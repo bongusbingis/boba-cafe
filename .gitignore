@@ -1,0 +1,13 @@
+# Roblox Studio lock files
+/*.rbxlx.lock
+/*.rbxl.lock
+
+# Wally-managed
+/Packages
+/ServerPackages
+
+# Misc
+/.vscode
+/sourcemap.json
+/aftman.toml
+/default.project.json
