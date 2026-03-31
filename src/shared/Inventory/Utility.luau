@@ -22,8 +22,8 @@ function Utility.ValidateItem(itemId: string, itemType: ItemType, itemData: Inve
 		return false, "itemId must be a non-empty string"
 	end
 
-	if typeof(itemType) ~= "string" or itemType == "" then
-		return false, "itemType must be a non-empty string"
+	if typeof(itemType) ~= "string" then
+		return false, "itemType must be a string"
 	end
 
 	local itemTypeDefinitions = ITEM_DATA_MAP[itemType]
@@ -70,7 +70,7 @@ function Utility.GetInventoryLimit(limitType: "Equipped" | "Storage", itemType: 
 	return itemLimitForType
 end
 
-function Utility.Clone<T>(value: T): T
+function Utility.Clone(value: any): any
 	if typeof(value) ~= "table" then
 		return value
 	end
@@ -81,7 +81,7 @@ function Utility.Clone<T>(value: T): T
 			result[key] = Utility.Clone(nestedValue)
 		end
 	end
-	return result :: T
+	return result
 end
 
 return Utility

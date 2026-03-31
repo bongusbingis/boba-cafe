@@ -5,14 +5,15 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Packages = ReplicatedStorage:WaitForChild("Packages")
+local Networking = ReplicatedStorage:WaitForChild("Networking")
 local Components = script.Parent
+local InventoryEvent = Networking:WaitForChild("InventoryEvent") :: RemoteEvent
 
-local Loader = require(Packages.Loader)
+local Knit = require(Packages.Knit)
 local Promise = require(Packages.Promise)
 local GoodSignal = require(Packages.GoodSignal)
 local Janitor = require(Packages.Janitor)
 
-local Packets = require(Components.Packets)
 local ItemsMap = require(Components.ItemsMap)
 local InventoryItem = require(Components.InventoryItem)
 local InventoryShared = require(Components.InventoryShared)
@@ -34,7 +35,7 @@ export type PlayerInventory = typeof(setmetatable(
 			_item_type_shared_data: { [string]: any },
 			_raw_data: InventoryTypeRoot,
 		},
-		_janitor: Janitor.Janitor,
+		_janitor: any,
 	},
 	{ __index = InventoryClient.Prototype }
 ))
@@ -77,9 +78,12 @@ function InventoryClient.Prototype:TotalItemsEquipped(): number
 end
 
 function InventoryClient.Prototype:RemoveItems(itemIds: { string })
-	Packets.removeItems.send({
-		itemsType = self.Metadata._type,
-		items = itemIds,
+	InventoryEvent:FireServer({
+		packet = "removeItems",
+		data = {
+			itemsType = self.Metadata._type,
+			items = itemIds,
+		},
 	})
 end
 
@@ -92,9 +96,10 @@ end
 
 function InventoryClient:GetPlayerInventoryAsync(itemTypeToReturn: ItemType)
 	Utility.AssertValidItemType(itemTypeToReturn)
+	local DataController = if Knit.GetController then Knit.GetController("DataController") else Knit.Controllers.DataController
 
 	return Promise.new(function(resolve, reject)
-		Loader.Controllers.DataController:GetDataAsync()
+		DataController:GetDataAsync()
 			:andThen(function(playerData)
 				local playerInventoryRoot: InventoryItemsRoot = playerData.Inventory.Items
 				local rawTypeRoot = playerInventoryRoot[itemTypeToReturn]
@@ -119,12 +124,17 @@ function InventoryClient:GetPlayerInventoryAsync(itemTypeToReturn: ItemType)
 					wrapped[itemId] = InventoryItem(Players.LocalPlayer, itemId, itemTypeToReturn, itemData, selfObject)
 				end
 
-				local connection = Packets.onChange.listen(function(data: OnChangeData)
-					if data.itemsType ~= itemTypeToReturn then
+				local connection = InventoryEvent.OnClientEvent:Connect(function(wireData: any)
+					if typeof(wireData) ~= "table" or wireData.packet ~= "onChange" then
 						return
 					end
 
-					local currentPlayerData = Loader.Controllers.DataController.LocalPlayerData
+					local changeData: OnChangeData = wireData.data
+					if changeData.itemsType ~= itemTypeToReturn then
+						return
+					end
+
+					local currentPlayerData = DataController.LocalPlayerData
 					if currentPlayerData and currentPlayerData.Inventory and currentPlayerData.Inventory.Items then
 						local latestRaw = currentPlayerData.Inventory.Items[itemTypeToReturn]
 						if latestRaw then
@@ -132,12 +142,12 @@ function InventoryClient:GetPlayerInventoryAsync(itemTypeToReturn: ItemType)
 						end
 					end
 
-					selfObject:_rebuildItem(data.itemId)
-					selfObject.OnChange:Fire(data)
+					selfObject:_rebuildItem(changeData.itemId)
+					selfObject.OnChange:Fire(changeData)
 				end)
 
 				selfObject._janitor:Add(function()
-					Packets.onChange.disconnect(connection)
+					connection:Disconnect()
 				end)
 
 				resolve(selfObject)

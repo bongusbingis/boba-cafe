@@ -13,9 +13,9 @@ local GoodSignal = require(Packages.GoodSignal)
 local PlayerDataReceivedSignal = GoodSignal.new()
 
 ---> controller declaration
-local DataController = Knit.CreateController {
+local DataController = Knit.CreateController({
 	Name = "DataController",
-}
+})
 
 function DataController:GetDataAsync()
 	return Promise.new(function(resolve)

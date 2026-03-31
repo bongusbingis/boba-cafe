@@ -12,7 +12,7 @@ Knit.Start()
 		local playerAddedProcesses = {}
 		local playerRemovingProcesses = {}
 
-		for _, controller in Knit.Controllers do
+		for _, controller in Controllers do
 			if typeof(controller.PlayerAdded) == "function" then
 				table.insert(playerAddedProcesses, function(player)
 					controller:PlayerAdded(player)

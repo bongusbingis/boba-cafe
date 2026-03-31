@@ -4,13 +4,14 @@ local InventoryItem = { Prototype = {} }
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Packages = ReplicatedStorage:WaitForChild("Packages")
+local Networking = ReplicatedStorage:WaitForChild("Networking")
+local InventoryEvent = Networking:WaitForChild("InventoryEvent") :: RemoteEvent
 
-local Loader = require(Packages.Loader)
+local Knit = require(Packages.Knit)
 
 local IS_SERVER = RunService:IsServer()
 
 local Utility = require(script.Parent.Utility)
-local Packets = require(script.Parent.Packets)
 local ItemActions = require(script.Parent.ItemActions)
 local ITEM_DATA_MAP = require(script.Parent.ItemsMap)
 local Types = require(script.Parent.Types)
@@ -85,9 +86,12 @@ function InventoryItem.Prototype:Remove(): ()
 	if IS_SERVER then
 		self._inventory:_removeItemById(self._id)
 	else
-		Packets.removeItems.send({
-			itemsType = self._type,
-			items = { self._id },
+		InventoryEvent:FireServer({
+			packet = "removeItems",
+			data = {
+				itemsType = self._type,
+				items = { self._id },
+			},
 		})
 	end
 end
@@ -100,10 +104,13 @@ function InventoryItem.Prototype:Equip(): ()
 	if IS_SERVER then
 		self._inventory:_setEquipped(self._id, true)
 	else
-		Packets.setItemEquipped.send({
-			itemId = self._id,
-			itemType = self._type,
-			equipped = true,
+		InventoryEvent:FireServer({
+			packet = "setItemEquipped",
+			data = {
+				itemId = self._id,
+				itemType = self._type,
+				equipped = true,
+			},
 		})
 	end
 end
@@ -116,10 +123,13 @@ function InventoryItem.Prototype:Unequip(): ()
 	if IS_SERVER then
 		self._inventory:_setEquipped(self._id, false)
 	else
-		Packets.setItemEquipped.send({
-			itemId = self._id,
-			itemType = self._type,
-			equipped = false,
+		InventoryEvent:FireServer({
+			packet = "setItemEquipped",
+			data = {
+				itemId = self._id,
+				itemType = self._type,
+				equipped = false,
+			},
 		})
 	end
 end
@@ -133,7 +143,7 @@ function InventoryItem.Prototype:ToggleEquipped(): ()
 end
 
 function InventoryItem.Prototype:Use(actionName: string?): ()
-	actionName = actionName or "Default"
+	local resolvedActionName = actionName or "Default"
 
 	if IS_SERVER then
 		local actionByType = ItemActions[self._type]
@@ -147,14 +157,17 @@ function InventoryItem.Prototype:Use(actionName: string?): ()
 			player = self._player,
 			item = self,
 			inventory = self._inventory,
-			services = Loader.Services,
-			actionName = actionName,
+			services = Knit.Services,
+			actionName = resolvedActionName,
 		})
 	else
-		Packets.useItem.send({
-			itemId = self._id,
-			itemType = self._type,
-			actionName = actionName,
+		InventoryEvent:FireServer({
+			packet = "useItem",
+			data = {
+				itemId = self._id,
+				itemType = self._type,
+				actionName = resolvedActionName,
+			},
 		})
 	end
 end

@@ -26,6 +26,23 @@ Knit.Start()
 			end
 		end
 
+		table.insert(playerAddedProcesses, function(player)
+			task.delay(3, function()
+				print("test")
+				local inventory = require(ReplicatedStorage.Shared.Inventory)
+				inventory
+					:GetPlayerInventoryAsync(player, "Nametags")
+					:andThen(function(playerInventory: inventory.PlayerInventory)
+						playerInventory:Insert({
+							Name = "Mint",
+							Rarity = "Rare",
+						})
+						print("Player inventory received:", playerInventory)
+					end)
+					:catch(warn)
+			end)
+		end)
+
 		for _, player in Players:GetPlayers() do
 			for _, fn in playerAddedProcesses do
 				task.spawn(fn, player)

@@ -9,15 +9,16 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Server = ServerScriptService:WaitForChild("Server")
 local Packages = ReplicatedStorage:WaitForChild("Packages")
+local Networking = ReplicatedStorage:WaitForChild("Networking")
 local Components = script.Parent
+local InventoryEvent = Networking:WaitForChild("InventoryEvent") :: RemoteEvent
 
-local DataService = require(Server.Runtime.DataService)
+local DataService = require(Server.Modules.DataService)
 local Promise = require(Packages.Promise)
 local GoodSignal = require(Packages.GoodSignal)
 local Janitor = require(Packages.Janitor)
 
 local Utility = require(Components.Utility)
-local Packets = require(Components.Packets)
 local ItemsMap = require(Components.ItemsMap)
 local InventoryItem = require(Components.InventoryItem)
 local InventoryShared = require(Components.InventoryShared)
@@ -39,7 +40,7 @@ export type PlayerInventory = typeof(setmetatable(
 			_type: ItemType,
 			_item_type_shared_data: { [string]: any },
 			_raw_data: InventoryTypeRoot,
-			_janitor: Janitor.Janitor,
+			_janitor: any,
 		},
 	},
 	{ __index = InventoryServer.Prototype }
@@ -48,7 +49,10 @@ export type PlayerInventory = typeof(setmetatable(
 local OnChangeSignals: { [number]: any } = {}
 
 local function dispatchChange(player: Player, data: OnChangeData)
-	Packets.onChange.sendTo(data, player)
+	InventoryEvent:FireClient(player, {
+		packet = "onChange",
+		data = data,
+	})
 	local signal = OnChangeSignals[player.UserId]
 	if signal then
 		signal:Fire(data)
@@ -268,52 +272,91 @@ if RunService:IsRunning() then
 		end
 	end)
 
-	Packets.removeItems.listen(function(data, player: Player)
-		if typeof(data) ~= "table" or typeof(data.itemsType) ~= "string" or typeof(data.items) ~= "table" then
-			warn("[InventoryServer]: Invalid removeItems packet")
+	InventoryEvent.OnServerEvent:Connect(function(player: Player, wireData: any)
+		if typeof(wireData) ~= "table" then
+			warn("[InventoryServer]: Invalid inventory event payload")
 			return
 		end
 
-		InventoryServer:GetPlayerInventoryAsync(player, data.itemsType):andThen(function(inventory)
-			inventory:RemoveItems(data.items)
-		end)
-	end)
+		local packet = wireData.packet
+		local data = wireData.data
 
-	Packets.setItemEquipped.listen(function(data, player: Player)
-		if typeof(data) ~= "table" then
-			warn("[InventoryServer]: Invalid setItemEquipped packet")
-			return
-		end
-
-		InventoryServer:GetPlayerInventoryAsync(player, data.itemType):andThen(function(inventory)
-			local item = inventory:GetItemFromId(data.itemId)
-			if item == nil then
-				warn("[InventoryServer]: Item not found for equip request", data.itemId)
+		if packet == "removeItems" then
+			if typeof(data) ~= "table" or typeof(data.itemsType) ~= "string" or typeof(data.items) ~= "table" then
+				warn("[InventoryServer]: Invalid removeItems packet")
+				return
+			end
+			if data.itemsType ~= "Nametags" and data.itemsType ~= "Pets" then
+				warn("[InventoryServer]: Invalid removeItems item type", data.itemsType)
 				return
 			end
 
-			if data.equipped then
-				item:Equip()
-			else
-				item:Unequip()
-			end
-		end)
-	end)
+			local itemType: ItemType = data.itemsType
 
-	Packets.useItem.listen(function(data, player: Player)
-		if typeof(data) ~= "table" then
-			warn("[InventoryServer]: Invalid useItem packet")
+			InventoryServer:GetPlayerInventoryAsync(player, itemType):andThen(function(inventory)
+				inventory:RemoveItems(data.items)
+			end)
 			return
 		end
 
-		InventoryServer:GetPlayerInventoryAsync(player, data.itemType):andThen(function(inventory)
-			local item = inventory:GetItemFromId(data.itemId)
-			if item == nil then
-				warn("[InventoryServer]: Item not found for use request", data.itemId)
+		if packet == "setItemEquipped" then
+			if typeof(data) ~= "table"
+				or typeof(data.itemType) ~= "string"
+				or typeof(data.itemId) ~= "string"
+				or typeof(data.equipped) ~= "boolean"
+			then
+				warn("[InventoryServer]: Invalid setItemEquipped packet")
 				return
 			end
-			item:Use(data.actionName)
-		end)
+			if data.itemType ~= "Nametags" and data.itemType ~= "Pets" then
+				warn("[InventoryServer]: Invalid setItemEquipped item type", data.itemType)
+				return
+			end
+
+			local itemType: ItemType = data.itemType
+
+			InventoryServer:GetPlayerInventoryAsync(player, itemType):andThen(function(inventory)
+				local item = inventory:GetItemFromId(data.itemId)
+				if item == nil then
+					warn("[InventoryServer]: Item not found for equip request", data.itemId)
+					return
+				end
+
+				if data.equipped then
+					item:Equip()
+				else
+					item:Unequip()
+				end
+			end)
+			return
+		end
+
+		if packet == "useItem" then
+			if typeof(data) ~= "table"
+				or typeof(data.itemType) ~= "string"
+				or typeof(data.itemId) ~= "string"
+				or typeof(data.actionName) ~= "string"
+			then
+				warn("[InventoryServer]: Invalid useItem packet")
+				return
+			end
+			if data.itemType ~= "Nametags" and data.itemType ~= "Pets" then
+				warn("[InventoryServer]: Invalid useItem item type", data.itemType)
+				return
+			end
+
+			local itemType: ItemType = data.itemType
+
+			InventoryServer:GetPlayerInventoryAsync(player, itemType):andThen(function(inventory)
+				local item = inventory:GetItemFromId(data.itemId)
+				if item == nil then
+					warn("[InventoryServer]: Item not found for use request", data.itemId)
+					return
+				end
+				item:Use(data.actionName)
+			end)
+			return
+		end
 	end)
 end
 
