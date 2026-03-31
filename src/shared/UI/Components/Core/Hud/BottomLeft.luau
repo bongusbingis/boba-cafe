@@ -25,7 +25,7 @@ local c = React.createElement
 
 return function(props: {
 	CurrentPage: ModuleScript,
-	SetCurrentPage: (pageComponent: ModuleScript | nil) -> (),
+	SetCurrentPage: (pageComponent: ModuleScript | nil, ...any) -> (),
 })
 	return c(Pane, {
 		ClassName = "Frame",
@@ -46,6 +46,9 @@ return function(props: {
 			Icon = "rbxassetid://13382286492",
 			Color = Color3.fromRGB(150, 189, 136),
 			Text = "1,000",
+			OnClick = function()
+				props.SetCurrentPage(UI.Pages.Shop, "Currency")
+			end
 		}),
 
 		Points = c(NormalButton, {
@@ -53,6 +56,9 @@ return function(props: {
 			Icon = "rbxassetid://13391365805",
 			Color = Color3.fromRGB(255, 107, 107),
 			Text = "1,000",
+			OnClick = function()
+				props.SetCurrentPage(UI.Pages.Shop, "Currency")
+			end
 		}),
 	})
 end

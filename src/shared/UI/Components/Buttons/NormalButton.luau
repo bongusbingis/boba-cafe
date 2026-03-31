@@ -19,6 +19,7 @@ return function(props: {
 
     Size: UDim2?,
     Position: UDim2?,
+	OnClick: (() -> ())?,
 })
 	return c(Pane, {
 		ClassName = "Frame",
@@ -43,6 +44,7 @@ return function(props: {
 				Image = "http://www.roblox.com/asset/?id=13382242889",
 				Size = UDim2.fromScale(1, 1),
 			},
+			OnClick = (not props.PlusButton) and props.OnClick or nil,
 		}, {
 			Border = c(Pane, {
 				ClassName = "ImageLabel",
@@ -94,6 +96,7 @@ return function(props: {
 
 				Plus = props.PlusButton and c(Pane, {
 					ClassName = "ImageButton",
+					OnClick = props.OnClick,
 					Native = {
 						AnchorPoint = Vector2.new(1, 0.5),
 						AutoButtonColor = false,

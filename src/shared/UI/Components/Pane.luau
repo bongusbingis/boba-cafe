@@ -89,8 +89,7 @@ return React.forwardRef(function(
 		--events[React.Event.MouseEnter] = props.OnHover
 		--events[React.Event.MouseLeave] = props.OnLeave
 		events[React.Event.MouseButton1Down] = props["OnPress"]
-            or props["OnClick"] --- OnClick will fire on MouseButton1Down if OnPress is not provided
-            or props["OnRelease"] --- OnRelease will fire on MouseButton1Down if neither OnPress nor OnClick are provided
+			or props["OnRelease"] --- OnRelease will fire on MouseButton1Down if OnPress is not provided
 		events[React.Event.MouseButton1Up] = props["OnRelease"]
 		events[React.Event.Activated] = props["OnClick"]
 	end

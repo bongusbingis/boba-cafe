@@ -22,6 +22,7 @@ function AppEntry:KnitStart()
 	local uiHandle = Instance.new("ScreenGui")
 	uiHandle.ResetOnSpawn = false
 	uiHandle.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+	uiHandle.IgnoreGuiInset = true
 	uiHandle.Parent = Players.LocalPlayer.PlayerGui
 
 	local root = ReactRoblox.createRoot(uiHandle)

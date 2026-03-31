@@ -72,6 +72,12 @@ return function()
 				Items = SHOP_DATA.Points,
 				LayoutOrder = 1,
 			}),
+
+			Spacer = c("Frame", {
+				BackgroundTransparency = 1,
+				LayoutOrder = math.huge,
+				Size = UDim2.fromScale(1, 0.05),
+			}),
 		}),
 	})
 end

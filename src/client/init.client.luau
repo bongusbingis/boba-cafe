@@ -3,25 +3,24 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Packages = ReplicatedStorage:WaitForChild("Packages")
 
 local Knit = require(Packages.Knit)
-
-Knit.AddServicesDeep(script.Modules)
+local Controllers = Knit.AddControllersDeep(script.Modules)
 
 Knit.Start()
 	:andThen(function()
-		print("[Server] Knit started successfully.")
+		print("[Client] Knit started successfully.")
 
 		local playerAddedProcesses = {}
 		local playerRemovingProcesses = {}
 
-		for _, service in Knit.Services do
-			if typeof(service.PlayerAdded) == "function" then
+		for _, controller in Knit.Controllers do
+			if typeof(controller.PlayerAdded) == "function" then
 				table.insert(playerAddedProcesses, function(player)
-					service:PlayerAdded(player)
+					controller:PlayerAdded(player)
 				end)
 			end
-			if typeof(service.PlayerRemoving) == "function" then
+			if typeof(controller.PlayerRemoving) == "function" then
 				table.insert(playerRemovingProcesses, function(player)
-					service:PlayerRemoving(player)
+					controller:PlayerRemoving(player)
 				end)
 			end
 		end

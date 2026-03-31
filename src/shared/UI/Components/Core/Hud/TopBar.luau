@@ -26,7 +26,7 @@ local c = React.createElement
 
 return function(props: {
     CurrentPage: ModuleScript,
-	SetCurrentPage: (pageComponent: ModuleScript | nil) -> (),
+	SetCurrentPage: (pageComponent: ModuleScript | nil, ...any) -> (),
 })
     local function setPage(page: ModuleScript)
         return function ()

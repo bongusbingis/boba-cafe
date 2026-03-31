@@ -20,6 +20,7 @@ local PAGE_SWAP_DELAY = 0.025
 local c = React.createElement
 
 local function App()
+	local extraData = React.useRef(nil)
 	local closePreviousPageCallback = React.useRef(nil)
 	local currentPage, setCurrentPage = React.useState(nil)
 
@@ -30,7 +31,8 @@ local function App()
 		end
 	end
 
-	local function handleSetCurrentPage(page: ModuleScript | nil)
+	local function handleSetCurrentPage(page: ModuleScript | nil, ...)
+		extraData.current = { ... }
 		setCurrentPage(function(existingPage)
 			closeCurrentPageIfExists()
 			if existingPage and existingPage == page then
@@ -45,6 +47,7 @@ local function App()
 		and c(Page, {
 			IsVisible = true,
 			PageContent = c(require(currentPage), {
+				Args = extraData.current,
 				ClosePage = function(newPage: ModuleScript?)
 					if newPage and newPage.ClassName == "ModuleScript" then
 						handleSetCurrentPage(newPage)

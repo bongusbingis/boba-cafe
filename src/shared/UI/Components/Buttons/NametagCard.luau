@@ -19,7 +19,7 @@ local IS_MOBILE = game:GetService("UserInputService").TouchEnabled
 local HOVER_SPRING = {
 	mass = 1,
 	tension = 10000,
-	friction = 150,
+	friction = 200,
 }
 
 ---> private
@@ -114,7 +114,7 @@ return function(props: Props)
 	local priceVisible = active and (IS_MOBILE or isHovering)
 
 	local hoverStyles = ReactSpring.useSpring({
-		scale        = active and (isPressing and 0.95 or (isHovering and 1.08 or 1)) or 1,
+		scale        = active and (isPressing and 0.95 or (isHovering and 1.12 or 1)) or 1,
 		priceOpacity = priceVisible and 0 or 1,
 		config = HOVER_SPRING,
 	})
@@ -124,7 +124,6 @@ return function(props: Props)
 		config = { mass = 0.5, tension = 15000, friction = 150 },
 	})
 
-	-- useClock drives re-render each frame for animated cards only
 	local startTime = React.useRef(os.clock())
 	local clock = if props.Animation then useClock() else 0
 
@@ -172,7 +171,7 @@ return function(props: Props)
 				AnchorPoint = Vector2.new(0.5, 0.5),
 				BackgroundTransparency = 1,
 				FontFace = Font.new("rbxasset://fonts/families/FredokaOne.json"),
-				Position = UDim2.fromScale(0.5, 0.6),
+				Position = UDim2.fromScale(0.5, 0.48),
 				Size = UDim2.fromScale(0.8, 0.22),
 				Text = props.Name,
 				TextColor3 = Color3.new(1, 1, 1),
@@ -190,7 +189,7 @@ return function(props: Props)
 				AnchorPoint = Vector2.new(0.5, 0.5),
 				BackgroundTransparency = 1,
 				FontFace = Font.new("rbxasset://fonts/families/FredokaOne.json"),
-				Position = UDim2.fromScale(0.5, 0.78),
+				Position = UDim2.fromScale(0.5, 0.66),
 				Size = UDim2.fromScale(0.7, 0.16),
 				Text = props.Tier,
 				TextColor3 = props.TierColor,

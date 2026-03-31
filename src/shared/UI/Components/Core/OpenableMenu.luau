@@ -88,6 +88,7 @@ return function(props: Props)
 				OnClick = function()
 					setCurrentPage(key)
 				end,
+				Selected = currentPage == key,
 			})
 		end
 	end

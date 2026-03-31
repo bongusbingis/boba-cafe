@@ -28,6 +28,7 @@ return function(props: {
 
     BackgroundColor: Color3?,
 	LayoutOrder: number?,
+	Selected: boolean?,
 	OnClick: (() -> ())?,
 })
     local isHovering, setIsHovering = React.useState(false)
@@ -66,6 +67,11 @@ return function(props: {
 		},
         CornerRadius = 0.5,
 	}, {
+		UIStroke = props.Selected and c("UIStroke", {
+			Thickness = 3,
+			Color = Color3.fromRGB(232, 234, 121),
+			ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+		}),
 		TextLabel = c(Pane, {
 			ClassName = "TextLabel",
             Scale = not props.BackgroundColor and styles.scale or nil,
