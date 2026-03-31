@@ -1,28 +1,31 @@
-local AppEntry = {}
-
+---> services
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+---> dependencies
 local Packages = ReplicatedStorage:WaitForChild("Packages")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 
----> dependencies
+local Knit = require(Packages.Knit)
 local React = require(Packages.React)
 local ReactRoblox = require(Packages.ReactRoblox)
 
 ---> components
 local App = require(Shared.UI.App)
 
----> render app component
-local uiHandle = Instance.new("ScreenGui")
-uiHandle.ResetOnSpawn = false
-uiHandle.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-uiHandle.Parent = Players.LocalPlayer.PlayerGui
+---> controller declaration
+local AppEntry = Knit.CreateController {
+	Name = "AppEntry",
+}
 
-local root = ReactRoblox.createRoot(uiHandle)
+function AppEntry:KnitStart()
+	local uiHandle = Instance.new("ScreenGui")
+	uiHandle.ResetOnSpawn = false
+	uiHandle.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+	uiHandle.Parent = Players.LocalPlayer.PlayerGui
 
-function AppEntry:Start()
-    root:render(React.createElement(App))
+	local root = ReactRoblox.createRoot(uiHandle)
+	root:render(React.createElement(App))
 end
 
 return AppEntry

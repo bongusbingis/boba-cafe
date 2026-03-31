@@ -11,6 +11,8 @@ local ReactSpring = require(Packages.ReactSpring)
 local Pane = require(UI.Components.Pane)
 
 ---> constants
+local IS_MOBILE = game:GetService("UserInputService").TouchEnabled
+
 local SPRING_CONFIG = {
 	mass = 1,
 	tension = 10000,
@@ -18,7 +20,6 @@ local SPRING_CONFIG = {
 }
 
 ---> private
-local IS_MOBILE = game:GetService("UserInputService").TouchEnabled
 local c = React.createElement
 
 ---> public
@@ -26,6 +27,7 @@ export type Props = {
 	Name: string,
 	Price: string,
 	Image: string,
+	OffSale: boolean?,
 	LayoutOrder: number?,
 	OnClick: (() -> ())?,
 }
@@ -33,17 +35,17 @@ export type Props = {
 return function(props: Props)
 	local isHovering, setIsHovering = React.useState(false)
 	local isPressing, setIsPressing = React.useState(false)
-	local priceVisible = IS_MOBILE or isHovering
+
+	local active = not props.OffSale
+	local priceVisible = active and (IS_MOBILE or isHovering)
 
 	local styles = ReactSpring.useSpring({
-		scale             = isPressing and 0.95 or (isHovering and 1.08 or 1),
-		imageTransparency = (not IS_MOBILE and isHovering) and 0.2 or 0,
+		scale             = active and (isPressing and 0.95 or (isHovering and 1.08 or 1)) or 1,
+		imageTransparency = active and ((not IS_MOBILE and isHovering) and 0.2 or 0) or 0,
 		priceOpacity      = priceVisible and 0 or 1,
 		config = SPRING_CONFIG,
 	})
 
-	-- Faster spring so the stroke always leads the text on fade-out,
-	-- preventing a visible outline with no content behind it.
 	local strokeStyles = ReactSpring.useSpring({
 		priceStrokeOpacity = priceVisible and 0 or 1,
 		config = { mass = 0.5, tension = 15000, friction = 150 },
@@ -52,20 +54,21 @@ return function(props: Props)
 	return c(Pane, {
 		ClassName = "ImageButton",
 		Scale = styles.scale,
-		OnClick = props.OnClick,
-		OnPress = function()
+		CornerRadius = UDim.new(1, 0),
+		OnClick = active and props.OnClick or nil,
+		OnPress = active and function()
 			setIsPressing(true)
-		end,
-		OnRelease = function()
+		end or nil,
+		OnRelease = active and function()
 			setIsPressing(false)
-		end,
-		OnHover = function()
+		end or nil,
+		OnHover = active and function()
 			setIsHovering(true)
-		end,
-		OnLeave = function()
+		end or nil,
+		OnLeave = active and function()
 			setIsHovering(false)
 			setIsPressing(false)
-		end,
+		end or nil,
 		Native = {
 			AutoButtonColor = false,
 			BackgroundTransparency = 1,
@@ -74,7 +77,7 @@ return function(props: Props)
 			LayoutOrder = props.LayoutOrder,
 		},
 	}, {
-		ProductName = c(Pane, {
+		ProductName = not props.OffSale and c(Pane, {
 			ClassName = "TextLabel",
 			Stroke = { Thickness = 1.5 },
 			Native = {
@@ -104,5 +107,33 @@ return function(props: Props)
 				TextScaled = true,
 			},
 		}),
+
+		OffSaleOverlay = props.OffSale and c(Pane, {
+			ClassName = "Frame",
+			CornerRadius = UDim.new(1, 0),
+			Native = {
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				BackgroundColor3 = Color3.new(0, 0, 0),
+				BackgroundTransparency = 0.4,
+				Position = UDim2.fromScale(0.5, 0.5),
+				Size = UDim2.fromScale(1, 1),
+				ZIndex = 2,
+			},
+		}, {
+			Label = c(Pane, {
+				ClassName = "TextLabel",
+				Stroke = { Thickness = 1.5 },
+				Native = {
+					AnchorPoint = Vector2.new(0.5, 0.5),
+					BackgroundTransparency = 1,
+					FontFace = Font.new("rbxasset://fonts/families/FredokaOne.json"),
+					Position = UDim2.fromScale(0.5, 0.5),
+					Size = UDim2.fromScale(0.75, 0.22),
+					Text = "Off Sale",
+					TextColor3 = Color3.new(1, 1, 1),
+					TextScaled = true,
+				},
+			}),
+		}) or nil,
 	})
 end

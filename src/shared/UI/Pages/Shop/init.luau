@@ -28,9 +28,9 @@ local PAGES: { OpenableMenu.Page } = {
 		ButtonTextColor = Color3.fromRGB(180, 80, 100),
 	},
 	{ Key = "Currency", Label = "Currency", Content = c(require(script.Currency)) },
-	{ Key = "Pets", Label = "Pets", Content = nil },
+	{ Key = "Pets", Label = "Pets", Content = c(require(script.Pets)) },
 	{ Key = "Passes", Label = "Passes", Content = c(require(script.Passes)) },
-	{ Key = "Cosmetics", Label = "Cosmetics", Content = nil },
+	{ Key = "Cosmetics", Label = "Cosmetics", Content = c(require(script.Cosmetics)) },
 	{ Key = "BecomeStaff", Label = "Become Staff", Content = nil },
 }
 

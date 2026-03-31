@@ -13,27 +13,54 @@ local ShopCard = require(UI.Components.Buttons.ShopCard)
 local c = React.createElement
 
 ---> mock data (replace with server-provided data)
-export type Pass = {
+export type Egg = {
 	Name: string,
+	Icon: string,
 	Price: string,
-	Image: string,
 	OffSale: boolean?,
 }
 
-local PASSES: { Pass } = {
-	{ Name = "Barista",       Price = " 199", Image = "rbxassetid://5893760810" },
-	{ Name = "Shift Lead",    Price = " 499", Image = "rbxassetid://5893760810" },
-	{ Name = "Manager",       Price = " 999", Image = "rbxassetid://5893760810" },
-	{ Name = "VIP",           Price = " 299", Image = "rbxassetid://5893760810" },
-	{ Name = "2x Boba Bucks", Price = " 399", Image = "rbxassetid://5893760810" },
-	{ Name = "Premium",       Price = " 799", Image = "rbxassetid://5893760810", OffSale = true },
+local EGGS: { Egg } = {
+	{
+		Name  = "Regular Pet Capsule",
+		Icon  = "rbxassetid://6073658218",
+		Price = " 75",
+	},
+	{
+		Name  = "Rare Pet Capsule",
+		Icon  = "rbxassetid://7621095542",
+		Price = " 250",
+	},
+	{
+		Name  = "Epic Pet Capsule",
+		Icon  = "rbxassetid://9369156094",
+		Price = " 800",
+	},
+	{
+		Name    = "Halloween Capsule",
+		Icon    = "rbxassetid://7621096000",
+		Price   = " 500",
+		OffSale = true,
+	},
+	{
+		Name    = "Christmas Capsule",
+		Icon    = "rbxassetid://8097926532",
+		Price   = " 500",
+		OffSale = true,
+	},
+	{
+		Name    = "Fall Capsule",
+		Icon    = "rbxassetid://11007702975",
+		Price   = " 500",
+		OffSale = true,
+	},
 }
 
 ---> public
 return function()
 	local onSaleCount = 0
-	for _, pass in ipairs(PASSES) do
-		if not pass.OffSale then
+	for _, egg in ipairs(EGGS) do
+		if not egg.OffSale then
 			onSaleCount += 1
 		end
 	end
@@ -53,9 +80,9 @@ return function()
 		}),
 	}
 
-	for _, pass in ipairs(PASSES) do
+	for _, egg in ipairs(EGGS) do
 		local layoutOrder
-		if pass.OffSale then
+		if egg.OffSale then
 			offSaleIndex += 1
 			layoutOrder = offSaleIndex
 		else
@@ -63,11 +90,11 @@ return function()
 			layoutOrder = onSaleIndex
 		end
 
-		gridChildren[pass.Name] = c(ShopCard, {
-			Name = pass.Name,
-			Price = pass.Price,
-			Image = pass.Image,
-			OffSale = pass.OffSale,
+		gridChildren[egg.Name] = c(ShopCard, {
+			Name = egg.Name,
+			Price = egg.Price,
+			Image = egg.Icon,
+			OffSale = egg.OffSale,
 			LayoutOrder = layoutOrder,
 		})
 	end
@@ -82,8 +109,19 @@ return function()
 			FontFace = Font.new("rbxasset://fonts/families/FredokaOne.json"),
 			Position = UDim2.fromScale(0.470149, 0),
 			Size = UDim2.fromScale(0.94, 0.09),
-			Text = "Game Passes",
+			Text = "Pets",
 			TextColor3 = Color3.fromRGB(143, 169, 127),
+			TextScaled = true,
+		}),
+
+		Hint = c("TextLabel", {
+			AnchorPoint = Vector2.new(0.5, 0),
+			BackgroundTransparency = 1,
+			FontFace = Font.new("rbxasset://fonts/families/FredokaOne.json"),
+			Position = UDim2.fromScale(0.5, 0.095),
+			Size = UDim2.fromScale(0.94, 0.055),
+			Text = "Purchase capsules to hatch your own pets!",
+			TextColor3 = Color3.fromRGB(180, 180, 180),
 			TextScaled = true,
 		}),
 
@@ -92,12 +130,12 @@ return function()
 			AutomaticCanvasSize = Enum.AutomaticSize.Y,
 			BackgroundTransparency = 1,
 			CanvasSize = UDim2.new(),
-			Position = UDim2.fromScale(0, 0.112),
+			Position = UDim2.fromScale(0, 0.175),
 			ScrollBarImageColor3 = Color3.new(),
 			ScrollBarImageTransparency = 1,
 			ScrollBarThickness = 5,
 			ScrollingDirection = Enum.ScrollingDirection.Y,
-			Size = UDim2.fromScale(1.02, 0.888),
+			Size = UDim2.fromScale(1.02, 0.825),
 		}, gridChildren),
 	})
 end

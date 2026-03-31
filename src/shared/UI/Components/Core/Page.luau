@@ -69,7 +69,7 @@ return function(props: {
 	return c(Pane, {
 		Scale = styles.Scale,
 		Native = {
-			Size = UDim2.fromScale(1, 1),
+			Size = UDim2.fromScale(0.8, 0.8),
 			Position = styles.Position,
 			AnchorPoint = Vector2.new(0.5, 0.5),
 		},

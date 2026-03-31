@@ -8,6 +8,7 @@ realm = "shared"
 ProfileStore = "lm-loleris/profilestore@1.0.3"
 
 [dependencies]
+Knit = "sleitnick/knit@^1.7"
 Promise = "evaera/promise@4.0.0"
 Janitor = "howmanysmall/janitor@1.18.3"
 Loader = "bongusbingis/loader@3.0.3"

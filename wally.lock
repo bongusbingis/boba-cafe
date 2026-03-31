@@ -55,7 +55,7 @@ dependencies = [["Promise", "evaera/promise@4.0.0"]]
 [[package]]
 name = "jackcrowell/boba-cafe"
 version = "0.1.0"
-dependencies = [["ByteNet", "bongusbingis/bytenet@0.6.0"], ["Cmdr", "evaera/cmdr@1.12.0"], ["GoodSignal", "stravant/goodsignal@0.3.1"], ["Janitor", "howmanysmall/janitor@1.18.3"], ["Loader", "bongusbingis/loader@3.0.3"], ["Promise", "evaera/promise@4.0.0"], ["React", "jsdotlua/react@17.2.1"], ["ReactRoblox", "jsdotlua/react-roblox@17.2.1"], ["ReactSpring", "chriscerie/react-spring@2.0.0"], ["ReplicaController", "etheroit/replicacontroller@1.0.0"], ["ReplicaService", "bongusbingis/replicaservice@1.0.2"], ["SimplePath", "jessekroeske/simplepath@2.2.2"], ["TableUtil", "bongusbingis/table-utility@1.0.0"], ["TestEZ", "roblox/testez@0.4.1"], ["Zone", "legendoj1/zoneplus@3.2.2"], ["ProfileStore", "lm-loleris/profilestore@1.0.3"]]
+dependencies = [["ByteNet", "bongusbingis/bytenet@0.6.0"], ["Cmdr", "evaera/cmdr@1.12.0"], ["GoodSignal", "stravant/goodsignal@0.3.1"], ["Janitor", "howmanysmall/janitor@1.18.3"], ["Knit", "sleitnick/knit@1.7.0"], ["Loader", "bongusbingis/loader@3.0.3"], ["Promise", "evaera/promise@4.0.0"], ["React", "jsdotlua/react@17.2.1"], ["ReactRoblox", "jsdotlua/react-roblox@17.2.1"], ["ReactSpring", "chriscerie/react-spring@2.0.0"], ["ReplicaController", "etheroit/replicacontroller@1.0.0"], ["ReplicaService", "bongusbingis/replicaservice@1.0.2"], ["SimplePath", "jessekroeske/simplepath@2.2.2"], ["TableUtil", "bongusbingis/table-utility@1.0.0"], ["TestEZ", "roblox/testez@0.4.1"], ["Zone", "legendoj1/zoneplus@3.2.2"], ["ProfileStore", "lm-loleris/profilestore@1.0.3"]]
 
 [[package]]
 name = "jessekroeske/simplepath"
@@ -160,6 +160,26 @@ dependencies = []
 [[package]]
 name = "roblox/testez"
 version = "0.4.1"
+dependencies = []
+
+[[package]]
+name = "sleitnick/comm"
+version = "1.0.1"
+dependencies = [["Option", "sleitnick/option@1.0.5"], ["Promise", "evaera/promise@4.0.0"], ["Signal", "sleitnick/signal@2.0.3"]]
+
+[[package]]
+name = "sleitnick/knit"
+version = "1.7.0"
+dependencies = [["Comm", "sleitnick/comm@1.0.1"], ["Promise", "evaera/promise@4.0.0"]]
+
+[[package]]
+name = "sleitnick/option"
+version = "1.0.5"
+dependencies = []
+
+[[package]]
+name = "sleitnick/signal"
+version = "2.0.3"
 dependencies = []
 
 [[package]]
