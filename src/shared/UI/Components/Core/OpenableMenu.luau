@@ -5,6 +5,9 @@ local UI = Shared:WaitForChild("UI")
 ---> dependencies
 local React = require(ReplicatedStorage.Packages.React)
 
+---> styles
+local Styles = require(UI.Styles)
+
 ---> components
 local Pane = require(UI.Components.Pane)
 local PageTitle = require(UI.Components.PageTitle)
@@ -52,7 +55,7 @@ export type Props = {
 	AspectRatio: number?,
 	--- Title banner text, defaults to "Menu"
 	TitleText: string?,
-	--- Title banner accent color, defaults to Color3.fromRGB(143, 169, 127)
+	--- Title banner accent color, defaults to Styles.GREEN
 	TitleColor: Color3?,
 	--- When true, hides the background pattern image
 	HidePattern: boolean?,
@@ -74,7 +77,6 @@ return function(props: Props)
 
 	local currentPage, setCurrentPage = React.useState(defaultKey)
 
-	-- Build side button children from the pages array
 	local sideButtonChildren: { [string]: any } = {}
 	if props.Pages then
 		for i, page in ipairs(props.Pages) do
@@ -83,8 +85,8 @@ return function(props: Props)
 				Text = page.Label,
 				LayoutOrder = page.LayoutOrder or i,
 				Size = UDim2.fromScale(0.85, 0.095),
-				BackgroundColor = page.ButtonColor or Color3.fromRGB(250, 250, 250),
-				TextColor3 = page.ButtonTextColor or Color3.fromRGB(150, 189, 136),
+				BackgroundColor = page.ButtonColor or Styles.OFFWHITE,
+				TextColor3 = page.ButtonTextColor or Styles.GREEN_LIGHT,
 				OnClick = function()
 					setCurrentPage(key)
 				end,
@@ -117,7 +119,7 @@ return function(props: Props)
 	}, {
 		Title = c(PageTitle, {
 			Text = props.TitleText or "Menu",
-			Color = props.TitleColor or Color3.fromRGB(143, 169, 127),
+			Color = props.TitleColor or Styles.GREEN,
 		}),
 
 		CloseButton = c(CloseButton, {
@@ -141,7 +143,7 @@ return function(props: Props)
 					AnchorPoint = Vector2.new(0.5, 0.5),
 					BackgroundTransparency = 1,
 					Image = "http://www.roblox.com/asset/?id=13438184024",
-					ImageColor3 = Color3.fromRGB(150, 189, 136),
+					ImageColor3 = Styles.GREEN_LIGHT,
 					Position = UDim2.fromScale(0.5, 0.5),
 					Size = UDim2.fromScale(0.971, 0.955),
 				},

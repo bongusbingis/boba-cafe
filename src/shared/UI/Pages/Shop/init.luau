@@ -1,4 +1,6 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local PolicyService = game:GetService("PolicyService")
+local Players = game:GetService("Players")
 local Packages = ReplicatedStorage:WaitForChild("Packages")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local UI = Shared:WaitForChild("UI")
@@ -6,10 +8,18 @@ local UI = Shared:WaitForChild("UI")
 ---> dependencies
 local React = require(Packages.React)
 
+---> styles
+local Styles = require(UI.Styles)
+
 ---> components
 local OpenableMenu = require(UI.Components.Core.OpenableMenu)
 
 local c = React.createElement
+
+-- local success, playerPolicyInfo: { ArePaidRandomItemsRestricted: boolean } =
+-- 	pcall(PolicyService.GetPolicyInfoForPlayerAsync, PolicyService, Players.LocalPlayer)
+
+local paidRandomItemsRestricted = false--success and playerPolicyInfo.ArePaidRandomItemsRestricted or false
 
 local PAGES: { OpenableMenu.Page } = {
 	{
@@ -17,21 +27,27 @@ local PAGES: { OpenableMenu.Page } = {
 		Label = "Featured",
 		LayoutOrder = 0,
 		Content = c(require(script.Featured)),
-		ButtonColor = Color3.fromRGB(255, 182, 193),
-		ButtonTextColor = Color3.fromRGB(180, 80, 100),
+		ButtonColor = Styles.ROSE,
+		ButtonTextColor = Styles.ROSE_DEEP,
 	},
 	{
 		Key = "Celebrity",
 		Label = "Celebrity",
 		Content = c(require(script.Celebrity)),
-		ButtonColor = Color3.fromRGB(255, 215, 37),
-		ButtonTextColor = Color3.fromRGB(188, 132, 0),
+		ButtonColor = Styles.GOLD,
+		ButtonTextColor = Styles.GOLD_DEEP,
 	},
 	{ Key = "Currency", Label = "Currency", Content = c(require(script.Currency)) },
 	{ Key = "Pets", Label = "Pets", Content = c(require(script.Pets)) },
 	{ Key = "Passes", Label = "Passes", Content = c(require(script.Passes)) },
-	{ Key = "Cosmetics", Label = "Cosmetics", Content = c(require(script.Cosmetics)) },
-	{ Key = "BecomeStaff", Label = "Become Staff", Content = c(require(script.BecomeStaff))},
+	{
+		Key = "Cosmetics",
+		Label = "Cosmetics",
+		Content = c(
+			require((paidRandomItemsRestricted and script.DirectCosmeticsPurchase or script.RandomCosmeticsPurchase))
+		),
+	},
+	{ Key = "BecomeStaff", Label = "Become Staff", Content = c(require(script.BecomeStaff)) },
 }
 
 return function(props)
@@ -47,11 +63,11 @@ return function(props)
 
 	return c(OpenableMenu, {
 		TitleText = "Shop",
-		TitleColor = Color3.fromRGB(143, 169, 127),
+		TitleColor = Styles.GREEN,
 		DefaultPage = landingPage.Key,
 		Pages = PAGES,
-        OnClose = function()
-            props.ClosePage()
-        end,
+		OnClose = function()
+			props.ClosePage()
+		end,
 	})
 end

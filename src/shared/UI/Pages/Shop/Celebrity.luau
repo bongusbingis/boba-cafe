@@ -6,6 +6,9 @@ local UI = Shared:WaitForChild("UI")
 ---> dependencies
 local React = require(Packages.React)
 
+---> styles
+local Styles = require(UI.Styles)
+
 ---> components
 local Pane = require(UI.Components.Pane)
 local PurchaseButton = require(UI.Components.Buttons.PurchaseButton)
@@ -20,11 +23,11 @@ return function()
 		Title = c("TextLabel", {
 			AnchorPoint = Vector2.new(0.5, 0),
 			BackgroundTransparency = 1,
-			FontFace = Font.new("rbxasset://fonts/families/FredokaOne.json"),
+			FontFace = Styles.FONT_FREDOKA,
 			Position = UDim2.fromScale(0.470149, 0),
 			Size = UDim2.fromScale(0.94, 0.09),
 			Text = "Celebrity",
-			TextColor3 = Color3.fromRGB(143, 169, 127),
+			TextColor3 = Styles.GREEN,
 			TextScaled = true,
 		}),
 
@@ -51,18 +54,18 @@ return function()
 				Title = c("TextLabel", {
 					AnchorPoint = Vector2.new(0.5, 0),
 					BackgroundTransparency = 1,
-					FontFace = Font.new("rbxasset://fonts/families/FredokaOne.json"),
+					FontFace = Styles.FONT_FREDOKA,
 					Position = UDim2.fromScale(0.485, 0),
 					Size = UDim2.fromScale(0.967662, 0.255814),
 					Text = "Reasons to be a Celebrity",
-					TextColor3 = Color3.fromRGB(143, 169, 127),
+					TextColor3 = Styles.GREEN,
 					TextScaled = true,
 					TextXAlignment = Enum.TextXAlignment.Left,
 				}),
 
 				Container = c("Frame", {
 					AnchorPoint = Vector2.new(0, 1),
-					BackgroundColor3 = Color3.fromRGB(143, 169, 127),
+					BackgroundColor3 = Styles.GREEN,
 					LayoutOrder = 1,
 					Position = UDim2.fromScale(0, 1),
 					Size = UDim2.fromScale(1, 0.697674),
@@ -74,7 +77,7 @@ return function()
 					Description = c("TextLabel", {
 						AnchorPoint = Vector2.new(0.5, 0.5),
 						BackgroundTransparency = 1,
-						FontFace = Font.new("rbxasset://fonts/families/FredokaOne.json"),
+						FontFace = Styles.FONT_FREDOKA,
 						Position = UDim2.fromScale(0.5, 0.5),
 						Size = UDim2.fromScale(0.945, 0.774),
 						Text = "Celebrities are the most elite type of customer here at Boba! They get unique perks to thank them for their support towards the group.",
@@ -93,7 +96,7 @@ return function()
 			}, {
 				Container = c("Frame", {
 					AnchorPoint = Vector2.new(0, 1),
-					BackgroundColor3 = Color3.fromRGB(143, 169, 127),
+					BackgroundColor3 = Styles.GREEN,
 					LayoutOrder = 1,
 					Position = UDim2.fromScale(0, 1),
 					Size = UDim2.fromScale(1, 0.697674),
@@ -105,7 +108,7 @@ return function()
 					Description = c("TextLabel", {
 						AnchorPoint = Vector2.new(0.5, 0.5),
 						BackgroundTransparency = 1,
-						FontFace = Font.new("rbxasset://fonts/families/FredokaOne.json"),
+						FontFace = Styles.FONT_FREDOKA,
 						Position = UDim2.fromScale(0.180872, 0.482759),
 						Size = UDim2.fromScale(0.306743, 0.774483),
 						Text = [[• Private Island
@@ -119,7 +122,7 @@ return function()
 					Description2 = c("TextLabel", {
 						AnchorPoint = Vector2.new(0.5, 0.5),
 						BackgroundTransparency = 1,
-						FontFace = Font.new("rbxasset://fonts/families/FredokaOne.json"),
+						FontFace = Styles.FONT_FREDOKA,
 						Position = UDim2.fromScale(0.469868, 0.483),
 						Size = UDim2.fromScale(0.306743, 0.774483),
 						Text = [[• Custom Tag
@@ -134,11 +137,11 @@ return function()
 				Title = c("TextLabel", {
 					AnchorPoint = Vector2.new(0.5, 0),
 					BackgroundTransparency = 1,
-					FontFace = Font.new("rbxasset://fonts/families/FredokaOne.json"),
+					FontFace = Styles.FONT_FREDOKA,
 					Position = UDim2.fromScale(0.485, 0),
 					Size = UDim2.fromScale(0.967662, 0.255814),
 					Text = "Celebrity Perks",
-					TextColor3 = Color3.fromRGB(143, 169, 127),
+					TextColor3 = Styles.GREEN,
 					TextScaled = true,
 					TextXAlignment = Enum.TextXAlignment.Left,
 				}),

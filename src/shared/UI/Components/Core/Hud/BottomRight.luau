@@ -16,6 +16,9 @@ local UI = Shared:WaitForChild("UI")
 ---> dependencies
 local React = require(Packages.React)
 
+---> styles
+local Styles = require(UI.Styles)
+
 ---> components
 local Pane = require(UI.Components.Pane)
 local NormalButton = require(UI.Components.Buttons.NormalButton)
@@ -42,7 +45,7 @@ return function(props: {
 		},
 	}, {
 		Points = c(NormalButton, {
-			Color = Color3.fromRGB(255, 107, 107),
+			Color = Styles.CORAL,
 			Text = "Collapse Buttons",
 		}),
 	})

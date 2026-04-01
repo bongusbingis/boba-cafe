@@ -10,33 +10,21 @@ local React = require(Packages.React)
 local Styles = require(UI.Styles)
 
 ---> components
-local ShopCard = require(UI.Components.Buttons.ShopCard)
+local InventoryItemDefinitions = require(Shared.Configuration.InventoryItemDefinitions)
+local NametagCard = require(UI.Components.Buttons.NametagCard)
 
 ---> private
 local c = React.createElement
+local nametagColors = InventoryItemDefinitions.Nametags
 
----> mock data (replace with server-provided data)
-export type Pass = {
-	Name: string,
-	Price: string,
-	Image: string,
-	OffSale: boolean?,
-}
-
-local PASSES: { Pass } = {
-	{ Name = "Barista",       Price = " 199", Image = "rbxassetid://5893760810" },
-	{ Name = "Shift Lead",    Price = " 499", Image = "rbxassetid://5893760810" },
-	{ Name = "Manager",       Price = " 999", Image = "rbxassetid://5893760810" },
-	{ Name = "VIP",           Price = " 299", Image = "rbxassetid://5893760810" },
-	{ Name = "2x Boba Bucks", Price = " 399", Image = "rbxassetid://5893760810" },
-	{ Name = "Premium",       Price = " 799", Image = "rbxassetid://5893760810", OffSale = true },
-}
+---> tier colors
+local TIER_COLORS = InventoryItemDefinitions.Tiers
 
 ---> public
 return function()
 	local onSaleCount = 0
-	for _, pass in ipairs(PASSES) do
-		if not pass.OffSale then
+	for _, entry in ipairs(nametagColors) do
+		if not entry.OffSale then
 			onSaleCount += 1
 		end
 	end
@@ -56,9 +44,9 @@ return function()
 		}),
 	}
 
-	for _, pass in ipairs(PASSES) do
+	for _, entry in ipairs(nametagColors) do
 		local layoutOrder
-		if pass.OffSale then
+		if entry.OffSale then
 			offSaleIndex += 1
 			layoutOrder = offSaleIndex
 		else
@@ -66,11 +54,14 @@ return function()
 			layoutOrder = onSaleIndex
 		end
 
-		gridChildren[pass.Name] = c(ShopCard, {
-			Name = pass.Name,
-			Price = pass.Price,
-			Image = pass.Image,
-			OffSale = pass.OffSale,
+		gridChildren[entry.Name] = c(NametagCard, {
+			Name = entry.Name,
+			Price = entry.Price,
+			Tier = entry.Tier,
+			TierColor = TIER_COLORS[entry.Tier] or TIER_COLORS.Basic,
+			Color = entry.Color,
+			Animation = entry.Animation,
+			OffSale = entry.OffSale,
 			LayoutOrder = layoutOrder,
 		})
 	end
@@ -85,7 +76,7 @@ return function()
 			FontFace = Styles.FONT_FREDOKA,
 			Position = UDim2.fromScale(0.470149, 0),
 			Size = UDim2.fromScale(0.94, 0.09),
-			Text = "Game Passes",
+			Text = "Nametag Colors",
 			TextColor3 = Styles.GREEN,
 			TextScaled = true,
 		}),

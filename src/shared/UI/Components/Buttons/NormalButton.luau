@@ -9,6 +9,9 @@ local React = require(Packages.React)
 ---> components
 local Pane = require(UI.Components.Pane)
 
+---> styles
+local Styles = require(UI.Styles)
+
 local c = React.createElement
 
 return function(props: {
@@ -52,7 +55,7 @@ return function(props: {
 					AnchorPoint = Vector2.new(0.5, 0.5),
 					BackgroundTransparency = 1,
 					Image = "http://www.roblox.com/asset/?id=13382243228",
-					ImageColor3 = props.Color or Color3.fromRGB(255, 107, 107),
+					ImageColor3 = props.Color or Styles.CORAL,
 					Position = UDim2.fromScale(0.5, 0.5),
 					Size = UDim2.fromScale(0.97, 0.85),
 				},
@@ -73,11 +76,11 @@ return function(props: {
 					Native = {
 						AnchorPoint = Vector2.new(0.5, 0.5),
 						BackgroundTransparency = 1,
-						FontFace = Font.new("rbxasset://fonts/families/FredokaOne.json"),
+						FontFace = Styles.FONT_FREDOKA,
 						Position = UDim2.fromScale(0.5, 0.5),
 						Size = UDim2.fromScale(0.65, 0.9),
 						Text = props.Text,
-						TextColor3 = props.Color or Color3.fromRGB(255, 107, 107),
+						TextColor3 = props.Color or Styles.CORAL,
 						TextScaled = true,
 					},
 				}),
@@ -102,7 +105,7 @@ return function(props: {
 						AutoButtonColor = false,
 						BackgroundTransparency = 1,
 						Image = "http://www.roblox.com/asset/?id=13382300733",
-						ImageColor3 = props.Color or Color3.fromRGB(255, 107, 107),
+						ImageColor3 = props.Color or Styles.CORAL,
 						Position = UDim2.fromScale(0.94603, 0.5),
 						Size = UDim2.fromScale(0.0820308, 0.60635),
 					},

@@ -16,6 +16,9 @@ local UI = Shared:WaitForChild("UI")
 ---> dependencies
 local React = require(Packages.React)
 
+---> styles
+local Styles = require(UI.Styles)
+
 ---> components
 local Pane = require(UI.Components.Pane)
 local NormalButton = require(UI.Components.Buttons.NormalButton)
@@ -44,7 +47,7 @@ return function(props: {
 		Bucks = c(NormalButton, {
 			PlusButton = true,
 			Icon = "rbxassetid://13382286492",
-			Color = Color3.fromRGB(150, 189, 136),
+			Color = Styles.GREEN_LIGHT,
 			Text = "1,000",
 			OnClick = function()
 				props.SetCurrentPage(UI.Pages.Shop, "Currency")
@@ -54,7 +57,7 @@ return function(props: {
 		Points = c(NormalButton, {
 			PlusButton = true,
 			Icon = "rbxassetid://13391365805",
-			Color = Color3.fromRGB(255, 107, 107),
+			Color = Styles.CORAL,
 			Text = "1,000",
 			OnClick = function()
 				props.SetCurrentPage(UI.Pages.Shop, "Currency")

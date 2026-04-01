@@ -16,6 +16,9 @@ local UI = Shared:WaitForChild("UI")
 ---> dependencies
 local React = require(Packages.React)
 
+---> styles
+local Styles = require(UI.Styles)
+
 ---> components
 local Pages = UI.Pages
 local Pane = require(UI.Components.Pane)
@@ -47,7 +50,7 @@ return function(props: {
 			Native = {
 				AnchorPoint = Vector2.new(0.5, 0),
 				Image = "http://www.roblox.com/asset/?id=13407992271",
-				ImageColor3 = Color3.fromRGB(253, 240, 190),
+				ImageColor3 = Styles.CREAM,
 				Position = UDim2.fromScale(0.5, 0.327),
 				Size = UDim2.fromScale(0.263667, 0.633103),
 			},
@@ -57,7 +60,7 @@ return function(props: {
 				Native = {
 					AnchorPoint = Vector2.new(0.5, 0.5),
 					Image = "http://www.roblox.com/asset/?id=13408001982",
-					ImageColor3 = Color3.fromRGB(150, 189, 136),
+					ImageColor3 = Styles.GREEN_LIGHT,
 					Position = UDim2.fromScale(0.5, 0.5),
 					Size = UDim2.new(1, 5, 1, 5),
 				},
@@ -66,12 +69,12 @@ return function(props: {
 			TextLabel = c(Pane, {
 				ClassName = "TextLabel",
 				Stroke = {
-					Color = Color3.fromRGB(159, 189, 140),
+					Color = Styles.GREEN_TEXT,
 					Thickness = 2,
 				},
 				Native = {
 					AnchorPoint = Vector2.new(0.5, 0.5),
-					FontFace = Font.new("rbxasset://fonts/families/FredokaOne.json"),
+					FontFace = Styles.FONT_FREDOKA,
 					Position = UDim2.fromScale(0.5, 0.66),
 					Size = UDim2.fromScale(1, 0.364498),
 					Text = "12:34 PM",
@@ -97,7 +100,7 @@ return function(props: {
 				Native = {
 					AnchorPoint = Vector2.new(0.5, 0.5),
 					Image = "http://www.roblox.com/asset/?id=13407901910",
-					ImageColor3 = Color3.fromRGB(150, 189, 136),
+					ImageColor3 = Styles.GREEN_LIGHT,
 					Position = UDim2.fromScale(0.5, 0.5),
 					Size = UDim2.fromScale(1.00668, 1.07692),
 				},
@@ -115,19 +118,19 @@ return function(props: {
 				Shop = c(HudTabButton, {
 					LayoutOrder = 0,
 					Text = "Shop",
-                    TextColor3 = Color3.fromRGB(159, 189, 140),
+                    TextColor3 = Styles.GREEN_TEXT,
                     OnClick = setPage(Pages.Shop),
 				}),
 				Menu = c(HudTabButton, {
 					LayoutOrder = 1,
 					Text = "Menu",
-                    TextColor3 = Color3.fromRGB(159, 189, 140),
+                    TextColor3 = Styles.GREEN_TEXT,
                     OnClick = setPage(Pages.Menu),
 				}),
 				Inventory = c(HudTabButton, {
 					LayoutOrder = 2,
 					Text = "Inventory",
-                    TextColor3 = Color3.fromRGB(159, 189, 140),
+                    TextColor3 = Styles.GREEN_TEXT,
                     OnClick = setPage(Pages.Menu),
 				}),
 			}),

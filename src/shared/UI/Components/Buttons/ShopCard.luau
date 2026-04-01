@@ -10,14 +10,13 @@ local ReactSpring = require(Packages.ReactSpring)
 ---> components
 local Pane = require(UI.Components.Pane)
 
+---> styles
+local Styles = require(UI.Styles)
+
 ---> constants
 local IS_MOBILE = game:GetService("UserInputService").TouchEnabled
 
-local SPRING_CONFIG = {
-	mass = 1,
-	tension = 10000,
-	friction = 150,
-}
+local SPRING_CONFIG = Styles.SPRING_STANDARD
 
 ---> private
 local c = React.createElement
@@ -54,7 +53,7 @@ return function(props: Props)
 	return c(Pane, {
 		ClassName = "ImageButton",
 		Scale = styles.scale,
-		CornerRadius = UDim.new(1, 0),
+		CornerRadius = Styles.CORNER_FULL,
 		OnClick = active and props.OnClick or nil,
 		OnPress = active and function()
 			setIsPressing(true)
@@ -83,7 +82,7 @@ return function(props: Props)
 			Native = {
 				AnchorPoint = Vector2.new(0.5, 0.5),
 				BackgroundTransparency = 1,
-				FontFace = Font.new("rbxasset://fonts/families/FredokaOne.json"),
+				FontFace = Styles.FONT_FREDOKA,
 				Position = UDim2.fromScale(0.5, 0.825908),
 				Size = UDim2.fromScale(0.8, 0.3554),
 				Text = props.Name,
@@ -98,7 +97,7 @@ return function(props: Props)
 			Native = {
 				AnchorPoint = Vector2.new(0.5, 0.5),
 				BackgroundTransparency = 1,
-				FontFace = Font.new("rbxasset://fonts/families/FredokaOne.json"),
+				FontFace = Styles.FONT_FREDOKA,
 				Position = UDim2.fromScale(0.5, 0.15),
 				Size = UDim2.fromScale(0.8, 0.213069),
 				Text = props.Price,
@@ -110,7 +109,7 @@ return function(props: Props)
 
 		OffSaleOverlay = props.OffSale and c(Pane, {
 			ClassName = "Frame",
-			CornerRadius = UDim.new(1, 0),
+			CornerRadius = Styles.CORNER_FULL,
 			Native = {
 				AnchorPoint = Vector2.new(0.5, 0.5),
 				BackgroundColor3 = Color3.new(0, 0, 0),
@@ -126,7 +125,7 @@ return function(props: Props)
 				Native = {
 					AnchorPoint = Vector2.new(0.5, 0.5),
 					BackgroundTransparency = 1,
-					FontFace = Font.new("rbxasset://fonts/families/FredokaOne.json"),
+					FontFace = Styles.FONT_FREDOKA,
 					Position = UDim2.fromScale(0.5, 0.5),
 					Size = UDim2.fromScale(0.75, 0.22),
 					Text = "Off Sale",

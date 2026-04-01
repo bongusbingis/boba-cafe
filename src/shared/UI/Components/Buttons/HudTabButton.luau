@@ -10,12 +10,11 @@ local ReactSpring = require(ReplicatedStorage.Packages.ReactSpring)
 ---> components
 local Pane = require(UI.Components.Pane)
 
+---> styles
+local Styles = require(UI.Styles)
+
 ---> constants
-local SPRING_CONFIG = {
-	mass = 1,
-	tension = 10000,
-	friction = 150,
-}
+local SPRING_CONFIG = Styles.SPRING_STANDARD
 
 
 ---> private
@@ -62,14 +61,14 @@ return function(props: {
 			Size = props.Size or UDim2.fromScale(0.334, 1),
 			Text = "",
 			TextSize = 14,
-            BackgroundColor3 = props.BackgroundColor or Color3.fromRGB(250, 250, 250),
+            BackgroundColor3 = props.BackgroundColor or Styles.OFFWHITE,
             BackgroundTransparency = props.BackgroundColor and 0 or 1,
 		},
         CornerRadius = 0.5,
 	}, {
 		UIStroke = props.Selected and c("UIStroke", {
 			Thickness = 3,
-			Color = Color3.fromRGB(232, 234, 121),
+			Color = Styles.GOLD_BADGE,
 			ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
 		}),
 		TextLabel = c(Pane, {
@@ -77,7 +76,7 @@ return function(props: {
             Scale = not props.BackgroundColor and styles.scale or nil,
 			Native = {
 				AnchorPoint = Vector2.new(0.5, 0.5),
-				FontFace = Font.new("rbxasset://fonts/families/FredokaOne.json"),
+				FontFace = Styles.FONT_FREDOKA,
 				Position = UDim2.fromScale(0.5, 0.5),
 				Size = UDim2.fromScale(1, 0.58),
 				Text = props.Text,

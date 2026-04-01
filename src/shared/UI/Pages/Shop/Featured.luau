@@ -13,16 +13,16 @@ local Pane = require(UI.Components.Pane)
 ---> utilities
 local useClock = require(UI.Utility.useClock)
 
+---> styles
+local Styles = require(UI.Styles)
+local ROSE = Styles.ROSE
+local ROSE_MID = Styles.ROSE_MID
+local ROSE_DEEP = Styles.ROSE_DEEP
+local BADGE_GREEN = Styles.GREEN_BADGE
+local CARD_SPRING = Styles.SPRING_CARD
+
 ---> private
 local c = React.createElement
-
----> theme
-local ROSE = Color3.fromRGB(255, 182, 193)
-local ROSE_MID = Color3.fromRGB(230, 145, 165)
-local ROSE_DEEP = Color3.fromRGB(180, 80, 100)
-local BADGE_GREEN = Color3.fromRGB(72, 199, 116)
-
-local CARD_SPRING = { mass = 1, tension = 10000, friction = 200 }
 
 ---> animation helpers (mirrors NametagCard)
 local function lerp(a: number, b: number, t: number): number
@@ -126,8 +126,8 @@ local TRENDING_ITEMS: { TrendingItem } = {
 		Name = "Gold Tag",
 		Price = " 350",
 		Type = "cosmetic",
-		Color = Color3.fromRGB(255, 215, 37),
-		TierColor = Color3.fromRGB(255, 185, 30),
+		Color = Styles.GOLD,
+		TierColor = Styles.GOLD_MID,
 		Tier = "Uncommon",
 	},
 	{
@@ -206,7 +206,7 @@ local function HeroCard(props)
 				Native = {
 					BackgroundTransparency = 0.5,
 					BackgroundColor3 = BADGE_GREEN,
-					FontFace = Font.new("rbxasset://fonts/families/FredokaOne.json"),
+					FontFace = Styles.FONT_FREDOKA,
 					LayoutOrder = 0,
 					Size = UDim2.fromScale(0.92, 0.18),
 					Text = "🔥  #1 Trending",
@@ -218,7 +218,7 @@ local function HeroCard(props)
 
 			Name = c("TextLabel", {
 				BackgroundTransparency = 1,
-				FontFace = Font.new("rbxasset://fonts/families/FredokaOne.json"),
+				FontFace = Styles.FONT_FREDOKA,
 				LayoutOrder = 1,
 				Size = UDim2.fromScale(1, 0.22),
 				Text = props.Item.Name,
@@ -229,11 +229,11 @@ local function HeroCard(props)
 
 			Desc = c("TextLabel", {
 				BackgroundTransparency = 1,
-				FontFace = Font.new("rbxasset://fonts/families/FredokaOne.json"),
+				FontFace = Styles.FONT_FREDOKA,
 				LayoutOrder = 2,
 				Size = UDim2.fromScale(1, 0.29),
 				Text = props.Item.Description,
-				TextColor3 = Color3.fromRGB(110, 50, 65),
+				TextColor3 = Styles.ROSE_TEXT,
 				TextScaled = true,
 				TextWrapped = true,
 				TextXAlignment = Enum.TextXAlignment.Left,
@@ -249,7 +249,7 @@ local function HeroCard(props)
 					CornerRadius = UDim.new(0.4, 0),
 					Native = {
 						BackgroundColor3 = ROSE_DEEP,
-						FontFace = Font.new("rbxasset://fonts/families/FredokaOne.json"),
+						FontFace = Styles.FONT_FREDOKA,
 						Size = UDim2.fromScale(0.78, 1),
 						Text = props.Item.Price,
 						TextColor3 = Color3.new(1, 1, 1),
@@ -322,7 +322,7 @@ local function TrendingCard(props: TrendingItem)
 			Native = {
 				AnchorPoint = Vector2.new(0.5, 0.5),
 				BackgroundTransparency = 1,
-				FontFace = Font.new("rbxasset://fonts/families/FredokaOne.json"),
+				FontFace = Styles.FONT_FREDOKA,
 				Position = UDim2.fromScale(0.5, 0.175),
 				Size = UDim2.fromScale(0.8, 0.22),
 				Text = props.Price,
@@ -338,7 +338,7 @@ local function TrendingCard(props: TrendingItem)
 			Native = {
 				AnchorPoint = Vector2.new(0.5, 0.5),
 				BackgroundTransparency = 1,
-				FontFace = Font.new("rbxasset://fonts/families/FredokaOne.json"),
+				FontFace = Styles.FONT_FREDOKA,
 				Position = UDim2.fromScale(0.5, isCosmetic and 0.52 or 0.825),
 				Size = UDim2.fromScale(0.8, 0.22),
 				Text = props.Name,
@@ -354,7 +354,7 @@ local function TrendingCard(props: TrendingItem)
 			Native = {
 				AnchorPoint = Vector2.new(0.5, 0.5),
 				BackgroundTransparency = 1,
-				FontFace = Font.new("rbxasset://fonts/families/FredokaOne.json"),
+				FontFace = Styles.FONT_FREDOKA,
 				Position = UDim2.fromScale(0.5, 0.70),
 				Size = UDim2.fromScale(0.7, 0.18),
 				Text = props.Tier,
@@ -397,7 +397,7 @@ return function()
 	}, {
 		Title = c("TextLabel", {
 			BackgroundTransparency = 1,
-			FontFace = Font.new("rbxasset://fonts/families/FredokaOne.json"),
+			FontFace = Styles.FONT_FREDOKA,
 			Position = UDim2.fromScale(0.03, 0),
 			Size = UDim2.fromScale(0.94, 0.09),
 			Text = "Featured",
@@ -418,7 +418,7 @@ return function()
 		TrendingLabel = c("TextLabel", {
 			AnchorPoint = Vector2.new(0, 0),
 			BackgroundTransparency = 1,
-			FontFace = Font.new("rbxasset://fonts/families/FredokaOne.json"),
+			FontFace = Styles.FONT_FREDOKA,
 			Position = UDim2.fromScale(0.03, 0.478),
 			Size = UDim2.fromScale(0.55, 0.065),
 			Text = "Hot Right Now",

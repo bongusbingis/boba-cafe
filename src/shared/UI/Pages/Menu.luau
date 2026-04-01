@@ -6,6 +6,9 @@ local UI = Shared:WaitForChild("UI")
 ---> dependencies
 local React = require(Packages.React)
 
+---> styles
+local Styles = require(UI.Styles)
+
 ---> components
 local OpenableMenu = require(UI.Components.Core.OpenableMenu)
 local HudTabButton = require(UI.Components.Buttons.HudTabButton)
@@ -28,14 +31,14 @@ return function()
             BackgroundEnabled = true,
             LayoutOrder = k,
             Size = UDim2.fromScale(0.85, 0.095),
-            TextColor3 = Color3.fromRGB(150, 189, 136),
+            TextColor3 = Styles.GREEN_LIGHT,
             Text = tab,
         })
     end
 
     return c(OpenableMenu, {
         TitleText = "Menu",
-        TitleColor = Color3.fromRGB(143, 169, 127),
+        TitleColor = Styles.GREEN,
         SideButtonChildren = sideButtonChildren,
     })
 end

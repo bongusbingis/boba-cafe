@@ -10,12 +10,11 @@ local ReactSpring = require(Packages.ReactSpring)
 ---> components
 local Pane = require(UI.Components.Pane)
 
+---> styles
+local Styles = require(UI.Styles)
+
 ---> constants
-local SPRING_CONFIG = {
-	mass = 1,
-	tension = 10000,
-	friction = 150,
-}
+local SPRING_CONFIG = Styles.SPRING_STANDARD
 
 ---> private
 local c = React.createElement
@@ -38,7 +37,7 @@ return function(props: Props)
 
 	return c(Pane, {
 		ClassName = "TextButton",
-		CornerRadius = UDim.new(0.2, 0),
+		CornerRadius = Styles.CORNER_BUTTON,
 		Scale = styles.scale,
 		OnClick = props.OnClick,
 		OnPress = function()
@@ -57,7 +56,7 @@ return function(props: Props)
 		Native = {
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			AutoButtonColor = false,
-			BackgroundColor3 = Color3.fromRGB(143, 169, 127),
+			BackgroundColor3 = Styles.GREEN,
 			BackgroundTransparency = 0,
 			LayoutOrder = props.LayoutOrder,
 			Size = UDim2.fromScale(0.235229, 1),
@@ -70,7 +69,7 @@ return function(props: Props)
 			Native = {
 				AnchorPoint = Vector2.new(0.5, 0.5),
 				BackgroundTransparency = 1,
-				FontFace = Font.new("rbxasset://fonts/families/FredokaOne.json"),
+				FontFace = Styles.FONT_FREDOKA,
 				Position = UDim2.fromScale(0.5, 0.2),
 				Size = UDim2.fromScale(1, 0.250944),
 				Text = props.Title,
@@ -84,7 +83,7 @@ return function(props: Props)
 			Native = {
 				AnchorPoint = Vector2.new(0.5, 0.5),
 				BackgroundTransparency = 1,
-				FontFace = Font.new("rbxasset://fonts/families/FredokaOne.json"),
+				FontFace = Styles.FONT_FREDOKA,
 				Position = UDim2.fromScale(0.5, 0.6),
 				Size = UDim2.fromScale(1, 0.32),
 				Text = props.Price,

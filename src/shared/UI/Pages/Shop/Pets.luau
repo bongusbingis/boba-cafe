@@ -6,6 +6,9 @@ local UI = Shared:WaitForChild("UI")
 ---> dependencies
 local React = require(Packages.React)
 
+---> styles
+local Styles = require(UI.Styles)
+
 ---> components
 local ShopCard = require(UI.Components.Buttons.ShopCard)
 
@@ -106,22 +109,22 @@ return function()
 		Title = c("TextLabel", {
 			AnchorPoint = Vector2.new(0.5, 0),
 			BackgroundTransparency = 1,
-			FontFace = Font.new("rbxasset://fonts/families/FredokaOne.json"),
+			FontFace = Styles.FONT_FREDOKA,
 			Position = UDim2.fromScale(0.470149, 0),
 			Size = UDim2.fromScale(0.94, 0.09),
 			Text = "Pets",
-			TextColor3 = Color3.fromRGB(143, 169, 127),
+			TextColor3 = Styles.GREEN,
 			TextScaled = true,
 		}),
 
 		Hint = c("TextLabel", {
 			AnchorPoint = Vector2.new(0.5, 0),
 			BackgroundTransparency = 1,
-			FontFace = Font.new("rbxasset://fonts/families/FredokaOne.json"),
+			FontFace = Styles.FONT_FREDOKA,
 			Position = UDim2.fromScale(0.5, 0.095),
 			Size = UDim2.fromScale(0.94, 0.055),
 			Text = "Purchase capsules to hatch your own pets!",
-			TextColor3 = Color3.fromRGB(180, 180, 180),
+			TextColor3 = Styles.GRAY,
 			TextScaled = true,
 		}),
 

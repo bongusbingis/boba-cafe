@@ -1,8 +1,13 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Packages = ReplicatedStorage:WaitForChild("Packages")
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local UI = Shared:WaitForChild("UI")
 
 ---> dependencies
 local React = require(Packages.React)
+
+---> styles
+local Styles = require(UI.Styles)
 
 ---> components
 local ShopCategory = require(script.Parent.ShopCategory)
@@ -37,11 +42,11 @@ return function()
 		Title = c("TextLabel", {
 			AnchorPoint = Vector2.new(0.5, 0),
 			BackgroundTransparency = 1,
-			FontFace = Font.new("rbxasset://fonts/families/FredokaOne.json"),
+			FontFace = Styles.FONT_FREDOKA,
 			Position = UDim2.fromScale(0.470149, 0),
 			Size = UDim2.fromScale(0.94, 0.09),
 			Text = "Currency",
-			TextColor3 = Color3.fromRGB(143, 169, 127),
+			TextColor3 = Styles.GREEN,
 			TextScaled = true,
 		}),
 

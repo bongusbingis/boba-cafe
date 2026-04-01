@@ -9,6 +9,9 @@ local React = require(Packages.React)
 ---> components
 local Pane = require(UI.Components.Pane)
 
+---> styles
+local Styles = require(UI.Styles)
+
 ---> private
 local c = React.createElement
 
@@ -20,7 +23,7 @@ return function(props)
 			AnchorPoint = Vector2.new(0, 0.5),
 			BackgroundTransparency = 1,
 			Image = props.Image or "http://www.roblox.com/asset/?id=13438617189",
-			ImageColor3 = props.ImageColor3 or Color3.fromRGB(150, 189, 136),
+			ImageColor3 = props.ImageColor3 or Styles.GREEN_LIGHT,
 			Position = props.Position or UDim2.fromScale(0.0193662, 0.5),
 			Size = props.Size or UDim2.fromScale(0.230634, 0.939058),
 		},

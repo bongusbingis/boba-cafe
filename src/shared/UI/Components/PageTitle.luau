@@ -6,6 +6,9 @@ local UI = Shared:WaitForChild("UI")
 ---> dependencies
 local React = require(Packages.React)
 
+---> styles
+local Styles = require(UI.Styles)
+
 ---> private
 local joinDicts = require(UI.Utility.joinDicts)
 local c = React.createElement
@@ -55,7 +58,7 @@ return function(props: {
 			TextLabel = c("TextLabel", {
 				AnchorPoint = Vector2.new(0.5, 0.5),
 				BackgroundTransparency = 1,
-				FontFace = Font.new("rbxasset://fonts/families/FredokaOne.json"),
+				FontFace = Styles.FONT_FREDOKA,
 				Position = UDim2.fromScale(0.5, 0.436),
 				Size = UDim2.fromScale(0.85, 0.591),
 				Text = props.Text,

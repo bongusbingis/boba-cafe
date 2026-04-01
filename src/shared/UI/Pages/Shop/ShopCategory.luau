@@ -6,6 +6,9 @@ local UI = Shared:WaitForChild("UI")
 ---> dependencies
 local React = require(Packages.React)
 
+---> styles
+local Styles = require(UI.Styles)
+
 ---> components
 local Pane = require(UI.Components.Pane)
 local ShopItem = require(UI.Components.Buttons.ShopItem)
@@ -38,7 +41,7 @@ return function(props: Props)
 			Native = {
 				BackgroundTransparency = 1,
 				Image = "http://www.roblox.com/asset/?id=13465572823",
-				ImageColor3 = Color3.fromRGB(136, 170, 122),
+				ImageColor3 = Styles.GREEN_DIM,
 				Size = UDim2.fromScale(0.981, 0.065),
 				SizeConstraint = Enum.SizeConstraint.RelativeXX,
 				SliceCenter = Rect.new(0, 0, 1019, 40),
@@ -49,7 +52,7 @@ return function(props: Props)
 				Native = {
 					AnchorPoint = Vector2.new(0.5, 0),
 					BackgroundTransparency = 1,
-					FontFace = Font.new("rbxasset://fonts/families/FredokaOne.json"),
+					FontFace = Styles.FONT_FREDOKA,
 					Position = UDim2.fromScale(0.5, 0.132084),
 					Size = UDim2.fromScale(0.94, 0.7),
 					Text = props.Title,
@@ -65,7 +68,7 @@ return function(props: Props)
 			Native = {
 				BackgroundTransparency = 1,
 				Image = "http://www.roblox.com/asset/?id=13465749908",
-				ImageColor3 = Color3.fromRGB(151, 190, 135),
+				ImageColor3 = Styles.GREEN_LIGHT,
 				LayoutOrder = 999999999,
 				Size = UDim2.fromScale(0.981, 0.02),
 				SizeConstraint = Enum.SizeConstraint.RelativeXX,

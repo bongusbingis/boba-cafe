@@ -10,12 +10,11 @@ local ReactSpring = require(Packages.ReactSpring)
 ---> components
 local Pane = require(UI.Components.Pane)
 
+---> styles
+local Styles = require(UI.Styles)
+
 ---> constants
-local SPRING_CONFIG = {
-	mass = 1,
-	tension = 10000,
-	friction = 150,
-}
+local SPRING_CONFIG = Styles.SPRING_STANDARD
 
 ---> private
 local c = React.createElement
@@ -66,7 +65,7 @@ return function(props: Props)
 				AnchorPoint = Vector2.new(0.5, 0.5),
 				BackgroundTransparency = 1,
 				Image = "http://www.roblox.com/asset/?id=13438418840",
-				ImageColor3 = Color3.fromRGB(255, 87, 90),
+				ImageColor3 = Styles.RED,
 				Position = UDim2.fromScale(0.5, 0.5),
 				Size = UDim2.fromScale(0.835405, 0.835405),
 			},
@@ -77,7 +76,7 @@ return function(props: Props)
 			Native = {
 				AnchorPoint = Vector2.new(0.5, 0.5),
 				BackgroundTransparency = 1,
-				FontFace = Font.new("rbxasset://fonts/families/FredokaOne.json"),
+				FontFace = Styles.FONT_FREDOKA,
 				Position = UDim2.fromScale(0.5, 0.5),
 				Size = UDim2.fromScale(0.744808, 0.744808),
 				Text = "X",
