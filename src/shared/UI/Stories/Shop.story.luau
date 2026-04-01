@@ -23,7 +23,7 @@ return function(target)
 		AnchorPoint = Vector2.new(0.5, 0.5),
 	}, {
 		Shop = c(Shop, {
-			Args = { "Cosmetics" },
+			Args = { "Pets" },
 		}),
 	}))
 

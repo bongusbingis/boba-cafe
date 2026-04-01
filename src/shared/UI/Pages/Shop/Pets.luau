@@ -6,105 +6,96 @@ local UI = Shared:WaitForChild("UI")
 ---> dependencies
 local React = require(Packages.React)
 
+---> components
+local CapsuleTierGroup = require(UI.Components.CapsuleTierGroup)
+local InventoryItemDefinitions = require(Shared.Configuration.InventoryItemDefinitions)
+local Pane = require(UI.Components.Pane)
+local PetCard = require(UI.Components.Buttons.PetCard)
+local ShopCard = require(UI.Components.Buttons.ShopCard)
+local usePx = require(UI.Hooks.usePx)
+
 ---> styles
 local Styles = require(UI.Styles)
 
----> components
-local ShopCard = require(UI.Components.Buttons.ShopCard)
-
 ---> private
 local c = React.createElement
+local pets = InventoryItemDefinitions.Pets
 
----> mock data (replace with server-provided data)
-export type Egg = {
-	Name: string,
-	Icon: string,
-	Price: string,
-	OffSale: boolean?,
-}
-
-local EGGS: { Egg } = {
-	{
-		Name  = "Regular Pet Capsule",
-		Icon  = "rbxassetid://6073658218",
-		Price = " 75",
-	},
-	{
-		Name  = "Rare Pet Capsule",
-		Icon  = "rbxassetid://7621095542",
-		Price = " 250",
-	},
-	{
-		Name  = "Epic Pet Capsule",
-		Icon  = "rbxassetid://9369156094",
-		Price = " 800",
-	},
-	{
-		Name    = "Halloween Capsule",
-		Icon    = "rbxassetid://7621096000",
-		Price   = " 500",
-		OffSale = true,
-	},
-	{
-		Name    = "Christmas Capsule",
-		Icon    = "rbxassetid://8097926532",
-		Price   = " 500",
-		OffSale = true,
-	},
-	{
-		Name    = "Fall Capsule",
-		Icon    = "rbxassetid://11007702975",
-		Price   = " 500",
-		OffSale = true,
-	},
-}
+---> constants
+local TIER_ORDER = { "Common", "Uncommon", "Rare", "Epic", "Legendary", "Special" }
+local PET_CELL_SIZE = 90
 
 ---> public
 return function()
-	local onSaleCount = 0
-	for _, egg in ipairs(EGGS) do
-		if not egg.OffSale then
-			onSaleCount += 1
+	local px = usePx()
+
+	local tierGroups = {}
+	for i, tierName in ipairs(TIER_ORDER) do
+		local items = {}
+		local onSaleIndex = 0
+		local offSaleIndex = 0
+
+		for _, pet in ipairs(pets) do
+			if pet.Tier ~= tierName then
+				continue
+			end
+
+			local layoutOrder
+			if pet.OffSale then
+				offSaleIndex += 1
+				layoutOrder = offSaleIndex
+			else
+				onSaleIndex += 1
+				layoutOrder = onSaleIndex
+			end
+
+			items[pet.Name] = c(PetCard, {
+				Name = pet.Name,
+				Tier = pet.Tier,
+				Model = pet.PetModel,
+				OffSale = pet.OffSale,
+				LayoutOrder = layoutOrder,
+				Size = UDim2.fromOffset(px(PET_CELL_SIZE), px(PET_CELL_SIZE)),
+			})
+		end
+
+		if onSaleIndex + offSaleIndex > 0 then
+			tierGroups[tierName] = c(CapsuleTierGroup, {
+				Tier = tierName,
+				LayoutOrder = i,
+				Items = items,
+			})
 		end
 	end
 
-	local onSaleIndex, offSaleIndex = 0, onSaleCount
-	local gridChildren = {
-		UIGridLayout = c("UIGridLayout", {
-			CellPadding = UDim2.fromScale(0.043, 0.03),
-			CellSize = UDim2.fromScale(0.212, 0.288),
-			SortOrder = Enum.SortOrder.LayoutOrder,
-		}),
-		UIPadding = c("UIPadding", {
-			PaddingTop = UDim.new(0.02, 0),
-			PaddingBottom = UDim.new(0.02, 0),
-			PaddingLeft = UDim.new(0.02, 0),
-			PaddingRight = UDim.new(0.02, 0),
-		}),
-	}
-
-	for _, egg in ipairs(EGGS) do
-		local layoutOrder
-		if egg.OffSale then
-			offSaleIndex += 1
-			layoutOrder = offSaleIndex
-		else
-			onSaleIndex += 1
-			layoutOrder = onSaleIndex
-		end
-
-		gridChildren[egg.Name] = c(ShopCard, {
-			Name = egg.Name,
-			Price = egg.Price,
-			Image = egg.Icon,
-			OffSale = egg.OffSale,
-			LayoutOrder = layoutOrder,
+	table.insert(
+		tierGroups,
+		c("Frame", {
+			BackgroundTransparency = 1,
+			Size = UDim2.fromScale(1, 0.25),
+			LayoutOrder = math.huge,
 		})
+	)
+
+	local capsules = {}
+	for k, capsule in ipairs(pets.Capsules) do
+		local isMiddle = k == 2
+		table.insert(
+			capsules,
+			c(ShopCard, {
+				Name = capsule.Name,
+				Price = capsule.Price,
+				Image = capsule.Image,
+				Size = isMiddle and UDim2.fromScale(1, 1) or UDim2.fromScale(0.875, 0.875),
+			})
+		)
 	end
 
-	return c("Frame", {
+	return c("ScrollingFrame", {
 		BackgroundTransparency = 1,
 		Size = UDim2.fromScale(1, 1),
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		CanvasSize = UDim2.fromScale(0.9, 3),
 	}, {
 		Title = c("TextLabel", {
 			AnchorPoint = Vector2.new(0.5, 0),
@@ -122,23 +113,42 @@ return function()
 			BackgroundTransparency = 1,
 			FontFace = Styles.FONT_FREDOKA,
 			Position = UDim2.fromScale(0.5, 0.095),
-			Size = UDim2.fromScale(0.94, 0.055),
-			Text = "Purchase capsules to hatch your own pets!",
+			Size = UDim2.fromScale(0.94, 0.085),
+			Text = "Open capsules to hatch your own pets. Each capsule contains a random pet!",
 			TextColor3 = Styles.GRAY,
 			TextScaled = true,
 		}),
 
-		Grid = c("ScrollingFrame", {
-			Active = true,
-			AutomaticCanvasSize = Enum.AutomaticSize.Y,
-			BackgroundTransparency = 1,
-			CanvasSize = UDim2.new(),
-			Position = UDim2.fromScale(0, 0.175),
-			ScrollBarImageColor3 = Color3.new(),
-			ScrollBarImageTransparency = 1,
-			ScrollBarThickness = 5,
-			ScrollingDirection = Enum.ScrollingDirection.Y,
-			Size = UDim2.fromScale(1.02, 0.825),
-		}, gridChildren),
+		CapsulePurchaseRow = c(Pane, {
+			ClassName = "Frame",
+			Native = {
+				BackgroundTransparency = 1,
+				Size = UDim2.fromScale(0.8, 0.25),
+				Position = UDim2.fromScale(0.475, 0.2),
+				AnchorPoint = Vector2.new(0.5, 0),
+			},
+			ListLayout = {
+				FillDirection = Enum.FillDirection.Horizontal,
+				HorizontalAlignment = Enum.HorizontalAlignment.Center,
+				VerticalAlignment = Enum.VerticalAlignment.Center,
+				HorizontalFlex = Enum.UIFlexAlignment.SpaceBetween,
+				Padding = UDim.new(0, 20),
+			},
+		}, capsules),
+
+		Grid = c(Pane, {
+			ClassName = "Frame",
+			ListLayout = {
+				FillDirection = Enum.FillDirection.Vertical,
+				HorizontalAlignment = Enum.HorizontalAlignment.Center,
+				Padding = UDim.new(0, 20),
+			},
+			Native = {
+				BackgroundTransparency = 1,
+				Position = UDim2.fromScale(0, 0.475),
+				Size = UDim2.fromScale(1, 0),
+				AutomaticSize = Enum.AutomaticSize.Y,
+			},
+		}, tierGroups),
 	})
 end

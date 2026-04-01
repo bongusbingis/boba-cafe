@@ -103,6 +103,7 @@ export type Props = {
 	Animation: ColorAnimation?,
 	OffSale: boolean?,
 	LayoutOrder: number?,
+	Size: UDim2?,
 	OnClick: (() -> ())?,
 }
 
@@ -144,16 +145,16 @@ return function(props: Props)
 		CornerRadius = Styles.CORNER_FULL,
 		Stroke = active and { Color = props.TierColor, Thickness = 3 } or nil,
 		OnClick = active and props.OnClick or nil,
-		OnPress = active and function()
+		OnPress = active and props.OnClick and function()
 			setIsPressing(true)
 		end or nil,
-		OnRelease = active and function()
+		OnRelease = active and props.OnClick and function()
 			setIsPressing(false)
 		end or nil,
-		OnHover = active and function()
+		OnHover = active and props.OnClick and function()
 			setIsHovering(true)
 		end or nil,
-		OnLeave = active and function()
+		OnLeave = active and props.OnClick and function()
 			setIsHovering(false)
 			setIsPressing(false)
 		end or nil,
@@ -162,6 +163,7 @@ return function(props: Props)
 			BackgroundColor3 = displayColor,
 			BackgroundTransparency = displayTransparency,
 			LayoutOrder = props.LayoutOrder,
+			Size = props.Size or UDim2.fromScale(1, 1),
 		},
 	}, {
 		ProductName = not props.OffSale and c(Pane, {

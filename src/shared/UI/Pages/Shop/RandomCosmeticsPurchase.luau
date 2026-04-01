@@ -5,156 +5,106 @@ local UI = Shared:WaitForChild("UI")
 
 ---> dependencies
 local React = require(Packages.React)
-local ReactSpring = require(Packages.ReactSpring)
 
 ---> components
+local CapsuleTierGroup = require(UI.Components.CapsuleTierGroup)
 local InventoryItemDefinitions = require(Shared.Configuration.InventoryItemDefinitions)
 local NametagCard = require(UI.Components.Buttons.NametagCard)
 local Pane = require(UI.Components.Pane)
+local usePx = require(UI.Hooks.usePx)
 
 ---> styles
 local Styles = require(UI.Styles)
-local GREEN = Styles.GREEN_MID
-local GREEN_DEEP = Styles.GREEN_DEEP
 
 ---> private
 local c = React.createElement
 local nametagColors = InventoryItemDefinitions.Nametags
 
----> tier colors
+---> constants
 local TIER_COLORS = InventoryItemDefinitions.Tiers
-
-local function HeroCard(props)
-	return c(Pane, {
-		ClassName = "ImageButton",
-		CornerRadius = UDim.new(0.06, 0),
-		Stroke = { Color = GREEN, Thickness = styles.strokeThickness },
-		Native = {
-			AutoButtonColor = false,
-			Size = UDim2.fromScale(1, 1),
-		},
-	}, {
-		-- Product image, left half
-		Image = c("ImageLabel", {
-			AnchorPoint = Vector2.new(0, 0.5),
-			BackgroundTransparency = 1,
-			Image = props.Item.Image,
-			Position = UDim2.fromScale(-0.05, 0.5),
-			ScaleType = Enum.ScaleType.Fit,
-			Size = UDim2.fromScale(0.43, 0.82),
-		}),
-
-		-- Info panel, right half
-		Info = c("Frame", {
-			AnchorPoint = Vector2.new(1, 0.5),
-			BackgroundTransparency = 1,
-			Position = UDim2.fromScale(0.975, 0.5),
-			Size = UDim2.fromScale(0.65, 0.88),
-		}, {
-			Layout = c("UIListLayout", {
-				FillDirection = Enum.FillDirection.Vertical,
-				HorizontalAlignment = Enum.HorizontalAlignment.Left,
-				VerticalAlignment = Enum.VerticalAlignment.Center,
-				Padding = UDim.new(0.06, 0),
-				SortOrder = Enum.SortOrder.LayoutOrder,
-			}),
-
-			Name = c("TextLabel", {
-				BackgroundTransparency = 1,
-				FontFace = Styles.FONT_FREDOKA,
-				LayoutOrder = 1,
-				Size = UDim2.fromScale(1, 0.22),
-				Text = props.Item.Name,
-				TextColor3 = GREEN,
-				TextScaled = true,
-				TextXAlignment = Enum.TextXAlignment.Left,
-			}),
-
-			Desc = c("TextLabel", {
-				BackgroundTransparency = 1,
-				FontFace = Styles.FONT_FREDOKA,
-				LayoutOrder = 2,
-				Size = UDim2.fromScale(1, 0.29),
-				Text = props.Item.Description,
-				TextColor3 = GREEN_DEEP,
-				TextScaled = true,
-				TextWrapped = true,
-				TextXAlignment = Enum.TextXAlignment.Left,
-			}),
-
-			PriceRow = c("Frame", {
-				BackgroundTransparency = 1,
-				LayoutOrder = 3,
-				Size = UDim2.fromScale(0.3, 0.2),
-			}, {
-				Pill = c(Pane, {
-					ClassName = "TextLabel",
-					CornerRadius = UDim.new(1, 0),
-					Native = {
-						FontFace = Styles.FONT_FREDOKA,
-						Size = UDim2.fromScale(0.78, 1),
-						Text = props.Item.Price,
-						TextColor3 = Color3.new(1, 1, 1),
-						TextScaled = true,
-						TextXAlignment = Enum.TextXAlignment.Center,
-						BackgroundTransparency = 0,
-						BackgroundColor3 = GREEN,
-					},
-				}),
-			}),
-		}),
-	})
-end
+local TIER_ORDER = { "Basic", "Uncommon", "Rare", "Epic", "Legendary", "Special" }
+local NAMETAG_CELL_SIZE = 90
 
 ---> public
 return function()
-	local onSaleCount = 0
-	for _, entry in ipairs(nametagColors) do
-		if not entry.OffSale then
-			onSaleCount += 1
+	local px = usePx()
+
+	local heroCards = {}
+	for i, tierName in ipairs(TIER_ORDER) do
+		local items = {}
+		local onSaleIndex = 0
+		local offSaleIndex = 0
+
+		for _, entry in ipairs(nametagColors) do
+			if entry.Tier ~= tierName then
+				continue
+			end
+
+			local layoutOrder
+			if entry.OffSale then
+				offSaleIndex += 1
+				layoutOrder = offSaleIndex
+			else
+				onSaleIndex += 1
+				layoutOrder = onSaleIndex
+			end
+
+			items[entry.Name] = c(NametagCard, {
+				Name = entry.Name,
+				Price = entry.Price,
+				Tier = entry.Tier,
+				TierColor = TIER_COLORS[tierName].Color,
+				Color = entry.Color,
+				Animation = entry.Animation,
+				OffSale = entry.OffSale,
+				LayoutOrder = layoutOrder,
+				Size = UDim2.fromOffset(px(NAMETAG_CELL_SIZE), px(NAMETAG_CELL_SIZE)),
+			})
+		end
+
+		if onSaleIndex + offSaleIndex > 0 then
+			heroCards[tierName] = c(CapsuleTierGroup, {
+				Tier = tierName,
+				LayoutOrder = i,
+				Items = items,
+			})
 		end
 	end
 
-	local onSaleIndex, offSaleIndex = 0, onSaleCount
-	local gridChildren = {
-		UIGridLayout = c("UIGridLayout", {
-			CellPadding = UDim2.fromScale(0.043, 0.03),
-			CellSize = UDim2.fromScale(0.212, 0.288),
-			SortOrder = Enum.SortOrder.LayoutOrder,
-		}),
-		UIPadding = c("UIPadding", {
-			PaddingTop = UDim.new(0.02, 0),
-			PaddingBottom = UDim.new(0.02, 0),
-			PaddingLeft = UDim.new(0.02, 0),
-			PaddingRight = UDim.new(0.02, 0),
-		}),
-	}
-
-	for _, entry in ipairs(nametagColors) do
-		local layoutOrder
-		if entry.OffSale then
-			offSaleIndex += 1
-			layoutOrder = offSaleIndex
-		else
-			onSaleIndex += 1
-			layoutOrder = onSaleIndex
-		end
-
-		gridChildren[entry.Name] = c(NametagCard, {
-			Name = entry.Name,
-			Price = entry.Price,
-			Tier = entry.Tier,
-			TierColor = TIER_COLORS[entry.Tier] or TIER_COLORS.Basic,
-			Color = entry.Color,
-			Animation = entry.Animation,
-			OffSale = entry.OffSale,
-			LayoutOrder = layoutOrder,
+	table.insert(
+		heroCards,
+		c("Frame", {
+			BackgroundTransparency = 1,
+			Size = UDim2.fromScale(1, 0.25),
+			LayoutOrder = math.huge,
 		})
+	)
+
+	local capsules = {}
+
+	for k, capsule in ipairs(nametagColors.Capsules) do
+		local isMiddle = k == 2
+		table.insert(
+			capsules,
+			c(require(UI.Components.Buttons.ShopCard), {
+				Name = capsule.Name,
+				Price = capsule.Price,
+				Image = capsule.Image,
+				Size = isMiddle and UDim2.fromScale(1, 1) or UDim2.fromScale(0.875, 0.875),
+				TopBanner = isMiddle and {
+					Color = Styles.GREEN_BADGE,
+					Text = "Best Value",
+					Size = UDim2.fromScale(1, 0.2),
+				} or nil,
+			})
+		)
 	end
 
-	return c("Frame", {
+	return c("ScrollingFrame", {
 		BackgroundTransparency = 1,
 		Size = UDim2.fromScale(1, 1),
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		CanvasSize = UDim2.fromScale(0.9, 3),
 	}, {
 		Title = c("TextLabel", {
 			AnchorPoint = Vector2.new(0.5, 0),
@@ -162,22 +112,52 @@ return function()
 			FontFace = Styles.FONT_FREDOKA,
 			Position = UDim2.fromScale(0.470149, 0),
 			Size = UDim2.fromScale(0.94, 0.09),
-			Text = "Nametag Colors",
+			Text = "Nametag Cosmetics",
 			TextColor3 = Styles.GREEN,
 			TextScaled = true,
 		}),
 
-		Grid = c("ScrollingFrame", {
-			Active = true,
-			AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		Hint = c("TextLabel", {
+			AnchorPoint = Vector2.new(0.5, 0),
 			BackgroundTransparency = 1,
-			CanvasSize = UDim2.new(),
-			Position = UDim2.fromScale(0, 0.112),
-			ScrollBarImageColor3 = Color3.new(),
-			ScrollBarImageTransparency = 1,
-			ScrollBarThickness = 5,
-			ScrollingDirection = Enum.ScrollingDirection.Y,
-			Size = UDim2.fromScale(1.02, 0.888),
-		}, gridChildren),
+			FontFace = Styles.FONT_FREDOKA,
+			Position = UDim2.fromScale(0.5, 0.095),
+			Size = UDim2.fromScale(0.94, 0.085),
+			Text = "Open capsules to purchase cosmetics. Each capsule contains a random item!",
+			TextColor3 = Styles.GRAY,
+			TextScaled = true,
+		}),
+
+		CapsulePurchaseRow = c(Pane, {
+			ClassName = "Frame",
+			Native = {
+				BackgroundTransparency = 1,
+				Size = UDim2.fromScale(0.8, 0.25),
+				Position = UDim2.fromScale(0.475, 0.2),
+				AnchorPoint = Vector2.new(0.5, 0),
+			},
+			ListLayout = {
+				FillDirection = Enum.FillDirection.Horizontal,
+				HorizontalAlignment = Enum.HorizontalAlignment.Center,
+				VerticalAlignment = Enum.VerticalAlignment.Center,
+				HorizontalFlex = Enum.UIFlexAlignment.SpaceBetween,
+				Padding = UDim.new(0, 20),
+			},
+		}, capsules),
+
+		Grid = c(Pane, {
+			ClassName = "Frame",
+			ListLayout = {
+				FillDirection = Enum.FillDirection.Vertical,
+				HorizontalAlignment = Enum.HorizontalAlignment.Center,
+				Padding = UDim.new(0, 20),
+			},
+			Native = {
+				BackgroundTransparency = 1,
+				Position = UDim2.fromScale(0, 0.475),
+				Size = UDim2.fromScale(1, 0),
+				AutomaticSize = Enum.AutomaticSize.Y,
+			},
+		}, heroCards),
 	})
 end
