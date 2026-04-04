@@ -3,10 +3,12 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Packages = ReplicatedStorage:WaitForChild("Packages")
 
 local Knit = require(Packages.Knit)
+local ReplicaController = require(Packages.ReplicaController)
 local Controllers = Knit.AddControllersDeep(script.Modules)
 
 Knit.Start()
 	:andThen(function()
+		ReplicaController.RequestData()
 		print("[Client] Knit started successfully.")
 
 		local playerAddedProcesses = {}

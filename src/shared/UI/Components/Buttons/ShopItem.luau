@@ -88,7 +88,7 @@ return function(props: Props)
 			},
 		}),
 
-		Price = c(Pane, {
+		Price = props.Price and c(Pane, {
 			ClassName = "TextLabel",
 			Native = {
 				BackgroundTransparency = 1,

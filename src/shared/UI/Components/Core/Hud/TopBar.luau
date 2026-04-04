@@ -131,7 +131,7 @@ return function(props: {
 					LayoutOrder = 2,
 					Text = "Inventory",
                     TextColor3 = Styles.GREEN_TEXT,
-                    OnClick = setPage(Pages.Menu),
+                    OnClick = setPage(Pages.Inventory),
 				}),
 			}),
 		}),

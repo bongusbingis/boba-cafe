@@ -1,3 +1,13 @@
+type InventoryItem = {
+    Name: string,
+    Rarity: string?,
+    Equipped: boolean?,
+    StackCount: number?,
+    Properties: {
+        [string]: any,
+    }?,
+}
+
 export type ProfileTemplate = {
     Currency: {
         Points: number,
@@ -10,26 +20,16 @@ export type ProfileTemplate = {
     Inventory: {
         Items: {
             Nametags: {
-                [string]: {
-                    Name: string,
-                    Rarity: string?,
-                    Equipped: boolean?,
-                    StackCount: number?,
-                    Properties: {
-                        [string]: any,
-                    }?,
-                },
+                [string]: InventoryItem,
             },
             Pets: {
-                [string]: {
-                    Name: string,
-                    Rarity: string?,
-                    Equipped: boolean?,
-                    StackCount: number?,
-                    Properties: {
-                        [string]: any,
-                    }?,
-                },
+                [string]: InventoryItem,
+            },
+            Particles: {
+                [string]: InventoryItem,
+            },
+            Capsules: {
+                [string]: InventoryItem,
             },
         },
     },
@@ -46,8 +46,10 @@ return {
     },
     Inventory = {
         Items = {
-            Nametags = {},
             Pets = {},
+            Nametags = {},
+            Capsules = {},
+            Particles = {},
         },
     },
 }

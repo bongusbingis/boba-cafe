@@ -1,159 +1,159 @@
 local petsStorage = game:GetService("ReplicatedStorage").SharedStorage.Pets
 
 export type Pet = {
-	Name: string,
 	Tier: string,
 	PetModel: Instance,
+	CanBeSold: boolean?,
 	OffSale: boolean?,
 }
 
 return setmetatable({
 	---> common
-	{
-		Name = "Ant Pet",
+	["Ant Pet"] = {
 		Tier = "Common",
 		Icon = "",
 		PetModel = petsStorage["Ant Pet"],
+		CanBeSold = true,
 	},
-	{
-		Name = "Duck Pet",
+	["Duck Pet"] = {
 		Tier = "Common",
 		Icon = "",
 		PetModel = petsStorage["Duck Pet"],
+		CanBeSold = true,
 	},
-	{
-		Name = "Monkey Pet",
+	["Monkey Pet"] = {
 		Tier = "Common",
 		Icon = "",
 		PetModel = petsStorage["Monkey Pet"],
+		CanBeSold = true,
 	},
-	{
-		Name = "Sheep Pet",
+	["Sheep Pet"] = {
 		Tier = "Common",
 		Icon = "",
 		PetModel = petsStorage["Sheep Pet"],
+		CanBeSold = true,
 	},
-	{
-		Name = "Squid Pet",
+	["Squid Pet"] = {
 		Tier = "Common",
 		Icon = "",
 		PetModel = petsStorage["Squid Pet"],
+		CanBeSold = true,
 	},
 
 	---> uncommon
-	{
-		Name = "Cow Pet",
+	["Cow Pet"] = {
 		Tier = "Uncommon",
 		Icon = "",
 		PetModel = petsStorage["Cow Pet"],
+		CanBeSold = true,
 	},
-	{
-		Name = "Ladybug Pet",
+	["Ladybug Pet"] = {
 		Tier = "Uncommon",
 		Icon = "",
 		PetModel = petsStorage["Ladybug Pet"],
+		CanBeSold = true,
 	},
-	{
-		Name = "Pig Pet",
+	["Pig Pet"] = {
 		Tier = "Uncommon",
 		Icon = "",
 		PetModel = petsStorage["Pig Pet"],
+		CanBeSold = true,
 	},
-	{
-		Name = "Shark Pet",
+	["Shark Pet"] = {
 		Tier = "Uncommon",
 		Icon = "",
 		PetModel = petsStorage["Shark Pet"],
+		CanBeSold = true,
 	},
-	{
-		Name = "Tiger Pet",
+	["Tiger Pet"] = {
 		Tier = "Uncommon",
 		Icon = "",
 		PetModel = petsStorage["Tiger Pet"],
+		CanBeSold = true,
 	},
-	{
-		Name = "Whale Pet",
+	["Whale Pet"] = {
 		Tier = "Uncommon",
 		Icon = "",
 		PetModel = petsStorage["Whale Pet"],
+		CanBeSold = true,
 	},
 
 	---> rare
-	{
-		Name = "Blue Squid Pet",
+	["Blue Squid Pet"] = {
 		Tier = "Rare",
 		Icon = "",
 		PetModel = petsStorage["Blue Squid Pet"],
+		CanBeSold = true,
 	},
-	{
-		Name = "Cat Pet",
+	["Cat Pet"] = {
 		Tier = "Rare",
 		Icon = "",
 		PetModel = petsStorage["Cat Pet"],
+		CanBeSold = true,
 	},
-	{
-		Name = "Dog Pet",
+	["Dog Pet"] = {
 		Tier = "Rare",
 		Icon = "",
 		PetModel = petsStorage["Dog Pet"],
+		CanBeSold = true,
 	},
-	{
-		Name = "Eagle Pet",
+	["Eagle Pet"] = {
 		Tier = "Rare",
 		Icon = "",
 		PetModel = petsStorage["Eagle Pet"],
+		CanBeSold = true,
 	},
-	{
-		Name = "Frog Pet",
+	["Frog Pet"] = {
 		Tier = "Rare",
 		Icon = "",
 		PetModel = petsStorage["Frog Pet"],
+		CanBeSold = true,
 	},
-	{
-		Name = "Snow Pet",
+	["Snow Pet"] = {
 		Tier = "Rare",
 		Icon = "",
 		PetModel = petsStorage["Snow Pet"],
+		CanBeSold = true,
 	},
 
 	---> epic
-	{
-		Name = "Hen Pet",
+	["Hen Pet"] = {
 		Tier = "Epic",
 		Icon = "",
 		PetModel = petsStorage["Hen Pet"],
+		CanBeSold = true,
 	},
-	{
-		Name = "Spider Pet",
+	["Spider Pet"] = {
 		Tier = "Epic",
 		Icon = "",
 		PetModel = petsStorage["Spider Pet"],
+		CanBeSold = true,
 	},
-	{
-		Name = "Wolf Pet",
+	["Wolf Pet"] = {
 		Tier = "Epic",
 		Icon = "",
 		PetModel = petsStorage["Wolf Pet"],
+		CanBeSold = true,
 	},
 
 	---> legendary
-	{
-		Name = "Seahorse Pet",
+	["Seahorse Pet"] = {
 		Tier = "Legendary",
 		Icon = "",
 		PetModel = petsStorage["Seahorse Pet"],
+		CanBeSold = true,
 	},
-	{
-		Name = "Fish Pet",
+	["Fish Pet"] = {
 		Tier = "Legendary",
 		Icon = "",
 		PetModel = petsStorage["Fish Pet"],
+		CanBeSold = true,
 	},
-	{
-		Name = "Rainbow Squid Pet",
+	["Rainbow Squid Pet"] = {
 		Tier = "Legendary", -- was Mythic; mapped to Legendary (no Mythic tier in new system)
 		Icon = "",
 		PetModel = petsStorage["Rainbow Squid Pet"],
+		CanBeSold = true,
 	},
 
 	---> special (event-only; was VerySpecial)

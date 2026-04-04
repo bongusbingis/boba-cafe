@@ -357,6 +357,32 @@ if RunService:IsRunning() then
 			end)
 			return
 		end
+
+		if packet == "sellItem" then
+			if typeof(data) ~= "table"
+				or typeof(data.itemType) ~= "string"
+				or typeof(data.itemId) ~= "string"
+			then
+				warn("[InventoryServer]: Invalid sellItem packet")
+				return
+			end
+			if data.itemType ~= "Nametags" and data.itemType ~= "Pets" then
+				warn("[InventoryServer]: Invalid sellItem item type", data.itemType)
+				return
+			end
+
+			local itemType: ItemType = data.itemType
+
+			InventoryServer:GetPlayerInventoryAsync(player, itemType):andThen(function(inventory)
+				local item = inventory:GetItemFromId(data.itemId)
+				if item == nil then
+					warn("[InventoryServer]: Item not found for sell request", data.itemId)
+					return
+				end
+				item:Sell()
+			end)
+			return
+		end
 	end)
 end
 

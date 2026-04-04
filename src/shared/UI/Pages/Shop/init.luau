@@ -41,13 +41,13 @@ local PAGES: { OpenableMenu.Page } = {
 	{ Key = "Pets", Label = "Pets", Content = c(require(script.Pets)) },
 	{ Key = "Passes", Label = "Passes", Content = c(require(script.Passes)) },
 	{
-		Key = "Cosmetics",
-		Label = "Cosmetics",
+		Key = "Nametags",
+		Label = "Nametags",
 		Content = c(
 			require((paidRandomItemsRestricted and script.DirectCosmeticsPurchase or script.RandomCosmeticsPurchase))
 		),
 	},
-	{ Key = "BecomeStaff", Label = "Become Staff", Content = c(require(script.BecomeStaff)) },
+	{ Key = "Particles", Label = "Particles", Content = c(require(script.BecomeStaff)) },
 }
 
 return function(props)

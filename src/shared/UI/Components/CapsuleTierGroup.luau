@@ -23,7 +23,7 @@ local BORDER_PADDING = UDim.new(0.05, 0)
 export type Props = {
 	Tier: string,
 	LayoutOrder: number,
-	Items: { [string]: any },
+	Items: { [ any ]: any },
 }
 
 return function(props: Props)

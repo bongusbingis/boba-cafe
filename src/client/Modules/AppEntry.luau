@@ -24,9 +24,14 @@ function AppEntry:KnitStart()
 	uiHandle.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 	uiHandle.IgnoreGuiInset = true
 	uiHandle.Parent = Players.LocalPlayer.PlayerGui
-
-	local root = ReactRoblox.createRoot(uiHandle)
-	root:render(React.createElement(App))
+	
+	xpcall(function()
+		local root = ReactRoblox.createRoot(uiHandle)
+		root:render(React.createElement(App))
+	end, function()
+		warn("Render failure")
+	end)
+	
 end
 
 return AppEntry

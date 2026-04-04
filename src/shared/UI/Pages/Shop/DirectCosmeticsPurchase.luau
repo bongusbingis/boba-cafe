@@ -23,7 +23,7 @@ local TIER_COLORS = InventoryItemDefinitions.Tiers
 ---> public
 return function()
 	local onSaleCount = 0
-	for _, entry in ipairs(nametagColors) do
+	for _, entry in pairs(nametagColors) do
 		if not entry.OffSale then
 			onSaleCount += 1
 		end
@@ -44,7 +44,7 @@ return function()
 		}),
 	}
 
-	for _, entry in ipairs(nametagColors) do
+	for name, entry in pairs(nametagColors) do
 		local layoutOrder
 		if entry.OffSale then
 			offSaleIndex += 1
@@ -54,8 +54,8 @@ return function()
 			layoutOrder = onSaleIndex
 		end
 
-		gridChildren[entry.Name] = c(NametagCard, {
-			Name = entry.Name,
+		gridChildren[name] = c(NametagCard, {
+			Name = name,
 			Price = entry.Price,
 			Tier = entry.Tier,
 			TierColor = TIER_COLORS[entry.Tier] or TIER_COLORS.Basic,

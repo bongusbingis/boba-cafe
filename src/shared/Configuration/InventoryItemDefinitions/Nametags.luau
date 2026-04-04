@@ -10,10 +10,10 @@ export type ColorAnimation = {
 }
 
 export type NametagColor = {
-	Name: string,
 	Tier: string,
 	Color: Color3,
 	Price: string,
+	CanBeSold: boolean?,
 	Animation: ColorAnimation?,
 	OffSale: boolean?,
 }
@@ -22,68 +22,67 @@ return setmetatable({
 	---> static
 
     ---> basic
-	{
-		Name = "Crimson",
+	["Crimson"] = {
 		Tier = "Basic",
 		Color = Color3.fromRGB(220, 50, 50),
 		Price = "150",
+		CanBeSold = true,
 	},
-	{
-		Name = "Blue",
+	["Blue"] = {
 		Tier = "Basic",
 		Color = Color3.fromRGB(50, 150, 220),
 		Price = " 150",
+		CanBeSold = true,
 	},
-    {
-		Name = "Turquoise",
+    ["Turquoise"] = {
 		Tier = "Basic",
 		Color = Color3.fromRGB(50, 220, 200),
 		Price = " 150",
+		CanBeSold = true,
 	},
-	{
-		Name = "Emerald",
+	["Emerald"] = {
 		Tier = "Basic",
 		Color = Color3.fromRGB(50, 180, 90),
 		Price = " 150",
+		CanBeSold = true,
 	},
-
-	{
-		Name = "Violet",
+	["Violet"] = {
 		Tier = "Basic",
 		Color = Color3.fromRGB(140, 70, 220),
 		Price = " 150",
+		CanBeSold = true,
 	},
-	{
-		Name = "Orange",
+	["Orange"] = {
 		Tier = "Basic",
 		Color = Color3.fromRGB(240, 120, 40),
 		Price = " 150",
+		CanBeSold = true,
 	},
-	{
-		Name = "Slate",
+	["Slate"] = {
 		Tier = "Basic",
 		Color = Color3.fromRGB(100, 120, 150),
 		Price = " 150",
+		CanBeSold = true,
 	},
 
     ---> uncommon
-	{
-		Name = "Gold",
+	["Gold"] = {
 		Tier = "Uncommon",
 		Color = Color3.fromRGB(255, 200, 50),
 		Price = " 200",
+		CanBeSold = true,
 	},
-    {
-		Name = "Rose",
+    ["Rose"] = {
 		Tier = "Uncommon",
 		Color = Color3.fromRGB(220, 80, 120),
 		Price = " 150",
+		CanBeSold = true,
 	},
-	{
-		Name = "Bubblegum",
+	["Bubblegum"] = {
 		Tier = "Uncommon",
 		Color = Color3.fromRGB(255, 100, 180),
 		Price = " 350",
+		CanBeSold = true,
 		Animation = {
 			Frames = {
 				{ Color = Color3.fromRGB(255, 100, 180), Transparency = 0, Hold = 0, Transition = 0.8 },
@@ -91,24 +90,23 @@ return setmetatable({
 			},
 		},
 	},
-
-	{
-		Name = "Mint",
+	["Mint"] = {
 		Tier = "Uncommon",
 		Color = Color3.fromRGB(100, 220, 160),
 		Price = " 200",
+		CanBeSold = true,
 	},
-	{
-		Name = "Lavender",
+	["Lavender"] = {
 		Tier = "Uncommon",
 		Color = Color3.fromRGB(180, 140, 255),
 		Price = " 200",
+		CanBeSold = true,
 	},
-	{
-		Name = "Tangerine",
+	["Tangerine"] = {
 		Tier = "Uncommon",
 		Color = Color3.fromRGB(255, 150, 60),
 		Price = " 250",
+		CanBeSold = true,
 		Animation = {
 			Frames = {
 				{ Color = Color3.fromRGB(255, 150, 60), Transparency = 0, Hold = 0.3, Transition = 0.7 },
@@ -118,11 +116,11 @@ return setmetatable({
 	},
 
     ---> rare
-	{
-		Name = "Sunset",
+	["Sunset"] = {
 		Tier = "Rare",
 		Color = Color3.fromRGB(255, 100, 50),
 		Price = " 400",
+		CanBeSold = true,
 		Animation = {
 			Frames = {
 				{ Color = Color3.fromRGB(255, 80, 50), Hold = 0, Transition = 1.2 },
@@ -131,11 +129,11 @@ return setmetatable({
 			},
 		},
 	},
-	{
-		Name = "Aurora",
+	["Aurora"] = {
 		Tier = "Rare",
 		Color = Color3.fromRGB(100, 255, 200),
 		Price = " 500",
+		CanBeSold = true,
 		Animation = {
 			Frames = {
 				{ Color = Color3.fromRGB(100, 255, 200), Hold = 0, Transition = 1.0 },
@@ -145,12 +143,11 @@ return setmetatable({
 			},
 		},
 	},
-
-	{
-		Name = "Ocean",
+	["Ocean"] = {
 		Tier = "Rare",
 		Color = Color3.fromRGB(30, 120, 220),
 		Price = " 450",
+		CanBeSold = true,
 		Animation = {
 			Frames = {
 				{ Color = Color3.fromRGB(30, 120, 220), Hold = 0, Transition = 1.5 },
@@ -159,11 +156,11 @@ return setmetatable({
 			},
 		},
 	},
-	{
-		Name = "Ember",
+	["Ember"] = {
 		Tier = "Rare",
 		Color = Color3.fromRGB(255, 80, 20),
 		Price = " 500",
+		CanBeSold = true,
 		Animation = {
 			Frames = {
 				{ Color = Color3.fromRGB(255, 80, 20), Hold = 0, Transition = 0.6 },
@@ -174,11 +171,11 @@ return setmetatable({
 	},
 
     ---> epic
-	{
-		Name = "Void",
+	["Void"] = {
 		Tier = "Epic",
 		Color = Color3.fromRGB(80, 50, 150),
 		Price = " 600",
+		CanBeSold = true,
 		Animation = {
 			Frames = {
 				{ Color = Color3.fromRGB(80, 50, 150), Transparency = 0, Hold = 0, Transition = 2.0 },
@@ -186,12 +183,11 @@ return setmetatable({
 			},
 		},
 	},
-
-	{
-		Name = "Eclipse",
+	["Eclipse"] = {
 		Tier = "Epic",
 		Color = Color3.fromRGB(20, 10, 60),
 		Price = " 650",
+		CanBeSold = true,
 		Animation = {
 			Frames = {
 				{ Color = Color3.fromRGB(20, 10, 60), Transparency = 0, Hold = 0.5, Transition = 2.5 },
@@ -200,11 +196,11 @@ return setmetatable({
 			},
 		},
 	},
-	{
-		Name = "Storm",
+	["Storm"] = {
 		Tier = "Epic",
 		Color = Color3.fromRGB(80, 100, 180),
 		Price = " 650",
+		CanBeSold = true,
 		Animation = {
 			Frames = {
 				{ Color = Color3.fromRGB(80, 100, 180), Transparency = 0, Hold = 0, Transition = 1.8 },
@@ -216,11 +212,11 @@ return setmetatable({
 	},
 
     ---> legendary
-	{
-		Name = "Prism",
+	["Prism"] = {
 		Tier = "Legendary",
 		Color = Color3.fromRGB(255, 50, 50),
 		Price = " 800",
+		CanBeSold = true,
 		Animation = {
 			Frames = {
 				{ Color = Color3.fromRGB(255, 50, 50), Hold = 0, Transition = 0.45 },
@@ -232,11 +228,11 @@ return setmetatable({
 			},
 		},
 	},
-	{
-		Name = "Nebula",
+	["Nebula"] = {
 		Tier = "Legendary",
 		Color = Color3.fromRGB(80, 20, 160),
 		Price = " 800",
+		CanBeSold = true,
 		Animation = {
 			Frames = {
 				{ Color = Color3.fromRGB(80, 20, 160), Hold = 0, Transition = 1.2 },
@@ -247,11 +243,11 @@ return setmetatable({
 			},
 		},
 	},
-	{
-		Name = "Inferno",
+	["Inferno"] = {
 		Tier = "Legendary",
 		Color = Color3.fromRGB(255, 60, 0),
 		Price = " 900",
+		CanBeSold = true,
 		Animation = {
 			Frames = {
 				{ Color = Color3.fromRGB(255, 60, 0), Hold = 0, Transition = 0.3 },

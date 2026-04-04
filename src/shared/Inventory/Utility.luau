@@ -6,6 +6,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 
 local Configuration = Shared:WaitForChild("Configuration")
 
+local ItemDefinitions = require(Configuration:WaitForChild("InventoryItemDefinitions"))
 local InventoryLimits = require(Configuration:WaitForChild("InventoryLimits"))
 local ITEM_DATA_MAP = require(script.Parent.ItemsMap)
 local Types = require(script.Parent.Types)
@@ -14,7 +15,7 @@ type InventoryItemRoot = Types.InventoryItemRoot
 type ItemType = Types.ItemType
 
 function Utility.AssertValidItemType(itemType: ItemType)
-	assert(ITEM_DATA_MAP[itemType] ~= nil, (`Invalid inventory item type: {itemType}`))
+	assert(ITEM_DATA_MAP[itemType] or  ItemDefinitions[itemType], (`Invalid inventory item type: {itemType}`))
 end
 
 function Utility.ValidateItem(itemId: string, itemType: ItemType, itemData: InventoryItemRoot): (boolean, string?)

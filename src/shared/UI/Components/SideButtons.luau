@@ -29,9 +29,12 @@ return function(props)
 		},
 		ListLayout = props.ListLayout or {
 			HorizontalAlignment = Enum.HorizontalAlignment.Center,
-            VerticalAlignment = Enum.VerticalAlignment.Center,
-			Padding = UDim.new(0.04, 0),
+            VerticalAlignment = Enum.VerticalAlignment.Top,
+			Padding = UDim.new(0.05, 0),
 			SortOrder = Enum.SortOrder.LayoutOrder,
 		},
+		Padding = {
+			PaddingTop = UDim.new(0.035, 0),
+		}
 	}, props.children)
 end

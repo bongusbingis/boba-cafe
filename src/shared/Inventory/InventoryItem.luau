@@ -7,6 +7,7 @@ local Packages = ReplicatedStorage:WaitForChild("Packages")
 local Networking = ReplicatedStorage:WaitForChild("Networking")
 local InventoryEvent = Networking:WaitForChild("InventoryEvent") :: RemoteEvent
 
+local InventoryItemDefinitions = require(ReplicatedStorage.Shared.Configuration.InventoryItemDefinitions)
 local Knit = require(Packages.Knit)
 
 local IS_SERVER = RunService:IsServer()
@@ -139,6 +140,29 @@ function InventoryItem.Prototype:ToggleEquipped(): ()
 		self:Unequip()
 	else
 		self:Equip()
+	end
+end
+
+function InventoryItem.Prototype:Sell(): ()
+	if IS_SERVER then
+		local itemDef = getItemDefinition(self)
+		if not itemDef or not itemDef.CanBeSold then
+			warn(("[InventoryItem]: Attempted to sell non-sellable item %s/%s"):format(self._type, self.Name))
+			return
+		end
+
+		local sellValue = InventoryItemDefinitions.Tiers[itemDef.Tier].SellPrice or 0
+		local currencyService = Knit.GetService("CurrencyService")
+		currencyService:Modify(self._player, "BobaBucks", sellValue)
+		self._inventory:_removeItemById(self._id)
+	else
+		InventoryEvent:FireServer({
+			packet = "sellItem",
+			data = {
+				itemId = self._id,
+				itemType = self._type,
+			},
+		})
 	end
 end
 

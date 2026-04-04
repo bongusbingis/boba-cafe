@@ -35,7 +35,7 @@ return function()
 		local onSaleIndex = 0
 		local offSaleIndex = 0
 
-		for _, entry in ipairs(nametagColors) do
+		for name, entry in pairs(nametagColors) do
 			if entry.Tier ~= tierName then
 				continue
 			end
@@ -49,8 +49,8 @@ return function()
 				layoutOrder = onSaleIndex
 			end
 
-			items[entry.Name] = c(NametagCard, {
-				Name = entry.Name,
+			items[name] = c(NametagCard, {
+				Name = name,
 				Price = entry.Price,
 				Tier = entry.Tier,
 				TierColor = TIER_COLORS[tierName].Color,

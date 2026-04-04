@@ -35,7 +35,9 @@ Knit.Start()
 					:andThen(function(playerInventory: inventory.PlayerInventory)
 						playerInventory:Insert({
 							Name = "Mint",
-							Rarity = "Rare",
+						})
+						playerInventory:Insert({
+							Name = "Nebula",
 						})
 						print("Player inventory received:", playerInventory)
 					end)

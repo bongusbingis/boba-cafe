@@ -35,7 +35,7 @@ return function()
 		local onSaleIndex = 0
 		local offSaleIndex = 0
 
-		for _, pet in ipairs(pets) do
+		for name, pet in pairs(pets) do
 			if pet.Tier ~= tierName then
 				continue
 			end
@@ -49,8 +49,8 @@ return function()
 				layoutOrder = onSaleIndex
 			end
 
-			items[pet.Name] = c(PetCard, {
-				Name = pet.Name,
+			items[name] = c(PetCard, {
+				Name = name,
 				Tier = pet.Tier,
 				Model = pet.PetModel,
 				OffSale = pet.OffSale,

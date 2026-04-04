@@ -14,6 +14,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local UI = Shared:WaitForChild("UI")
 
 ---> dependencies
+local Knit = require(Packages.Knit)
 local React = require(Packages.React)
 
 ---> styles
@@ -30,6 +31,27 @@ return function(props: {
 	CurrentPage: ModuleScript,
 	SetCurrentPage: (pageComponent: ModuleScript | nil, ...any) -> (),
 })
+	local currency, setCurrency = React.useState({
+		BobaBucks = 0,
+		Points = 0,
+	})
+
+	React.useEffect(function()
+		Knit.GetController("DataController"):GetDataAsync():andThen(function(playerData)
+			setCurrency(playerData.Currency)
+			for type, _ in playerData.Currency do
+				playerData:ListenToChange({ "Currency", type }, function(newValue: number)
+					setCurrency(function(prev)
+						local new = table.clone(prev)
+						new[type] = newValue
+						return new
+					end)
+				end)
+			end
+		end)
+	end, {})
+
+
 	return c(Pane, {
 		ClassName = "Frame",
 		ListLayout = {
@@ -48,7 +70,7 @@ return function(props: {
 			PlusButton = true,
 			Icon = "rbxassetid://13382286492",
 			Color = Styles.GREEN_LIGHT,
-			Text = "1,000",
+			Text = currency.BobaBucks,
 			OnClick = function()
 				props.SetCurrentPage(UI.Pages.Shop, "Currency")
 			end
@@ -58,7 +80,7 @@ return function(props: {
 			PlusButton = true,
 			Icon = "rbxassetid://13391365805",
 			Color = Styles.CORAL,
-			Text = "1,000",
+			Text = currency.Points,
 			OnClick = function()
 				props.SetCurrentPage(UI.Pages.Shop, "Currency")
 			end
