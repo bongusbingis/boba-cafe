@@ -9,6 +9,7 @@
 --!nonstrict
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 local Packages = ReplicatedStorage:WaitForChild("Packages")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local UI = Shared:WaitForChild("UI")
@@ -36,20 +37,22 @@ return function(props: {
 		Points = 0,
 	})
 
-	React.useEffect(function()
-		Knit.GetController("DataController"):GetDataAsync():andThen(function(playerData)
-			setCurrency(playerData.Currency)
-			for type, _ in playerData.Currency do
-				playerData:ListenToChange({ "Currency", type }, function(newValue: number)
-					setCurrency(function(prev)
-						local new = table.clone(prev)
-						new[type] = newValue
-						return new
+	if RunService:IsRunning() then
+		React.useEffect(function()
+			Knit.GetController("DataController"):GetDataAsync():andThen(function(playerData)
+				setCurrency(playerData.Currency)
+				for type, _ in playerData.Currency do
+					playerData:ListenToChange({ "Currency", type }, function(newValue: number)
+						setCurrency(function(prev)
+							local new = table.clone(prev)
+							new[type] = newValue
+							return new
+						end)
 					end)
-				end)
-			end
-		end)
-	end, {})
+				end
+			end)
+		end, {})
+	end
 
 
 	return c(Pane, {

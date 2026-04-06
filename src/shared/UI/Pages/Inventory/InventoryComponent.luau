@@ -24,7 +24,7 @@ type playerInventory = {
 	Inventory: {
 		[string]: {
 			Name: string,
-			Rarity: string?,
+			Tier: string?,
 			Equipped: boolean?,
 			StackCount: number?,
 			Properties: {
@@ -39,15 +39,12 @@ local prettyName = {
 	["Pets"] = "Pets",
 }
 
-local function getSellPrice(itemDef): number?
-	if itemDef.SellPrice then
-		return itemDef.SellPrice
+local function getSellPrice(tier: string): number
+	local tierDef = InventoryItemDefinitions.Tiers[tier]
+	if tierDef and tierDef.SellPrice then
+		return tierDef.SellPrice
 	end
-	local rawPrice = tonumber(itemDef.Price)
-	if rawPrice then
-		return math.floor(rawPrice * 0.5)
-	end
-	return nil
+	return 0
 end
 
 local function getPlayerInventoryAsync(itemType: string)
@@ -64,6 +61,7 @@ local function buildCard(_, entry, itemDef, layoutOrder, equipped, onClick)
 		Name = entry.Name,
 		Tier = itemDef.Tier,
 		Image = itemDef.Image,
+		ImageSize = entry._type == "Particles" and UDim2.fromScale(0.675, 0.675) or UDim2.fromScale(1, 1),
 		Color = itemDef.Color,
 		Model = itemDef.PetModel,
 		Animation = itemDef.Animation,
@@ -105,15 +103,16 @@ local function makeToggleHandler(itemType, id, entry, itemDef, layoutOrder, upda
 			end
 
 			if action == "Sell" then
-				local sellPrice = getSellPrice(itemDef)
-				local priceText = if sellPrice then `[{sellPrice} Boba Bucks]` else "this item"
+				local sellPrice = getSellPrice(itemDef.Tier)
+				local priceText = `[{sellPrice} Boba Bucks]`
 				local confirmDialog = appDialogs.new("ButtonPrompt", {
 					Title = "Sell Item",
 					Text = appDialogs.FormatBrackets(`Sell |{entry.Name}| for {priceText}?`),
 					Buttons = {
-						{ Text = "Sell", Color = Styles.ROSE },
-						{ Text = "Cancel" },
+						{ Text = "Sell", Color = Styles.GREEN },
+						{ Text = "Cancel", Color = Styles.RED },
 					},
+					OffsetX = 0.1,
 				})
 				activeDialogRef.current = confirmDialog
 				confirmDialog:Fire():andThen(function(choice)
@@ -141,14 +140,6 @@ end
 return function(props: {
 	ItemType: string,
 })
-	local itemDefs = InventoryItemDefinitions[props.ItemType]
-	local onSaleCount = 0
-	for _, entry in pairs(itemDefs) do
-		if not entry.OffSale then
-			onSaleCount += 1
-		end
-	end
-
 	local emptyGrid = {
 		UIGridLayout = c("UIGridLayout", {
 			CellPadding = UDim2.fromScale(0.043, 0.03),

@@ -1,32 +1,32 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local UserInputService = game:GetService("UserInputService")
+
 local Packages = ReplicatedStorage:WaitForChild("Packages")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local UI = Shared:WaitForChild("UI")
 
----> dependencies
 local React = require(Packages.React)
 local ReactSpring = require(Packages.ReactSpring)
 
----> components
 local Banner = require(UI.Components.Buttons.Banner)
 local InventoryItemDefinitions = require(Shared.Configuration.InventoryItemDefinitions)
 local Pane = require(UI.Components.Pane)
 local ViewportModel = require(UI.Components.ViewportModel)
-
----> utilities
 local useClock = require(UI.Utility.useClock)
-
----> styles
 local Styles = require(UI.Styles)
 
----> constants
-local IS_MOBILE = game:GetService("UserInputService").TouchEnabled
-local TIER_COLORS = InventoryItemDefinitions.Tiers
+--------------------------------------------------------------------------------
+-- Constants
+--------------------------------------------------------------------------------
 
----> private
+local IS_MOBILE = UserInputService.TouchEnabled
+local TIER_COLORS = InventoryItemDefinitions.Tiers
 local c = React.createElement
 
---- Lerp a number
+--------------------------------------------------------------------------------
+-- Animation helpers
+--------------------------------------------------------------------------------
+
 local function lerp(a: number, b: number, t: number): number
 	return a + (b - a) * t
 end
@@ -36,10 +36,12 @@ local function smoothstep(t: number): number
 	return t * t * (3 - 2 * t)
 end
 
+--- Evaluates an animation keyframe sequence at a given elapsed time.
+--- Returns the interpolated Color3 and transparency for that moment.
 local function evalAnimation(frames: { any }, elapsed: number): (Color3, number)
 	local totalDuration = 0
-	for _, f in ipairs(frames) do
-		totalDuration += (f.Transition or 0.5) + f.Hold
+	for _, frame in ipairs(frames) do
+		totalDuration += (frame.Transition or 0.5) + frame.Hold
 	end
 
 	local t = elapsed % totalDuration
@@ -52,10 +54,8 @@ local function evalAnimation(frames: { any }, elapsed: number): (Color3, number)
 			if t <= transition then
 				local alpha = smoothstep(transition > 0 and (t / transition) or 1)
 				local prevFrame = frames[((i - 2) % #frames) + 1]
-				local fromColor = prevFrame.Color
-				local fromTransp = prevFrame.Transparency or 0
-				return fromColor:Lerp(frame.Color, alpha),
-					lerp(fromTransp, frame.Transparency or 0, alpha)
+				return prevFrame.Color:Lerp(frame.Color, alpha),
+					lerp(prevFrame.Transparency or 0, frame.Transparency or 0, alpha)
 			else
 				return frame.Color, frame.Transparency or 0
 			end
@@ -68,7 +68,9 @@ local function evalAnimation(frames: { any }, elapsed: number): (Color3, number)
 	return last.Color, last.Transparency or 0
 end
 
----> public
+--------------------------------------------------------------------------------
+-- Types
+--------------------------------------------------------------------------------
 
 export type AnimFrame = {
 	Color: Color3,
@@ -84,22 +86,23 @@ export type ColorAnimation = {
 --[[
 	Unified item card. The visual variant is determined by which props are provided:
 
-	  Color / Animation  →  nametag style: animated circular color swatch with Name + Tier labels
-	  Model              →  pet style: 3D viewport with Name at the bottom
-	  Image              →  shop style: image-based circular card with Name + Price
+	  Color / Animation  →  nametag: animated color swatch with Name + Tier labels
+	  Model              →  pet: 3D viewport with Name at the bottom
+	  Image              →  shop: image-based card with Name + optional Price
 
-	All variants support: Equipped banner, OffSale overlay, Price label, hover/press spring.
+	All variants support: TopBanner, OffSale overlay, Price label, hover/press spring.
 ]]
 export type Props = {
 	-- identity
 	Name: string,
 	Tier: string,
 
-	-- variant selectors (provide exactly one group)
-	Color: Color3?,           -- nametag: background color
+	-- variant (provide exactly one group)
+	Color: Color3?, -- nametag: static background color
 	Animation: ColorAnimation?, -- nametag: animated color cycle (overrides Color)
-	Model: Instance?,          -- pet: 3D model rendered in a viewport
-	Image: string?,            -- shop: asset id used as background image
+	Model: Instance?, -- pet: 3D model rendered in a viewport
+	Image: string?, -- shop: asset ID used as background image
+	ImageSize: UDim2?, -- shop: optional image size override
 
 	-- optional
 	Price: string?,
@@ -113,42 +116,45 @@ export type Props = {
 	OnClick: (() -> ())?,
 }
 
-return function(props: Props)
-	local isHovering, setIsHovering = React.useState(false)
-	local isPressing, setIsPressing = React.useState(false)
+--------------------------------------------------------------------------------
+-- Component helpers
+--------------------------------------------------------------------------------
 
-	local active = not props.OffSale
-	local priceVisible = active and (IS_MOBILE or isHovering)
-
+--- Resolves which layout variant is active based on props.
+local function resolveVariant(props: Props): (boolean, boolean)
 	local isPet = props.Model ~= nil
 	local isShop = not isPet and props.Image ~= nil
-	-- else: nametag variant
+	return isPet, isShop
+end
 
-	local tierColor = props.Tier and TIER_COLORS[props.Tier].Color or TIER_COLORS.Common.Color
-	local springConfig = isPet and Styles.SPRING_CARD or Styles.SPRING_STANDARD
-
-	local hoverStyles = ReactSpring.useSpring({
-		scale           = active and (isPressing and 0.95 or (isHovering and (isPet and 1.1 or 1.08) or 1)) or 1,
-		priceOpacity    = props.Price and (priceVisible and 0 or 1) or nil,
-		imageTransparency = isShop and (active and ((not IS_MOBILE and isHovering) and 0.2 or 0) or 0) or nil,
-		config = springConfig,
-	})
-
-	local strokeStyles = ReactSpring.useSpring({
-		priceStrokeOpacity = props.Price and (priceVisible and 0 or 1) or nil,
-		config = { mass = 0.5, tension = 15000, friction = 150 },
-	})
-
-	local startTime = React.useRef(os.clock())
-	local clock = if props.Animation then useClock() else 0
-	local displayColor: Color3 = props.Color or Color3.new(1, 1, 1)
-	local displayTransparency: number = 0
-	if props.Animation and #props.Animation.Frames > 0 then
-		local elapsed = clock - startTime.current
-		displayColor, displayTransparency = evalAnimation(props.Animation.Frames, elapsed)
+--- Builds the name label's position and size based on the active variant.
+local function resolveNameLayout(isPet: boolean, isShop: boolean, hasTier: boolean): (UDim2, UDim2)
+	if isPet then
+		-- Same text layout as nametags; viewport is sized to stay above.
+		return UDim2.fromScale(0.5, 0.48), UDim2.fromScale(0.8, 0.22)
+	elseif isShop and not hasTier then
+		return UDim2.fromScale(0.5, 0.825908), UDim2.fromScale(0.8, 0.3554)
+	elseif hasTier then
+		return UDim2.fromScale(0.5, 0.48), UDim2.fromScale(0.8, 0.22)
+	else
+		return UDim2.fromScale(0.5, 0.48), UDim2.fromScale(0.8, 0.4)
 	end
+end
 
-	local offSaleOverlay = props.OffSale and c(Pane, {
+--- Resolves the price label position based on variant and banner presence.
+local function resolvePricePosition(isShop: boolean, hasBanner: boolean): UDim2
+	if isShop and hasBanner then
+		return UDim2.fromScale(0.5, 0.5)
+	end
+	return UDim2.fromScale(0.5, 0.15)
+end
+
+--------------------------------------------------------------------------------
+-- Child builders
+--------------------------------------------------------------------------------
+
+local function buildOffSaleOverlay()
+	return c(Pane, {
 		ClassName = "Frame",
 		CornerRadius = 1,
 		Native = {
@@ -174,171 +180,192 @@ return function(props: Props)
 				TextScaled = true,
 			},
 		}),
-	}) or nil
+	})
+end
 
-	local banner = props.TopBanner and c(Banner, {
+local function buildBanner(bannerProps: Banner.Props)
+	return c(Banner, {
 		Size = UDim2.fromScale(1.05, 0.225),
-		Text = props.TopBanner.Text,
-		Color = props.TopBanner.Color,
-	}) or nil
+		Text = bannerProps.Text,
+		Color = bannerProps.Color,
+	})
+end
 
-	local priceLabel = props.Price and c(Pane, {
+local function buildPriceLabel(price: string, position: UDim2, springs: any, strokes: any)
+	return c(Pane, {
 		ClassName = "TextLabel",
-		Stroke = { Thickness = 1.5, Transparency = strokeStyles.priceStrokeOpacity },
+		Stroke = { Thickness = 1.5, Transparency = strokes.priceStrokeOpacity },
 		Native = {
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			BackgroundTransparency = 1,
 			FontFace = Styles.FONT_FREDOKA,
-			Position = isShop and (props.TopBanner and UDim2.fromScale(0.5, 0.5) or UDim2.fromScale(0.5, 0.15))
-				or UDim2.fromScale(0.5, 0.15),
+			Position = position,
 			Size = UDim2.fromScale(0.8, 0.213),
-			Text = props.Price,
+			Text = price,
 			TextColor3 = Color3.new(1, 1, 1),
-			TextTransparency = hoverStyles.priceOpacity,
+			TextTransparency = springs.priceOpacity,
 			TextScaled = true,
 		},
-	}) or nil
+	})
+end
 
-	-- Container props differ by variant
-	local nativeProps
-	local stroke = (not isShop) and (active and { Color = tierColor, Thickness = 3 } or nil) or nil
-	local cornerRadius = Styles.CORNER_FULL
-
-	if isShop then
-		nativeProps = {
-			AutoButtonColor = false,
+local function buildShopImage(image: string?, imageSize: UDim2?, tierColor: Color3?, imageTransparency: any)
+	return c(Pane, {
+		ClassName = "ImageLabel",
+		Native = {
+			AnchorPoint = Vector2.new(0.5, 0.5),
 			BackgroundTransparency = 1,
-			Image = props.Image,
-			ImageTransparency = hoverStyles.imageTransparency,
-			LayoutOrder = props.LayoutOrder,
-			Size = props.Size or UDim2.fromScale(1, 1),
-		}
-	elseif isPet then
-		nativeProps = {
-			AutoButtonColor = false,
-			BackgroundColor3 = tierColor:Lerp(Color3.new(0, 0, 0), 0.2),
-			BackgroundTransparency = 0,
-			LayoutOrder = props.LayoutOrder,
-			Size = props.Size or UDim2.fromScale(1, 1),
-		}
-	else
-		-- nametag
-		nativeProps = {
-			AutoButtonColor = false,
-			BackgroundColor3 = displayColor,
-			BackgroundTransparency = displayTransparency,
-			LayoutOrder = props.LayoutOrder,
-			Size = props.Size or UDim2.fromScale(1, 1),
-		}
+			Image = image,
+			BackgroundColor3 = tierColor,
+			ImageTransparency = imageTransparency,
+			Position = UDim2.fromScale(0.5, 0.5),
+			Size = imageSize or UDim2.fromScale(0.675, 0.675),
+			ScaleType = Enum.ScaleType.Fit,
+			ZIndex = 0,
+		},
+	})
+end
+
+local function buildViewport(model: Instance?)
+	return c(ViewportModel, {
+		Model = model,
+		Size = UDim2.fromScale(1, 0.55),
+		ModelRotation = 15,
+		ElevationAngle = 15,
+		FieldOfView = 30,
+	})
+end
+
+local function buildNameLabel(text: string, _, size: UDim2, strokeThickness: number)
+	return c(Pane, {
+		ClassName = "TextLabel",
+		Stroke = { Thickness = strokeThickness },
+		Native = {
+			AnchorPoint = Vector2.new(0.5, 0.65),
+			BackgroundTransparency = 1,
+			FontFace = Styles.FONT_FREDOKA,
+			Position = UDim2.fromScale(0.5, 0.625),
+			Size = size,
+			Text = text,
+			TextColor3 = Color3.new(1, 1, 1),
+			TextScaled = true,
+		},
+	})
+end
+
+local function buildTierLabel(tier: string, tierColor: Color3?)
+	return c(Pane, {
+		ClassName = "TextLabel",
+		Stroke = { Color = Color3.new(0, 0, 0), Thickness = 1.5 },
+		Native = {
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundTransparency = 1,
+			FontFace = Styles.FONT_FREDOKA,
+			Position = UDim2.fromScale(0.5, 0.75),
+			Size = UDim2.fromScale(0.7, 0.16),
+			Text = tier,
+			TextColor3 = tierColor or Styles.OFFWHITE,
+			TextScaled = true,
+		},
+	})
+end
+
+--------------------------------------------------------------------------------
+-- Component
+--------------------------------------------------------------------------------
+
+return function(props: Props)
+	local isHovering, setIsHovering = React.useState(false)
+	local isPressing, setIsPressing = React.useState(false)
+
+	local isPet, isShop = resolveVariant(props)
+	local isActive = not props.OffSale
+	local isInteractive = isActive and props.OnClick ~= nil
+	local priceVisible = isActive and (IS_MOBILE or isHovering)
+
+	local tierColor = props.Tier and TIER_COLORS[props.Tier].Color or nil
+
+	-- Springs
+	local hoverScale = isActive and (isPressing and 0.95 or (isHovering and (isPet and 1.1 or 1.08) or 1)) or 1
+
+	local springs = ReactSpring.useSpring({
+		scale = hoverScale,
+		priceOpacity = props.Price and (priceVisible and 0 or 1) or nil,
+		imageTransparency = isShop and (isActive and ((not IS_MOBILE and isHovering) and 0.2 or 0) or 0) or nil,
+		config = isPet and Styles.SPRING_CARD or Styles.SPRING_STANDARD,
+	})
+
+	local strokes = ReactSpring.useSpring({
+		priceStrokeOpacity = props.Price and (priceVisible and 0 or 1) or nil,
+		config = { mass = 0.5, tension = 15000, friction = 150 },
+	})
+
+	-- Animated background color (nametag variant)
+	local startTime = React.useRef(os.clock())
+	local clock = if props.Animation then useClock() else 0
+	local displayColor: Color3 = props.Color or Color3.new(1, 1, 1)
+	local displayTransparency: number = 0
+	if props.Animation and #props.Animation.Frames > 0 then
+		displayColor, displayTransparency = evalAnimation(props.Animation.Frames, clock - startTime.current)
 	end
 
-	local children
+	-- Layout
+	local namePosition, nameSize = resolveNameLayout(isPet, isShop, props.Tier ~= nil)
+	local nameText = isPet and props.Name:gsub("Pet", "") or props.Name
+	local nameVisible = isPet or not props.OffSale
 
-	if isPet then
-		local petName = props.Name:gsub("Pet", "")
-		children = {
-			Viewport = c(ViewportModel, {
-				Model = props.Model,
-				Size = UDim2.fromScale(1, 0.78),
-				ModelRotation = 15,
-				ElevationAngle = 15,
-				FieldOfView = 30,
-			}),
-			NameLabel = c(Pane, {
-				ClassName = "TextLabel",
-				Stroke = { Thickness = 1 },
-				Native = {
-					AnchorPoint = Vector2.new(0.5, 1),
-					BackgroundTransparency = 1,
-					FontFace = Styles.FONT_FREDOKA,
-					Position = UDim2.fromScale(0.5, 0.99),
-					Size = UDim2.fromScale(0.9, 0.2),
-					Text = petName,
-					TextColor3 = Color3.new(1, 1, 1),
-					TextScaled = true,
-				},
-			}),
-			Banner = banner,
-			ProductPrice = priceLabel,
-			OffSaleOverlay = offSaleOverlay,
-		}
-	elseif isShop then
-		children = {
-			ProductName = not props.OffSale and c(Pane, {
-				ClassName = "TextLabel",
-				Stroke = { Thickness = 1.5 },
-				Native = {
-					AnchorPoint = Vector2.new(0.5, 0.5),
-					BackgroundTransparency = 1,
-					FontFace = Styles.FONT_FREDOKA,
-					Position = UDim2.fromScale(0.5, 0.825908),
-					Size = UDim2.fromScale(0.8, 0.3554),
-					Text = props.Name,
-					TextColor3 = Color3.new(1, 1, 1),
-					TextScaled = true,
-				},
-			}) or nil,
-			ProductPrice = priceLabel,
-			Banner = banner,
-			OffSaleOverlay = offSaleOverlay,
-		}
-	else
-		-- nametag
-		children = {
-			ProductName = not props.OffSale and c(Pane, {
-				ClassName = "TextLabel",
-				Stroke = { Thickness = 1.5 },
-				Native = {
-					AnchorPoint = Vector2.new(0.5, 0.5),
-					BackgroundTransparency = 1,
-					FontFace = Styles.FONT_FREDOKA,
-					Position = UDim2.fromScale(0.5, 0.48),
-					Size = props.Tier and UDim2.fromScale(0.8, 0.22) or UDim2.fromScale(0.8, 0.4),
-					Text = props.Name,
-					TextColor3 = Color3.new(1, 1, 1),
-					TextScaled = true,
-				},
-			}) or nil,
-			TierLabel = not props.OffSale and props.Tier and c(Pane, {
-				ClassName = "TextLabel",
-				Stroke = { Color = Color3.new(0, 0, 0), Thickness = 1.5 },
-				Native = {
-					AnchorPoint = Vector2.new(0.5, 0.5),
-					BackgroundTransparency = 1,
-					FontFace = Styles.FONT_FREDOKA,
-					Position = UDim2.fromScale(0.5, 0.66),
-					Size = UDim2.fromScale(0.7, 0.16),
-					Text = props.Tier,
-					TextColor3 = tierColor,
-					TextScaled = true,
-				},
-			}) or nil,
-			Banner = banner,
-			ProductPrice = priceLabel,
-			OffSaleOverlay = offSaleOverlay,
-		}
-	end
+	-- Children
+	local children = {
+		ShopImage = isShop and buildShopImage(props.Image, props.ImageSize, tierColor, springs.imageTransparency)
+			or nil,
+		Viewport = isPet and buildViewport(props.Model) or nil,
+
+		ProductName = nameVisible and buildNameLabel(nameText, namePosition, nameSize, isPet and 1 or 1.5) or nil,
+
+		TierLabel = (not props.OffSale and props.Tier) and buildTierLabel(props.Tier, tierColor) or nil,
+
+		Banner = props.TopBanner and buildBanner(props.TopBanner) or nil,
+		ProductPrice = props.Price
+				and buildPriceLabel(props.Price, resolvePricePosition(isShop, props.TopBanner ~= nil), springs, strokes)
+			or nil,
+		OffSaleOverlay = props.OffSale and buildOffSaleOverlay() or nil,
+	}
+
+	-- Background color: pet/shop use tier tint; nametag uses animated color
+	local backgroundColor = (isPet or isShop)
+			and (tierColor and tierColor:Lerp(Color3.new(1, 1, 1), 0.2) or Color3.new(1, 1, 1))
+		or displayColor
+
+	local backgroundTransparency = isPet and 0 or isShop and 0 or displayTransparency
 
 	return c(Pane, {
 		ClassName = "ImageButton",
-		Scale = hoverStyles.scale,
+		Scale = springs.scale,
 		AspectRatio = 1,
-		CornerRadius = cornerRadius,
-		Stroke = stroke,
-		OnClick = active and props.OnClick or nil,
-		OnPress = active and props.OnClick and function()
+		CornerRadius = Styles.CORNER_FULL,
+		Stroke = (isActive and props.Tier) and { Color = tierColor, Thickness = 3 } or nil,
+
+		OnClick = isInteractive and props.OnClick or nil,
+		OnPress = isInteractive and function()
 			setIsPressing(true)
 		end or nil,
-		OnRelease = active and props.OnClick and function()
+		OnRelease = isInteractive and function()
 			setIsPressing(false)
 		end or nil,
-		OnHover = active and props.OnClick and function()
+		OnHover = isInteractive and function()
 			setIsHovering(true)
 		end or nil,
-		OnLeave = active and props.OnClick and function()
+		OnLeave = isInteractive and function()
 			setIsHovering(false)
 			setIsPressing(false)
 		end or nil,
-		Native = nativeProps,
+
+		Native = {
+			AutoButtonColor = false,
+			BackgroundColor3 = backgroundColor,
+			BackgroundTransparency = backgroundTransparency,
+			LayoutOrder = props.LayoutOrder,
+			Size = props.Size or UDim2.fromScale(1, 1),
+		},
 	}, children)
 end

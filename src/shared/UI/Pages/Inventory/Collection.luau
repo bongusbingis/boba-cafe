@@ -23,7 +23,7 @@ type playerInventory = {
 	Inventory: {
 		[string]: {
 			Name: string,
-			Rarity: string?,
+			Tier: string?,
 			Equipped: boolean?,
 			StackCount: number?,
 			Properties: {

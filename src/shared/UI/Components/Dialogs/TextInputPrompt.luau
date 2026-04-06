@@ -11,6 +11,7 @@ local Banner = require(UI.Components.Buttons.Banner)
 local Page = require(UI.Components.Core.Page)
 local Pane = require(UI.Components.Pane)
 local PromptButton = require(UI.Components.Buttons.PromptButton)
+local PromptTextBox = require(UI.Components.Buttons.PromptTextBox)
 
 local c = React.createElement
 
@@ -22,27 +23,46 @@ type ButtonDef = {
 return function(props: {
 	Title: string,
 	Text: string,
-	Buttons: { ButtonDef },
+	PlaceholderText: string?,
+	Filter: (string) -> boolean?,
 	OffsetX: number?,
 	OnResolution: (string) -> (),
 	Native: { [string]: any }?,
 })
 	local closeFnRef = React.useRef(nil)
-
+	local textRef = React.useRef()
 	local buttonElements = {}
-	for i, buttonDef in ipairs(props.Buttons) do
-		buttonElements["Button_" .. i] = c(PromptButton, {
-			Text = buttonDef.Text,
-			Color = buttonDef.Color,
-			LayoutOrder = i,
+
+	table.insert(
+		buttonElements,
+		c(PromptTextBox, {
+			Size = UDim2.fromScale(0.75, 0.77),
+			PlaceholderText = props.PlaceholderText,
+			Color = Styles.GRAY,
+			LayoutOrder = math.huge,
+			OnTextChange = function(newText: string)
+				textRef.current = newText
+			end,
+		})
+	)
+
+	print(textRef.current)
+
+	table.insert(
+		buttonElements,
+		c(PromptButton, {
+			Text = "Submit",
+			Size = UDim2.fromScale(0.25, 0.77),
+			Color = Styles.GREEN,
+			LayoutOrder = math.huge,
 			OnClick = function()
 				if closeFnRef.current then
 					closeFnRef.current()
 				end
-				props.OnResolution(buttonDef.Text)
+				props.OnResolution(textRef.current)
 			end,
 		})
-	end
+	)
 
 	local promptElement = c(Pane, {
 		ClassName = "Frame",
@@ -103,7 +123,6 @@ return function(props: {
 						HorizontalAlignment = Enum.HorizontalAlignment.Center,
 						Padding = UDim.new(0.05, 0),
 						VerticalAlignment = Enum.VerticalAlignment.Center,
-						HorizontalFlex = Enum.UIFlexAlignment.Fill,
 					},
 					Native = {
 						AnchorPoint = Vector2.new(0.5, 1),
@@ -129,7 +148,7 @@ return function(props: {
 			Title = c(Banner, {
 				Text = props.Title or "Notification",
 				Color = Styles.GREEN,
-				Size = UDim2.fromScale(1.21645, 0.371931),
+				Size = UDim2.fromScale(1.21645, 0.35),
 			}),
 		}),
 	})

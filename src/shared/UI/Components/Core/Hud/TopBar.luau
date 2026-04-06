@@ -50,7 +50,7 @@ return function(props: {
 			Native = {
 				AnchorPoint = Vector2.new(0.5, 0),
 				Image = "http://www.roblox.com/asset/?id=13407992271",
-				ImageColor3 = Styles.CREAM,
+				ImageColor3 = Styles.GREEN,
 				Position = UDim2.fromScale(0.5, 0.327),
 				Size = UDim2.fromScale(0.263667, 0.633103),
 			},
@@ -60,7 +60,7 @@ return function(props: {
 				Native = {
 					AnchorPoint = Vector2.new(0.5, 0.5),
 					Image = "http://www.roblox.com/asset/?id=13408001982",
-					ImageColor3 = Styles.GREEN_LIGHT,
+					ImageColor3 = Styles.OFFWHITE,
 					Position = UDim2.fromScale(0.5, 0.5),
 					Size = UDim2.new(1, 5, 1, 5),
 				},
@@ -90,6 +90,7 @@ return function(props: {
 			Native = {
 				AnchorPoint = Vector2.new(0.5, 0),
 				Image = "http://www.roblox.com/asset/?id=13407950658",
+				ImageColor3 = Styles.GREEN,
 				Position = UDim2.fromScale(0.5, 0),
 				ScaleType = Enum.ScaleType.Fit,
 				Size = UDim2.fromScale(0.982294, 0.558621),
@@ -100,7 +101,7 @@ return function(props: {
 				Native = {
 					AnchorPoint = Vector2.new(0.5, 0.5),
 					Image = "http://www.roblox.com/asset/?id=13407901910",
-					ImageColor3 = Styles.GREEN_LIGHT,
+					ImageColor3 = Styles.OFFWHITE,
 					Position = UDim2.fromScale(0.5, 0.5),
 					Size = UDim2.fromScale(1.00668, 1.07692),
 				},
@@ -118,19 +119,19 @@ return function(props: {
 				Shop = c(HudTabButton, {
 					LayoutOrder = 0,
 					Text = "Shop",
-                    TextColor3 = Styles.GREEN_TEXT,
+                    TextColor3 = Styles.OFFWHITE,
                     OnClick = setPage(Pages.Shop),
 				}),
 				Menu = c(HudTabButton, {
 					LayoutOrder = 1,
 					Text = "Menu",
-                    TextColor3 = Styles.GREEN_TEXT,
+                    TextColor3 = Styles.OFFWHITE,
                     OnClick = setPage(Pages.Menu),
 				}),
 				Inventory = c(HudTabButton, {
 					LayoutOrder = 2,
 					Text = "Inventory",
-                    TextColor3 = Styles.GREEN_TEXT,
+                    TextColor3 = Styles.OFFWHITE,
                     OnClick = setPage(Pages.Inventory),
 				}),
 			}),

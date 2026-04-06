@@ -25,7 +25,7 @@ type ItemProperties = Types.ItemProperties
 export type InventoryItem = typeof(setmetatable(
 	{} :: {
 		Name: string,
-		Rarity: string?,
+		Tier: string?,
 		_player: Player,
 		_inventory: any,
 		_type: ItemType,
@@ -224,7 +224,7 @@ return function(player: Player, itemId: string, itemType: ItemType, itemData: In
 
 	local self = {
 		Name = itemData.Name,
-		Rarity = itemData.Rarity,
+		Tier = itemData.Tier,
 		_player = player,
 		_id = itemId,
 		_type = itemType,

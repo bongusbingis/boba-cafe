@@ -8,7 +8,7 @@ export type ItemType = "Nametags" | "Pets"
 
 export type InventoryItemRoot = {
 	Name: string,
-	Rarity: string?,
+	Tier: string?,
 	Equipped: boolean?,
 	StackCount: number?,
 	Properties: ItemProperties?,

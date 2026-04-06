@@ -86,6 +86,7 @@ return function()
 				Name = capsule.Name,
 				Price = capsule.Price,
 				Image = capsule.Image,
+				ImageSize = UDim2.fromScale(1, 1),
 				Size = isMiddle and UDim2.fromScale(1, 1) or UDim2.fromScale(0.875, 0.875),
 			})
 		)

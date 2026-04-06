@@ -75,6 +75,8 @@ return React.forwardRef(function(
 			Color: ColorSequence,
 		},
 
+		OnChange: {string} & {() -> ()},
+
 		Native: { [any]: any }?,
         children: {},
 	},

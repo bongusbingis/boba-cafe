@@ -28,13 +28,12 @@ Knit.Start()
 
 		table.insert(playerAddedProcesses, function(player)
 			task.delay(3, function()
-				print("test")
 				local inventory = require(ReplicatedStorage.Shared.Inventory)
 				inventory
 					:GetPlayerInventoryAsync(player, "Nametags")
-					:andThen(function(playerInventory: inventory.PlayerInventory)
+					:andThen(function(playerInventory)
 						playerInventory:Insert({
-							Name = "Mint",
+							Name = "Bubblegum",
 						})
 						playerInventory:Insert({
 							Name = "Nebula",

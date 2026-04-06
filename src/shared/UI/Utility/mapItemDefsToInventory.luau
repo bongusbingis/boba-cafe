@@ -146,7 +146,7 @@ local function mapItemDefinitionsToInventory(itemType: string, items: { string }
 			local id = HttpService:GenerateGUID(false)
 			inventory[id] = setmetatable({
 				Name = name,
-				Rarity = definition.Tier,
+				Tier = definition.Tier,
 				_id = id,
 				_type = itemType,
 				_definition = definition,
@@ -160,7 +160,7 @@ local function mapItemDefinitionsToInventory(itemType: string, items: { string }
 			local id = HttpService:GenerateGUID(false)
 			inventory[id] = setmetatable({
 				Name = name,
-				Rarity = definition.Tier,
+				Tier = definition.Tier,
 				_id = id,
 				_type = itemType,
 				_definition = definition,

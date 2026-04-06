@@ -70,6 +70,7 @@ return function()
 			Name = pass.Name,
 			Price = pass.Price,
 			Image = pass.Image,
+			ImageSize = UDim2.fromScale(1, 1),
 			OffSale = pass.OffSale,
 			LayoutOrder = layoutOrder,
 		})

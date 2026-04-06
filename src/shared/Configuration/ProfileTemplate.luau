@@ -1,6 +1,6 @@
 type InventoryItem = {
     Name: string,
-    Rarity: string?,
+    Tier: string?,
     Equipped: boolean?,
     StackCount: number?,
     Properties: {
@@ -33,6 +33,7 @@ export type ProfileTemplate = {
             },
         },
     },
+    Nickname: string,
 }
 
 return {
@@ -52,4 +53,5 @@ return {
             Particles = {},
         },
     },
+    Nickname = "",
 }

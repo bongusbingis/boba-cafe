@@ -211,7 +211,7 @@ function InventoryServer.Prototype:Insert(itemRootData: InventoryItemRoot): stri
 	local itemId = string.format("%s-%s", itemRootData.Name:lower(), HttpService:GenerateGUID(false))
 	local newItem: InventoryItemRoot = {
 		Name = itemRootData.Name,
-		Rarity = itemRootData.Rarity,
+		Tier = itemRootData.Tier,
 		Equipped = itemRootData.Equipped == true,
 		StackCount = itemRootData.StackCount,
 		Properties = Utility.Clone(itemRootData.Properties or {}),
