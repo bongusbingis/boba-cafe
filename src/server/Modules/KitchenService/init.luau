@@ -6,7 +6,6 @@
 ---> Services
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Workspace = game:GetService("Workspace")
 local Packages = ReplicatedStorage:WaitForChild("Packages")
 
 ---> Requires
@@ -18,7 +17,7 @@ local PromptBuilder = require(script.PromptBuilder)
 local Recipes = require(ReplicatedStorage.Shared.Kitchen.Recipes)
 local KitchenConfig = require(ReplicatedStorage.Shared.Configuration.KitchenConfig)
 local KitchenTypes = require(ReplicatedStorage.Shared.Kitchen.KitchenTypes)
-local RankUtil = require(ReplicatedStorage.Shared.Wrappers.RankUtil)
+local RankUtil = require(ReplicatedStorage.Shared.Utility.RankUtil)
 
 ---> Types
 
@@ -40,7 +39,7 @@ local KitchenService = Knit.CreateService({
 
 function KitchenService:_getMatchingModels(itemName: string): { Model }
     local results = {}
-    local kitchenFolder = Workspace.Assets.Kitchen
+    local kitchenFolder = workspace.Assets.Kitchen
     for _, descendant in kitchenFolder:GetDescendants() do
         if descendant:IsA("Model") and descendant.Name == itemName then
             table.insert(results, descendant)
