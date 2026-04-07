@@ -95,7 +95,7 @@ local function loadPlayerProfile(player: Player)
 				local proxy = createProxyForPlayerProfile(player, playerProfile)
 				local current = os.time()
 				playerProfile.Data.Playtime.MostRecentJoin = current
-				if playerProfile.Data.Playtime.FirstJoin == 0 then
+				if playerProfile.Data.Playtime.FirstJoin == 0 and not RunService:IsStudio() then
 					playerProfile.Data.Playtime.FirstJoin = current
 
 					local function chooseNicknameRecursive(errorText: string?)

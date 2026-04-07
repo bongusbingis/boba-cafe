@@ -7,6 +7,7 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Packages = ReplicatedStorage:WaitForChild("Packages")
+local SelectorModels = ReplicatedStorage:WaitForChild("SelectorModels")
 
 ---> Requires
 
@@ -37,6 +38,28 @@ local KitchenService = Knit.CreateService({
 
 ---> Private
 
+function KitchenService:_spawnSyrupDispensers()
+    local Kitchen = workspace.Assets.Kitchen
+    local numSyrups = 0
+    for _ in Recipes.Syrups do
+        numSyrups += 1
+    end
+
+    for _, syrupsArea: Part in Kitchen.Syrups:GetChildren() do
+        local n = 0
+        for name: string, color: Color3 in Recipes.Syrups do
+            n += 1
+            local syrupDispenser = SelectorModels.Kitchen.SyrupDispenser:Clone()
+            local dispenserPosition = ((syrupsArea.Size.X / (numSyrups + 1)) * n) - syrupsArea.Size.X / 2
+            syrupDispenser:PivotTo(syrupsArea.CFrame * CFrame.new(dispenserPosition, 0, 0))
+            syrupDispenser.Name = name .. " Syrup"
+            syrupDispenser.Liquid.Color = color
+            syrupDispenser.Rim.Color = color
+            syrupDispenser.Parent = Kitchen.Syrups
+        end
+    end
+end
+
 function KitchenService:_getMatchingModels(itemName: string): { Model }
     local results = {}
     local kitchenFolder = workspace.Assets.Kitchen
@@ -61,6 +84,8 @@ function KitchenService:KnitInit()
 end
 
 function KitchenService:KnitStart()
+    self:_spawnSyrupDispensers()
+
     for itemName, recipeData: RecipeData in Recipes.Items do
         local models = self:_getMatchingModels(itemName)
         self._prompts[itemName] = {}
@@ -68,12 +93,14 @@ function KitchenService:KnitStart()
         for _, model in models do
             local prompt = PromptBuilder.Attach(
                 model,
-                { Label = itemName, ActionText = "Interact" },
+                { Label = itemName, ActionText = "Interact", HoldDuration = recipeData.HoldDuration },
                 function(player: Player)
+                    print(RankUtil:GetRankAndRoleAsync(player))
                     if not RankUtil:CanEnterKitchen(player) then
                         return
                     end
 
+                    print("2")
                     local primaryPart = model.PrimaryPart
                     if not primaryPart then
                         return
@@ -90,7 +117,7 @@ function KitchenService:KnitStart()
                         return
                     end
 
-                    self._runner:Run(player, recipeData)
+                    self._runner:Run(player, recipeData, model)
                 end
             )
 

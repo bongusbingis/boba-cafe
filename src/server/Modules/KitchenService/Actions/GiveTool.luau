@@ -11,7 +11,7 @@ end
 
 ---> Action
 
-local function GiveTool(player: Player, toolToClone: Tool): boolean
+local function GiveTool(player: Player, _actionModel: Model, toolToClone: Tool): boolean
     local character = player.Character
     if not character then
         return false

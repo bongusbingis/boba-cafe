@@ -6,6 +6,7 @@
 ---> Requires
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 local KitchenTypes = require(ReplicatedStorage.Shared.Kitchen.KitchenTypes)
 local KitchenConfig = require(ReplicatedStorage.Shared.Configuration.KitchenConfig)
 
@@ -32,11 +33,17 @@ function PromptBuilder.Attach(model: Model, config: PromptConfig, callback: (Pla
 
     model.PrimaryPart = part
 
+    local holdDuration = config.HoldDuration or 3
+    if RunService:IsStudio() then
+        holdDuration = 0.1
+    end
+
     local prompt = Instance.new("ProximityPrompt")
-    prompt.Style = Enum.ProximityPromptStyle.Custom
+    -- prompt.Style = Enum.ProximityPromptStyle.Custom
     prompt.ObjectText = config.Label
     prompt.ActionText = config.ActionText
     prompt.RequiresLineOfSight = false
+    prompt.HoldDuration = holdDuration
     prompt.MaxActivationDistance = KitchenConfig.PROMPT_DISTANCE
     prompt.Parent = part
 

@@ -7,13 +7,16 @@ local Services = Knit.AddServicesDeep(script.Modules)
 
 Knit.Start()
 	:andThen(function()
-		print(Knit)
 		print("[Server] Knit started successfully.")
 
 		local playerAddedProcesses = {}
 		local playerRemovingProcesses = {}
 
 		for _, service in Services do
+			if typeof(service) ~= "table" then
+				continue
+			end
+
 			if typeof(service.PlayerAdded) == "function" then
 				table.insert(playerAddedProcesses, function(player)
 					service:PlayerAdded(player)

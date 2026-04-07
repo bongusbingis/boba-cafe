@@ -10,7 +10,7 @@ local KitchenConfig = require(ReplicatedStorage.Shared.Configuration.KitchenConf
 
 ---> Action
 
-local function AnimateRaw(player: Player, animationInstance: Animation, useMarker: boolean?): boolean
+local function AnimateRaw(player: Player, _actionModel: Model, animationInstance: Animation, useMarker: boolean?): boolean
     local character = player.Character
     if not character then
         return false

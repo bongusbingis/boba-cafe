@@ -11,7 +11,7 @@ end
 
 ---> Action
 
-local function SetToolHoldingProperty(player: Player, instanceName: string, propertyName: string, newValue: any): boolean
+local function SetToolHoldingProperty(player: Player, actionModel: Model, instanceName: string, propertyName: string, newValue: any): boolean
     local tool = getHeldTool(player)
     if not tool then
         return false
@@ -20,6 +20,10 @@ local function SetToolHoldingProperty(player: Player, instanceName: string, prop
     local child = tool:FindFirstChild(instanceName)
     if not child then
         return true
+    end
+
+    if typeof(newValue) == "function" then
+        newValue = newValue(child, actionModel)
     end
 
     (child :: any)[propertyName] = newValue

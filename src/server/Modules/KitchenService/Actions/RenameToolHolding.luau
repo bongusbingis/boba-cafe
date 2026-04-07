@@ -11,10 +11,14 @@ end
 
 ---> Action
 
-local function RenameToolHolding(player: Player, newName: string): boolean
+local function RenameToolHolding(player: Player, _actionModel: Model, newName: string): boolean
     local tool = getHeldTool(player)
     if not tool then
         return false
+    end
+
+    if typeof(newName) == "function" then
+        newName = newName(tool.Name)
     end
 
     tool.Name = newName

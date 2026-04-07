@@ -8,10 +8,11 @@
 export type ActionData = { any }
 
 export type RecipeData = {
+    HoldDuration: number?,
     Actions: { ActionData },
 }
 
-export type ActionFn = (player: Player, ...any) -> boolean
+export type ActionFn = (player: Player, actionModel: Model, ...any) -> boolean
 
 export type InteractionResult = {
     Success: boolean,
@@ -21,6 +22,7 @@ export type InteractionResult = {
 export type PromptConfig = {
     Label: string,
     ActionText: string,
+    HoldDuration: number?, -- default 3
 }
 
 return {}

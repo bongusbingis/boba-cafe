@@ -60,7 +60,7 @@ local FALLBACK_RANK_AND_ROLE: RankAndRole = {
 }
 
 local BOBA_CONFIG: GroupConfig = {
-	GroupId = 34373909,
+	GroupId = 3174578,
 }
 
 -- Cache
@@ -139,12 +139,11 @@ local function ensureCached(player: Player, config: GroupConfig)
 		end)
 		:catch(function(...)
 			warn(
-				string.format(
-					"[RankUtil] Failed to fetch rank for %s (%d) after %d retries — falling back to Customer.",
-					player.Name,
-					player.UserId,
-					MAX_RETRIES
-				),
+				"[RankUtil] Failed to fetch rank — falling back to Customer.",
+				player.Name,
+				player.UserId,
+				MAX_RETRIES,
+
 				...
 			)
 			-- Do NOT cache the fallback; next call will retry.
@@ -204,7 +203,7 @@ function RankUtil:InvalidateCache(player: Player)
 end
 
 local function makeRankCheck(minRank: number, config: GroupConfig?)
-	return function(player: Player): boolean
+	return function(self, player: Player): boolean
 		local _, result = ensureCached(player, config or BOBA_CONFIG):await()
 		return (result :: RankAndRole).Rank >= minRank
 	end

@@ -83,13 +83,15 @@ return function(props: {
 		BackgroundTransparency = 1,
 	}))
 
+	local yOffset = #buttonElements / 2 * (BUTTON_HEIGHT + 8) + 20
+
 	local promptElement = c(Pane, {
 		ClassName = "Frame",
 		AspectRatio = 0.937,
 		Native = {
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			BackgroundTransparency = 1,
-			Position = UDim2.fromScale(0.5 + (props.OffsetX or 0), 0.5),
+			Position = UDim2.fromScale(0.5 + (props.OffsetX or 0), 0.5 - yOffset / 1000),
 			Size = UDim2.fromScale(0.65, 0.65),
 		},
 	}, {

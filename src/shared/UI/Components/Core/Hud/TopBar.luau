@@ -68,10 +68,6 @@ return function(props: {
 
 			TextLabel = c(Pane, {
 				ClassName = "TextLabel",
-				Stroke = {
-					Color = Styles.GREEN_TEXT,
-					Thickness = 2,
-				},
 				Native = {
 					AnchorPoint = Vector2.new(0.5, 0.5),
 					FontFace = Styles.FONT_FREDOKA,
