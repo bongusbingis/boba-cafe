@@ -44,9 +44,7 @@ return function(props: {
 
 	---> init register prompts
 	React.useEffect(function()
-		print(1)
 		if RankUtil:CanUseOrderingSystem(Players.LocalPlayer) then
-			print(2)
 			for _, computer: MeshPart in OrderingSystem.Computers:GetChildren() do
 				local prompt = Instance.new("ProximityPrompt")
 				prompt.HoldDuration = 0
@@ -147,7 +145,7 @@ return function(props: {
 					LayoutOrder = 1,
 					Text = "Menu",
 					TextColor3 = Styles.OFFWHITE,
-					OnClick = setPage(Pages.Ordering),
+					OnClick = setPage(Pages.Menu),
 				}),
 				Inventory = c(HudTabButton, {
 					LayoutOrder = 2,

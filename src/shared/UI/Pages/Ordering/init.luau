@@ -289,7 +289,7 @@ return function(props: {
 		closeMenu()
 	end
 
-	local cardSize = usePx()(70)
+	local cardSize = usePx()(125)
 	local activeItem = if selCategory and selItemKey
 		then FoodTable[selCategory :: string].Items[selItemKey :: string]
 		else nil
@@ -431,15 +431,10 @@ return function(props: {
 		AspectRatio = 1.53648,
 		Native = {
 			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.fromScale(0.5, 0.875),
-			Size = UDim2.fromScale(0.75, 0.75),
+			Position = UDim2.fromScale(0.5, 0.6),
+			Size = UDim2.fromScale(1, 1),
 		},
 	}, {
-		UISizeConstraint = c("UISizeConstraint", {
-			MaxSize = Vector2.new(610, math.huge),
-			MinSize = Vector2.new(390, math.huge),
-		}),
-
 		Base = c(Pane, {
 			ClassName = "ImageLabel",
 			Native = {

@@ -29,9 +29,7 @@ function CurrencyService:Modify(player: Player, type: "BobaBucks" | "Points", am
             return
         end
 
-        print("Before:", playerData.Currency[type])
         playerData:SetValue({ "Currency", type }, current + amount)
-        print("After:", playerData.Currency[type])
     end)
 end
 

@@ -29,12 +29,14 @@ local PickupBeam = SharedStorage.Effects.PickupBeam
 local PlayerBeams = {}
 
 
-OrderController.CurrentOrder = nil :: { any }? 
+OrderController.CurrentOrder = nil :: { any }?
 OrderController.ReadyNode = nil :: Instance?
+OrderController.QueuePosition = nil :: number? -- nil = not queued, 1 = next up
 
 OrderController.OrderChanged = GoodSignal.new()
 OrderController.ReadyNodeChanged = GoodSignal.new()
 OrderController.AnnouncementReceived = GoodSignal.new()
+OrderController.QueueChanged = GoodSignal.new() -- fires(position: number?)
 
 ---> Lifecycle
 function OrderController:KnitStart()
@@ -82,6 +84,19 @@ function OrderController:KnitStart()
 	OrderService.Announcement:Connect(function(title: string, body: string, color: Color3)
 		self.AnnouncementReceived:Fire(title, body, color)
 	end)
+
+	OrderService.QueueUpdated:Connect(function(position: number?)
+		self.QueuePosition = position
+		self.QueueChanged:Fire(position)
+	end)
+end
+
+-- Called by the OrderQueue UI button. Tells the server to remove this player
+-- from the barista queue and clears local state immediately for responsiveness.
+function OrderController:LeaveQueue()
+	self.QueuePosition = nil
+	self.QueueChanged:Fire(nil)
+	Knit.GetService("OrderService"):LeaveQueue()
 end
 
 return OrderController

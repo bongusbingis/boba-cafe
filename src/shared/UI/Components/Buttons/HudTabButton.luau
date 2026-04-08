@@ -68,7 +68,7 @@ return function(props: {
 	}, {
 		UIStroke = props.Selected and c("UIStroke", {
 			Thickness = 3,
-			Color = Styles.GOLD_BADGE,
+			Color = Styles.GREEN_DEEP,
 			ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
 		}),
 		TextLabel = c(Pane, {

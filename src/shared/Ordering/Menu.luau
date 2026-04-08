@@ -188,9 +188,6 @@ local TapiocaFlavor = {
 }
 
 local SyrupFlavor = {
-	['Pumpkin Spice'] = {
-		Color = Color3.fromRGB(255, 147, 75)
-	},
 	['Banana'] = {
 		Color = Color3.fromRGB(255, 250, 84)
 	},
@@ -227,9 +224,6 @@ local SyrupFlavor = {
 	['Thai Milk Tea'] = {
 		Color = Color3.fromRGB(255, 170, 51)
 	},
-	['Watermelon'] = {
-		Color = Color3.fromRGB(255, 54, 111)
-	},
 	['Strawberry'] = {
 		Color = Color3.fromRGB(255, 112, 167)
 	},
@@ -263,40 +257,31 @@ local SyrupFlavor = {
 	['Guava'] = {
 		Color = Color3.fromRGB(235, 173, 131)
 	},
-	['Dragon Fruit'] = {
-		Color = Color3.fromRGB(255, 5, 47)
-	},
 	["Blueberry"] = {
 		Color = Color3.fromRGB(79, 134, 247),
 	},
 	["Peach"] = {
 		Color = Color3.fromRGB(255, 203, 164),
 	},
-	["Oreo"] = {
-		Color = Color3.fromRGB(18, 18, 18),
-	},
-	--['Peppermint'] = {
-	--	Color = Color3.fromRGB(255, 135, 137)
-	--},
 }
 
-local topMenuItems = buildSmoothieItems(true)
-topMenuItems["Pumpkin Spice Boba"] = {
-	Color = TOP_MENU_ITEM_COLOR,
-	ItemName = "Boba",
-	RequiredSelection = {
-		["Tapioca Flavor"] = TapiocaFlavor,
-	},
-	Select = {
-		["Size"] = SIZE_SMALL_MEDIUM_LARGE,
-	},
-}
+-- local topMenuItems = {}--buildSmoothieItems(true)
+-- topMenuItems["Pumpkin Spice Boba"] = {
+-- 	Color = TOP_MENU_ITEM_COLOR,
+-- 	ItemName = "Boba",
+-- 	RequiredSelection = {
+-- 		["Tapioca Flavor"] = TapiocaFlavor,
+-- 	},
+-- 	Select = {
+-- 		["Size"] = SIZE_SMALL_MEDIUM_LARGE,
+-- 	},
+-- }
 
-FoodService["TopMenuSpecial"] = {
-	Title = "New Arrivals",
-	Color = TOP_MENU_COLOR,
-	Items = topMenuItems,
-}
+-- FoodService["TopMenuSpecial"] = {
+-- 	Title = "New Arrivals",
+-- 	Color = TOP_MENU_COLOR,
+-- 	Items = topMenuItems,
+-- }
 
 FoodService['FoodTable'] = {
 	['Boba Teas'] = {

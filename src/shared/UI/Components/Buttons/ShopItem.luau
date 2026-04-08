@@ -14,10 +14,6 @@ local Pane = require(UI.Components.Pane)
 local Styles = require(UI.Styles)
 
 ---> constants
-local NORMAL_COLOR = Styles.GREEN_LIGHT
-local HOVER_COLOR  = NORMAL_COLOR:Lerp(Color3.new(0, 0, 0), 0.12)
-local PRESS_COLOR  = NORMAL_COLOR:Lerp(Color3.new(0, 0, 0), 0.22)
-
 local SPRING_CONFIG = Styles.SPRING_STANDARD
 
 ---> private
@@ -27,15 +23,20 @@ local c = React.createElement
 export type Props = {
 	Label: string,
 	Price: string,
+	Color: Color3?,
 	LayoutOrder: number?,
 	OnClick: (() -> ())?,
 }
 
 return function(props: Props)
+	local baseColor = props.Color or Styles.GREEN_LIGHT
+	local hoverColor = baseColor:Lerp(Color3.new(0, 0, 0), 0.12)
+	local pressColor = baseColor:Lerp(Color3.new(0, 0, 0), 0.22)
+
 	local isHovering, setIsHovering = React.useState(false)
 	local isPressing, setIsPressing = React.useState(false)
 	local styles = ReactSpring.useSpring({
-		backgroundColor = isPressing and PRESS_COLOR or (isHovering and HOVER_COLOR or NORMAL_COLOR),
+		backgroundColor = isPressing and pressColor or (isHovering and hoverColor or baseColor),
 		config = SPRING_CONFIG,
 	})
 

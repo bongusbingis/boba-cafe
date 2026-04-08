@@ -74,10 +74,13 @@ local OrderService = Knit.CreateService({
 		PickUpNodeVisibilityChanged = Knit.CreateSignal(),
 		-- Fired to surface an error/announcement to a specific player's UI
 		Announcement = Knit.CreateSignal(),
+		-- Fired when a player's queue position changes; position = nil means dequeued
+		QueueUpdated = Knit.CreateSignal(),
 	},
 
 	_currentOrderNum = 0 :: number,
 	_orders = {} :: { Order },
+	_queue = {} :: { number }, -- ordered list of waiting barista UserIds
 	_statusScreens = {} :: { SurfaceGui },
 	_staffScreens = {} :: { SurfaceGui },
 	_pickUpAreas = {} :: { Model },
@@ -221,6 +224,18 @@ function OrderService:_updateOrders()
 		end
 	end
 
+	-- Prune baristas who have left the game from the queue
+	local queueChanged = false
+	for i = #self._queue, 1, -1 do
+		if not Players:GetPlayerByUserId(self._queue[i]) then
+			table.remove(self._queue, i)
+			queueChanged = true
+		end
+	end
+	if queueChanged then
+		self:_broadcastQueuePositions()
+	end
+
 	-- Remove pick-up area contents if the customer has left
 	for _, node in self._pickUpAreas do
 		local ownerValue: IntValue = node.OrderOwner
@@ -355,6 +370,8 @@ function OrderService:_addOrder(customerId: number, orderItems: { any })
 		preparedBy = nil,
 		statusColor = COLOR_PENDING,
 	})
+	-- Immediately hand the order to the first barista in the queue, if any.
+	self:_tryDispatchFromQueue()
 	self:_broadcastUpdate()
 end
 
@@ -381,6 +398,117 @@ function OrderService:_claimNextOrder(player: Player)
 
 	self:_broadcastUpdate()
 end
+
+-- ── Queue helpers ─────────────────────────────────────────────────────────
+
+function OrderService:_isInQueue(userId: number): boolean
+	for _, id in self._queue do
+		if id == userId then
+			return true
+		end
+	end
+	return false
+end
+
+-- Fires each queued player their current 1-based position.
+function OrderService:_broadcastQueuePositions()
+	for i, userId in self._queue do
+		local player = Players:GetPlayerByUserId(userId)
+		if player then
+			self.Client.QueueUpdated:Fire(player, i)
+		end
+	end
+end
+
+-- Appends a barista to the end of the waiting queue and notifies them.
+function OrderService:_joinQueue(player: Player)
+	if not RankUtil:CanEnterKitchen(player) then
+		return
+	end
+	if self:_getPlayerOrder(player.UserId, "Being Prepared") then
+		return
+	end
+	if self:_isInQueue(player.UserId) then
+		return
+	end
+	table.insert(self._queue, player.UserId)
+	self.Client.QueueUpdated:Fire(player, #self._queue)
+end
+
+-- Removes a barista from the queue and updates remaining positions.
+function OrderService:_leaveQueue(player: Player)
+	for i, userId in self._queue do
+		if userId == player.UserId then
+			table.remove(self._queue, i)
+			self.Client.QueueUpdated:Fire(player, nil) -- nil = no longer queued
+			self:_broadcastQueuePositions()
+			return
+		end
+	end
+end
+
+-- Dequeues the first waiting barista and assigns the next pending order to them.
+-- Called whenever a new order is placed and the queue is non-empty.
+function OrderService:_tryDispatchFromQueue()
+	if #self._queue == 0 then
+		return
+	end
+	local nextOrder = self:_getNextOrder()
+	if not nextOrder then
+		return
+	end
+
+	-- Walk the queue front-to-back, skipping any baristas who have since left
+	while #self._queue > 0 do
+		local staffId = table.remove(self._queue, 1)
+		local staff = Players:GetPlayerByUserId(staffId)
+
+		if staff and self:_getPlayerOrder(staffId, "Being Prepared") == nil then
+			-- Assign the order
+			nextOrder.status = "Being Prepared"
+			nextOrder.preparedBy = staffId
+			nextOrder.statusColor = COLOR_PREPARING
+
+			self.Client.NotepadUpdated:Fire(staff, "SetNewOrder", nextOrder.order)
+			self.Client.QueueUpdated:Fire(staff, nil) -- they've been dispatched, no longer queued
+
+			for _, node in self._pickUpAreas do
+				if node.OrderOwner.Value == 0 then
+					self.Client.PickUpNodeVisibilityChanged:Fire(staff, node, true)
+				end
+			end
+
+			self:_broadcastQueuePositions()
+			return
+		end
+	end
+end
+
+-- Decides whether to claim immediately or join the queue when a barista
+-- activates a staff screen prompt.
+-- Rules:
+--   • Pending orders exist AND queue is empty → claim directly (no wait).
+--   • No pending orders OR queue already has waiters → join queue.
+function OrderService:_handleClaimOrQueue(player: Player)
+	if not RankUtil:CanEnterKitchen(player) then
+		return
+	end
+	if self:_getPlayerOrder(player.UserId, "Being Prepared") then
+		return -- already preparing an order
+	end
+	if self:_isInQueue(player.UserId) then
+		return -- already waiting
+	end
+
+	local nextOrder = self:_getNextOrder()
+	if nextOrder and #self._queue == 0 then
+		self:_claimNextOrder(player)
+	else
+		self:_joinQueue(player)
+	end
+end
+
+-- ──────────────────────────────────────────────────────────────────────────
 
 -- Presents sequential ActionPrompt dialogs so the staff member can choose
 -- which tools from their inventory to include in the deposited order.
@@ -607,6 +735,11 @@ function OrderService.Client:CreateOrder(player: Player, customerId: number, ord
 	end)
 end
 
+-- Removes the calling player from the barista queue.
+function OrderService.Client:LeaveQueue(player: Player)
+	self.Server:_leaveQueue(player)
+end
+
 ---> Lifecycle
 
 function OrderService:KnitInit()
@@ -642,7 +775,7 @@ function OrderService:KnitInit()
 			prompt.Parent = screenModel
 
 			prompt.Triggered:Connect(function(player: Player)
-				self:_claimNextOrder(player)
+				self:_handleClaimOrQueue(player)
 			end)
 		end
 	end
@@ -687,6 +820,7 @@ end
 
 function OrderService:PlayerRemoving(player: Player)
 	self._orderDebounces[player.UserId] = nil
+	-- _updateOrders (called inside _broadcastUpdate) handles queue pruning
 	self:_broadcastUpdate()
 end
 

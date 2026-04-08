@@ -85,6 +85,7 @@ local function overheadComponent(props: {
 end
 
 local function buildOverhead(player: Player, character: Model)
+	Knit.OnStart():await()
 	Knit.GetController("DataController"):GetDataAsync():andThen(function(playerData)
 		local uiHandle = Instance.new("BillboardGui")
 		uiHandle.Adornee = character:WaitForChild("Head")
