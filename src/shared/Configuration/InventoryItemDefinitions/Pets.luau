@@ -8,71 +8,71 @@ export type Pet = {
 }
 
 return setmetatable({
-	---> common
+	---> Basic
 	["Ant Pet"] = {
-		Tier = "Common",
+		Tier = "Basic",
 		Icon = "",
 		PetModel = petsStorage["Ant Pet"],
 		CanBeSold = true,
 	},
 	["Duck Pet"] = {
-		Tier = "Common",
+		Tier = "Basic",
 		Icon = "",
 		PetModel = petsStorage["Duck Pet"],
 		CanBeSold = true,
 	},
 	["Monkey Pet"] = {
-		Tier = "Common",
+		Tier = "Basic",
 		Icon = "",
 		PetModel = petsStorage["Monkey Pet"],
 		CanBeSold = true,
 	},
 	["Sheep Pet"] = {
-		Tier = "Common",
+		Tier = "Basic",
 		Icon = "",
 		PetModel = petsStorage["Sheep Pet"],
 		CanBeSold = true,
 	},
 	["Squid Pet"] = {
-		Tier = "Common",
+		Tier = "Basic",
 		Icon = "",
 		PetModel = petsStorage["Squid Pet"],
 		CanBeSold = true,
 	},
 
-	---> uncommon
+	---> unBasic
 	["Cow Pet"] = {
-		Tier = "Uncommon",
+		Tier = "UnBasic",
 		Icon = "",
 		PetModel = petsStorage["Cow Pet"],
 		CanBeSold = true,
 	},
 	["Ladybug Pet"] = {
-		Tier = "Uncommon",
+		Tier = "UnBasic",
 		Icon = "",
 		PetModel = petsStorage["Ladybug Pet"],
 		CanBeSold = true,
 	},
 	["Pig Pet"] = {
-		Tier = "Uncommon",
+		Tier = "UnBasic",
 		Icon = "",
 		PetModel = petsStorage["Pig Pet"],
 		CanBeSold = true,
 	},
 	["Shark Pet"] = {
-		Tier = "Uncommon",
+		Tier = "UnBasic",
 		Icon = "",
 		PetModel = petsStorage["Shark Pet"],
 		CanBeSold = true,
 	},
 	["Tiger Pet"] = {
-		Tier = "Uncommon",
+		Tier = "UnBasic",
 		Icon = "",
 		PetModel = petsStorage["Tiger Pet"],
 		CanBeSold = true,
 	},
 	["Whale Pet"] = {
-		Tier = "Uncommon",
+		Tier = "UnBasic",
 		Icon = "",
 		PetModel = petsStorage["Whale Pet"],
 		CanBeSold = true,

@@ -4,7 +4,7 @@ export type ItemProperties = {
 	[string]: any,
 }
 
-export type ItemType = "Nametags" | "Pets"
+export type ItemType = "Nametags" | "Pets" | "Capsules" | "Particles"
 
 export type InventoryItemRoot = {
 	Name: string,

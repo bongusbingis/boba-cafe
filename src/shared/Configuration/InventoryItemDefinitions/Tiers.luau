@@ -5,11 +5,6 @@ export type Tier = {
 }
 
 return {
-	Common = {
-		Color = Color3.fromRGB(190, 190, 190),
-		Weight = 0.6,
-        SellPrice = 5,
-	},
 	Basic = {
         Color = Color3.fromRGB(190, 190, 190),
         Weight = 0.5,

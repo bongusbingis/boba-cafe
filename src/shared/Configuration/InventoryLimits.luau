@@ -1,4 +1,5 @@
---!strict
+local RunService = game:GetService("RunService")
+local BASE_STORAGE = RunService:IsStudio() and 200 or 10
 
 return {
 	Equipped = {
@@ -7,9 +8,9 @@ return {
 		Particles = 5,
 	},
 	Storage = {
-		Nametags = 10,
-		Pets = 10,
-		Particles = 10,
-		Capsules = 10,
+		Nametags = BASE_STORAGE,
+		Pets = BASE_STORAGE,
+		Particles = BASE_STORAGE,
+		Capsules = BASE_STORAGE,
 	},
 }

@@ -8,6 +8,16 @@ type InventoryItem = {
     }?,
 }
 
+-- Represents a pet capsule that has been activated and is currently incubating.
+-- The reward is NOT pre-selected; it is rolled when the hatch completes so
+-- that item pool changes during the wait period are respected.
+-- TimeAccumulated only counts seconds spent actively playing (offline time
+-- does not progress the hatch).
+type PendingHatch = {
+    CapsuleName: string,   -- definition name of the capsule that was used
+    TimeAccumulated: number, -- active-play seconds accumulated so far
+}
+
 export type ProfileTemplate = {
     Currency: {
         Points: number,
@@ -33,6 +43,7 @@ export type ProfileTemplate = {
             },
         },
     },
+    HatchingPet: PendingHatch | false,
     Nickname: string,
 }
 
@@ -53,5 +64,6 @@ return {
             Particles = {},
         },
     },
+    HatchingPet = false,
     Nickname = "",
 }

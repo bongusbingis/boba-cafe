@@ -20,6 +20,7 @@ local BUTTON_HEIGHT = 50
 type ButtonDef = {
 	Text: string,
 	Color: Color3?,
+	Disabled: boolean?,
 }
 
 --[[
@@ -59,9 +60,13 @@ return function(props: {
 		table.insert(buttonElements, c(PromptButton, {
 			Text = buttonDef.Text,
 			Color = buttonDef.Color or Styles.GREEN_DIM,
+			Disabled = buttonDef.Disabled,
 			LayoutOrder = i,
 			Size = UDim2.new(1, 0, 0, px(BUTTON_HEIGHT)),
 			OnClick = function()
+				if buttonDef.Disabled then
+					return
+				end
 				resolve(buttonDef.Text)
 			end,
 		}))

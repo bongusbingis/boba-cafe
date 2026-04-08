@@ -6,52 +6,52 @@ return setmetatable({
 	},
 
 	["Macaron"] = {
-		Tier = "Common",
+		Tier = "Basic",
 		Image = "rbxassetid://16348763106",
 		CanBeSold = true,
 	},
 	["Popsicle"] = {
-		Tier = "Common",
+		Tier = "Basic",
 		Image = "rbxassetid://16348763002",
 		CanBeSold = true,
 	},
 	["Strawberry"] = {
-		Tier = "Common",
+		Tier = "Basic",
 		Image = "rbxassetid://16349044402",
 		CanBeSold = true,
 	},
 	["Orange"] = {
-		Tier = "Common",
+		Tier = "Basic",
 		Image = "rbxassetid://16349044564",
 		CanBeSold = true,
 	},
 	["Grapes"] = {
-		Tier = "Common",
+		Tier = "Basic",
 		Image = "rbxassetid://16349044744",
 		CanBeSold = true,
 	},
 	["Cherry"] = {
-		Tier = "Common",
+		Tier = "Basic",
 		Image = "rbxassetid://16349044888",
 		CanBeSold = true,
 	},
 	["Coffee"] = {
-		Tier = "Common",
+		Tier = "Basic",
 		Image = "rbxassetid://16349078366",
 		CanBeSold = true,
 	},
 	["Cookie"] = {
-		Tier = "Common",
+		Tier = "Basic",
 		Image = "rbxassetid://16349099182",
 		CanBeSold = true,
 	},
 	["Jelly"] = {
-		Tier = "Common",
+		Tier = "Basic",
 		Image = "rbxassetid://16349099020",
 		CanBeSold = true,
 	},
 	["Mochis"] = {
-		Tier = "Common",
+		Tier = "Basic",
 		Image = "rbxassetid://16349116522",
 		CanBeSold = true,
 	},

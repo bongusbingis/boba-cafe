@@ -39,6 +39,8 @@ return setmetatable({
 	} :: Capsule,
 }, {
 	__index = {
-		ActionOverride = {"Hatch", "Sell"}
+		-- "Sell" is omitted here; InventoryComponent appends it automatically
+		-- for any item with CanBeSold = true.
+		ActionOverride = { { Text = "Hatch" } },
 	}
 })

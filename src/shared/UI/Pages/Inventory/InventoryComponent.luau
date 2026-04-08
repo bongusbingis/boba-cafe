@@ -72,6 +72,44 @@ local function buildCard(_, entry, itemDef, layoutOrder, equipped, onClick)
 	})
 end
 
+local function cloneButtons(buttons: { [number]: { [string]: any } }): { [number]: { [string]: any } }
+	local copied = {}
+	for i, button in ipairs(buttons) do
+		copied[i] = table.clone(button)
+	end
+	return copied
+end
+
+local function resolveCapsuleUseLabel(itemType: string, itemDef: any): string?
+	if itemType ~= "Capsules" then
+		return nil
+	end
+
+	if itemDef and itemDef.ItemType == "Pets" then
+		return "Hatch"
+	end
+
+	return "Open"
+end
+
+local function hasActivePetHatch(playerData: any): boolean
+	if not playerData then
+		return false
+	end
+
+	local hatchingPet = playerData.HatchingPet
+	if hatchingPet and hatchingPet ~= false then
+		return true
+	end
+
+	local legacyHatchingPets = playerData.HatchingPets
+	if type(legacyHatchingPets) == "table" then
+		return next(legacyHatchingPets) ~= nil
+	end
+
+	return false
+end
+
 local function makeToggleHandler(itemType, id, entry, itemDef, layoutOrder, updateFn, activeDialogRef)
 	return function()
 		--entry:ToggleEquipped()
@@ -80,29 +118,61 @@ local function makeToggleHandler(itemType, id, entry, itemDef, layoutOrder, upda
 		end
 
 		local buttons = { { Text = entry:IsEquipped() and "Unequip" or "Equip" } }
-		if InventoryItemDefinitions[itemType].ActionOverride then
-			buttons = InventoryItemDefinitions[itemType].ActionOverride
-		end
+		local actionOverride = InventoryItemDefinitions[itemType].ActionOverride
+		local displayToAction: { [string]: string } = {}
 
-		if itemDef.CanBeSold then
-			table.insert(buttons, { Text = "Sell", Color = Styles.ROSE })
-		end
+		local DataController = Knit.GetController("DataController")
+		DataController:GetDataAsync():andThen(function(playerData)
+			local shouldDisablePetHatch = itemType == "Capsules"
+				and itemDef
+				and itemDef.ItemType == "Pets"
+				and hasActivePetHatch(playerData)
 
-		local appDialogs = Knit.GetController("DialogController")
-		local dialog = appDialogs.new("ActionPrompt", {
-			Title = entry.Name,
-			Text = "Choose an action:",
-			OffsetX = 0.1,
-			Buttons = buttons,
-		})
-		activeDialogRef.current = dialog
-		dialog:Fire():andThen(function(action: string)
+			if actionOverride then
+				buttons = cloneButtons(actionOverride)
+
+				local capsuleUseLabel = resolveCapsuleUseLabel(itemType, itemDef)
+				if capsuleUseLabel then
+					for _, button in ipairs(buttons) do
+						if button.Text == "Hatch" then
+							button.Text = capsuleUseLabel
+							displayToAction[capsuleUseLabel] = "Hatch"
+							if shouldDisablePetHatch and capsuleUseLabel == "Hatch" then
+								button.Disabled = true
+							end
+						end
+					end
+				end
+			end
+
+			local hasSellButton = false
+			for _, button in ipairs(buttons) do
+				if button.Text == "Sell" then
+					hasSellButton = true
+					break
+				end
+			end
+
+			if itemDef.CanBeSold and not hasSellButton then
+				table.insert(buttons, { Text = "Sell", Color = Styles.ROSE })
+			end
+
+			local appDialogs = Knit.GetController("DialogController")
+			local dialog = appDialogs.new("ActionPrompt", {
+				Title = entry.Name,
+				Text = "Choose an action:",
+				OffsetX = 0.1,
+				Buttons = buttons,
+			})
+			activeDialogRef.current = dialog
+			dialog:Fire():andThen(function(action: string)
 			activeDialogRef.current = nil
-			if action == "Close" then
+			local resolvedAction = displayToAction[action] or action
+			if resolvedAction == "Close" then
 				return
 			end
 
-			if action == "Sell" then
+			if resolvedAction == "Sell" then
 				local sellPrice = getSellPrice(itemDef.Tier)
 				local priceText = `[{sellPrice} Boba Bucks]`
 				local confirmDialog = appDialogs.new("ButtonPrompt", {
@@ -124,7 +194,16 @@ local function makeToggleHandler(itemType, id, entry, itemDef, layoutOrder, upda
 				return
 			end
 
-			entry[action](entry)
+			-- "Equip"/"Unequip" are direct methods on InventoryItem.
+				-- Any other action (e.g. "Hatch") is a registered ItemAction.
+				if resolvedAction == "Equip" or resolvedAction == "Unequip" then
+					entry[resolvedAction](entry)
+				else
+					entry:Use(resolvedAction)
+				end
+			end)
+		end):catch(function(err)
+			warn("[InventoryComponent]: Failed to read player hatch state", err)
 		end)
 
 		-- local equipped = entry:IsEquipped()
@@ -147,7 +226,7 @@ return function(props: {
 			SortOrder = Enum.SortOrder.LayoutOrder,
 		}),
 		UIPadding = c("UIPadding", {
-			PaddingTop = UDim.new(0.02, 0),
+			PaddingTop = UDim.new(0.01, 0),
 			PaddingBottom = UDim.new(0.02, 0),
 			PaddingLeft = UDim.new(0.02, 0),
 			PaddingRight = UDim.new(0.02, 0),
@@ -183,13 +262,20 @@ return function(props: {
 				end
 
 				local item = playerInventory:GetItemFromId(update.itemId)
+				if not item then
+					return
+				end
+				local itemDef = InventoryItemDefinitions[props.ItemType][item.Name]
+				if not itemDef then
+					return
+				end
 
 				updateGridChildren(function(t)
 					local new = table.clone(t)
 					new[update.itemId] = buildCard(
 						props.ItemType,
 						item,
-						InventoryItemDefinitions[props.ItemType][item.Name],
+						itemDef,
 						0,
 						item:IsEquipped(),
 						makeToggleHandler(
@@ -212,7 +298,7 @@ return function(props: {
 					continue
 				end
 
-				local tier = InventoryItemDefinitions.Tiers[itemDef.Tier or "Common"]
+				local tier = InventoryItemDefinitions.Tiers[itemDef.Tier or "Basic"]
 				local layoutOrder = tier.Weight * 1000
 
 				local onClick = makeToggleHandler(

@@ -108,6 +108,7 @@ function DialogService:Resolve(player: Player, data: OnResolution)
 	local pending = pendingDialogs[data.id]
 	if pending and pending.Player == player then
 		pending.Resolve(data.value)
+		pendingDialogs[data.id] = nil
 	end
 end
 

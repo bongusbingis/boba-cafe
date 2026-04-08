@@ -1,5 +1,6 @@
 ---> fonts
 local FONT_FREDOKA = Font.new("rbxasset://fonts/families/FredokaOne.json")
+local FONT_DENKONE = Font.new("rbxasset://fonts/families/DenkOne.json")
 
 ---> greens
 local GREEN = Color3.fromRGB(143, 169, 127) -- primary: shop title, purchase button bg
@@ -41,6 +42,7 @@ local SPRING_CARD = { mass = 1, tension = 10000, friction = 200 }
 
 return {
 	FONT_FREDOKA = FONT_FREDOKA,
+	FONT_DENKONE = FONT_DENKONE,
 
 	GREEN = GREEN,
 	GREEN_MID = GREEN_MID,

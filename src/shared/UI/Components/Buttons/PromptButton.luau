@@ -15,14 +15,16 @@ return function(props: {
 	Color: Color3?,
 	Size: UDim2?,
 	LayoutOrder: number?,
+	Disabled: boolean?,
 	OnClick: (() -> ())?,
 })
 	local color = props.Color or Styles.GREEN_DIM
+	local isDisabled = props.Disabled == true
 	local isHovering, setIsHovering = React.useState(false)
 	local isPressing, setIsPressing = React.useState(false)
 
 	local springs = ReactSpring.useSpring({
-		scale = isPressing and 0.93 or (isHovering and 1.07 or 1.0),
+		scale = isDisabled and 1 or (isPressing and 0.93 or (isHovering and 1.07 or 1.0)),
 		config = Styles.SPRING_STANDARD,
 	})
 
@@ -34,14 +36,23 @@ return function(props: {
 			Thickness = 3,
 		} or nil,
 		Scale = springs.scale,
-		OnClick = props.OnClick,
+		OnClick = if isDisabled then nil else props.OnClick,
 		OnPress = function()
+			if isDisabled then
+				return
+			end
 			setIsPressing(true)
 		end,
 		OnRelease = function()
+			if isDisabled then
+				return
+			end
 			setIsPressing(false)
 		end,
 		OnHover = function()
+			if isDisabled then
+				return
+			end
 			setIsHovering(true)
 		end,
 		OnLeave = function()
@@ -49,9 +60,10 @@ return function(props: {
 			setIsPressing(false)
 		end,
 		Native = {
+			Active = not isDisabled,
 			AutoButtonColor = false,
 			BackgroundColor3 = color,
-			BackgroundTransparency = 0,
+			BackgroundTransparency = if isDisabled then 0.45 else 0,
 			ImageTransparency = 1,
 			LayoutOrder = props.LayoutOrder,
 			Size = props.Size or UDim2.fromScale(0.47, 0.77),
@@ -68,6 +80,7 @@ return function(props: {
 				Size = UDim2.fromScale(0.85, 0.6),
 				Text = props.Text,
 				TextColor3 = Color3.new(1, 1, 1),
+				TextTransparency = if isDisabled then 0.35 else 0,
 				TextScaled = true,
 				TextWrapped = true,
 			},

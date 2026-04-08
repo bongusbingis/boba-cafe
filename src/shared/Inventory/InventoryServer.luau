@@ -286,7 +286,7 @@ if RunService:IsRunning() then
 				warn("[InventoryServer]: Invalid removeItems packet")
 				return
 			end
-			if data.itemsType ~= "Nametags" and data.itemsType ~= "Pets" then
+			if not ItemsMap[data.itemsType] then
 				warn("[InventoryServer]: Invalid removeItems item type", data.itemsType)
 				return
 			end
@@ -308,7 +308,7 @@ if RunService:IsRunning() then
 				warn("[InventoryServer]: Invalid setItemEquipped packet")
 				return
 			end
-			if data.itemType ~= "Nametags" and data.itemType ~= "Pets" then
+			if not ItemsMap[data.itemType] then
 				warn("[InventoryServer]: Invalid setItemEquipped item type", data.itemType)
 				return
 			end
@@ -340,7 +340,7 @@ if RunService:IsRunning() then
 				warn("[InventoryServer]: Invalid useItem packet")
 				return
 			end
-			if data.itemType ~= "Nametags" and data.itemType ~= "Pets" then
+			if not ItemsMap[data.itemType] then
 				warn("[InventoryServer]: Invalid useItem item type", data.itemType)
 				return
 			end
@@ -366,7 +366,7 @@ if RunService:IsRunning() then
 				warn("[InventoryServer]: Invalid sellItem packet")
 				return
 			end
-			if data.itemType ~= "Nametags" and data.itemType ~= "Pets" then
+			if not ItemsMap[data.itemType] then
 				warn("[InventoryServer]: Invalid sellItem item type", data.itemType)
 				return
 			end

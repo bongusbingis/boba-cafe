@@ -9,6 +9,7 @@
 --!nonstrict
 
 local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Packages = ReplicatedStorage:WaitForChild("Packages")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -43,22 +44,25 @@ return function(props: {
 	end
 
 	---> init register prompts
-	React.useEffect(function()
-		if RankUtil:CanUseOrderingSystem(Players.LocalPlayer) then
-			for _, computer: MeshPart in OrderingSystem.Computers:GetChildren() do
-				local prompt = Instance.new("ProximityPrompt")
-				prompt.HoldDuration = 0
-				prompt.UIOffset = Vector2.new(0, 25)
-				prompt.ObjectText = "Register"
-				prompt.ActionText = "Use Ordering System"
-				prompt.RequiresLineOfSight = false
-				prompt.Parent = computer
-				prompt.Triggered:Connect(function()
-					props.SetCurrentPage(Pages.Ordering)
-				end)
+
+	if RunService:IsRunning() then
+		React.useEffect(function()
+			if RankUtil:CanUseOrderingSystem(Players.LocalPlayer) then
+				for _, computer: MeshPart in OrderingSystem.Computers:GetChildren() do
+					local prompt = Instance.new("ProximityPrompt")
+					prompt.HoldDuration = 0
+					prompt.UIOffset = Vector2.new(0, 25)
+					prompt.ObjectText = "Register"
+					prompt.ActionText = "Use Ordering System"
+					prompt.RequiresLineOfSight = false
+					prompt.Parent = computer
+					prompt.Triggered:Connect(function()
+						props.SetCurrentPage(Pages.Ordering)
+					end)
+				end
 			end
-		end
-	end, {})
+		end, {})
+	end
 
 	return c(Pane, {
 		Native = {

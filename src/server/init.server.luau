@@ -1,6 +1,11 @@
 local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Packages = ReplicatedStorage:WaitForChild("Packages")
+
+-- Set to true to automatically grant every item to yourself when testing in
+-- Studio. Has no effect on live servers regardless of this value.
+local STUDIO_GRANT_ALL_ITEMS = true
 
 local Knit = require(Packages.Knit)
 local Services = Knit.AddServicesDeep(script.Modules)
@@ -23,9 +28,12 @@ Knit.Start()
 				end)
 			end
 			if typeof(service.PlayerRemoving) == "function" then
-				table.insert(playerRemovingProcesses, function(player)
-					service:PlayerRemoving(player)
-				end)
+				table.insert(playerRemovingProcesses, {
+					Name = service.Name,
+					Run = function(player)
+						service:PlayerRemoving(player)
+					end,
+				})
 			end
 		end
 
@@ -36,23 +44,30 @@ Knit.Start()
 			end
 		end)
 
-		table.insert(playerAddedProcesses, function(player)
-			task.delay(3, function()
-				local inventory = require(ReplicatedStorage.Shared.Inventory)
-				inventory
-					:GetPlayerInventoryAsync(player, "Nametags")
-					:andThen(function(playerInventory)
-						playerInventory:Insert({
-							Name = "Bubblegum",
-						})
-						playerInventory:Insert({
-							Name = "Nebula",
-						})
-						print("Player inventory received:", playerInventory)
-					end)
-					:catch(warn)
+		if RunService:IsStudio() and STUDIO_GRANT_ALL_ITEMS then
+			local InventoryItemDefinitions =
+				require(ReplicatedStorage.Shared.Configuration.InventoryItemDefinitions)
+			local Inventory = require(ReplicatedStorage.Shared.Inventory)
+			local ITEM_TYPES = { "Nametags", "Pets", "Capsules", "Particles" }
+
+			table.insert(playerAddedProcesses, function(player)
+				task.delay(3, function()
+					for _, itemType in ITEM_TYPES do
+						local definitions = InventoryItemDefinitions[itemType]
+						if not definitions then
+							continue
+						end
+						Inventory:GetPlayerInventoryAsync(player, itemType)
+							:andThen(function(inv)
+								for itemName, itemDef in definitions do
+									inv:Insert({ Name = itemName, Tier = itemDef.Tier })
+								end
+							end)
+							:catch(warn)
+					end
+				end)
 			end)
-		end)
+		end
 
 		for _, player in Players:GetPlayers() do
 			for _, fn in playerAddedProcesses do
@@ -67,8 +82,24 @@ Knit.Start()
 		end)
 
 		Players.PlayerRemoving:Connect(function(player)
-			for _, fn in playerRemovingProcesses do
-				task.spawn(fn, player)
+			-- Run non-DataService removal hooks first so they can still access profile data.
+			for _, process in playerRemovingProcesses do
+				if process.Name ~= "DataService" then
+					local ok, err = pcall(process.Run, player)
+					if not ok then
+						warn("[Server] PlayerRemoving hook failed for", process.Name, err)
+					end
+				end
+			end
+
+			-- End profile session last.
+			for _, process in playerRemovingProcesses do
+				if process.Name == "DataService" then
+					local ok, err = pcall(process.Run, player)
+					if not ok then
+						warn("[Server] PlayerRemoving hook failed for", process.Name, err)
+					end
+				end
 			end
 		end)
 	end)

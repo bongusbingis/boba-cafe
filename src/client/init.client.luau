@@ -11,6 +11,13 @@ Knit.Start()
 		ReplicaController.RequestData()
 		print("[Client] Knit started successfully.")
 
+		task.delay(2, function()
+			local capsuleService = Knit.GetService("CapsuleService")
+			capsuleService.HatchCapsule:Connect(function(...)
+				print("Hatch capsule event received:", ...)
+			end)
+		end)
+
 		local playerAddedProcesses = {}
 		local playerRemovingProcesses = {}
 

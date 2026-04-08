@@ -111,6 +111,7 @@ export type Props = {
 	OffSale: boolean?,
 
 	-- layout
+	ZIndex: number?,
 	LayoutOrder: number?,
 	Size: UDim2?,
 	OnClick: (() -> ())?,
@@ -366,6 +367,7 @@ return function(props: Props)
 			BackgroundTransparency = backgroundTransparency,
 			LayoutOrder = props.LayoutOrder,
 			Size = props.Size or UDim2.fromScale(1, 1),
+			ZIndex = props.ZIndex,
 		},
 	}, children)
 end

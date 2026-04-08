@@ -17,6 +17,8 @@ local ItemDefinitions = require(Configuration:WaitForChild("InventoryItemDefinit
 local map: { [ItemType]: { [string]: any } } = {
 	Nametags = ItemDefinitions.Nametags,
 	Pets = ItemDefinitions.Pets,
+	Capsules = ItemDefinitions.Capsules,
+	Particles = ItemDefinitions.Particles,
 }
 
 return map
