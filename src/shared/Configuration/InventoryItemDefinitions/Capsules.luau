@@ -21,6 +21,7 @@ return setmetatable({
 		Price = " 75",
 		Image = "rbxassetid://6073658218",
 		ItemType = "Pets",
+		MinTier = "Basic",
 		CanBeSold = true,
 	} :: Capsule,
 	["Rare Pet Capsule"] = {

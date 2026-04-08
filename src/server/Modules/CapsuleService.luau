@@ -40,6 +40,22 @@ local function getDialogService()
 	return Knit.GetService("DialogService")
 end
 
+local function resolveCapsuleMinTier(capsuleName: string, capsuleDef: any): string?
+	if capsuleDef and typeof(capsuleDef.MinTier) == "string" then
+		return capsuleDef.MinTier
+	end
+
+	-- Fallback for misconfigured capsules: infer tier from the capsule's name.
+	for tierNameRaw, _ in InventoryItemDefinitions.Tiers do
+		local tierName = tostring(tierNameRaw)
+		if string.find(string.lower(capsuleName), string.lower(tierName), 1, true) then
+			return tierName
+		end
+	end
+
+	return nil
+end
+
 -- Seconds this player has been online in the current session.
 local function currentSessionElapsed(player: Player): number
 	local start = sessionStarts[player.UserId]
@@ -81,10 +97,11 @@ local function completePendingHatches(player: Player, extraElapsed: number)
 				:andThen(function(petsInventory)
 					-- Pick the reward now, after the waiting period.
 					local capsuleDef = InventoryItemDefinitions.Capsules[hatchData.CapsuleName]
-					local reward = CapsuleUtil.pickWeightedRandom(
-						"Pets",
-						capsuleDef and capsuleDef.MinTier
-					)
+					local minTier = if typeof(hatchData.MinTier) == "string"
+						then hatchData.MinTier
+						else resolveCapsuleMinTier(hatchData.CapsuleName, capsuleDef)
+
+					local reward = CapsuleUtil.pickWeightedRandom("Pets", minTier)
 					if not reward then
 						warn("[CapsuleService]: No valid reward for capsule", hatchData.CapsuleName)
 						playerDataAny:SetValue({ "HatchingPet" }, false)
@@ -152,7 +169,8 @@ function CapsuleService:StartHatch(player: Player, capsuleId: string, capsuleNam
 	if not capsuleDef or capsuleDef.ItemType ~= "Pets" then
 		local Inventory = require(ReplicatedStorage.Shared.Inventory)
 		local targetType = capsuleDef and capsuleDef.ItemType or "Pets"
-		local reward = CapsuleUtil.pickWeightedRandom(targetType, capsuleDef and capsuleDef.MinTier)
+		local minTier = if targetType == "Pets" then resolveCapsuleMinTier(capsuleName, capsuleDef) else nil
+		local reward = CapsuleUtil.pickWeightedRandom(targetType, minTier)
 		if reward then
 			Inventory:GetPlayerInventoryAsync(player, targetType)
 				:andThen(function(inv)
@@ -182,6 +200,7 @@ function CapsuleService:StartHatch(player: Player, capsuleId: string, capsuleNam
 		:andThen(function(playerData)
 			local playerDataAny: any = playerData
 			local hatchData = playerDataAny.HatchingPet
+			local minTier = resolveCapsuleMinTier(capsuleName, capsuleDef)
 
 			-- Legacy migration path from old keyed table format.
 			if hatchData == nil or hatchData == false then
@@ -202,6 +221,7 @@ function CapsuleService:StartHatch(player: Player, capsuleId: string, capsuleNam
 			end
 			playerDataAny:SetValue({ "HatchingPet" }, {
 				CapsuleName = capsuleName,
+				MinTier = minTier,
 				TimeAccumulated = 0,
 			})
 		end)

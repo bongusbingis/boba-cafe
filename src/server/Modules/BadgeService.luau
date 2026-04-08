@@ -14,7 +14,9 @@ export type BadgeInfo = {
 
 ---> modules
 local Packages = ReplicatedStorage:WaitForChild("Packages")
+local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Knit = require(Packages.Knit)
+local RankUtil = require(Shared.Utility.RankUtil)
 
 ---> variables
 local Service = Knit.CreateService({ Name = "BadgeService", Client = {} })
@@ -229,17 +231,9 @@ function Service:KnitStart()
             self:_awardMetBadge(player, "MetADeveloper")
         end
 
-        -- if player is a staff member, attempt to award the first staff badge
-        Knit.Shared.RankManager:IsCashier(player):andThen(function(isCashier: boolean)
-            if isCashier then
-                self:AwardBadgeByName(player, "FirstStaff")
-            end
-        end)
-        Knit.Shared.RankManager:IsBarista(player):andThen(function(isBarista: boolean)
-            if isBarista then
-                self:AwardBadgeByName(player, "FirstStaff")
-            end
-        end)
+        if RankUtil:CanUseOrderingSystem(player) then
+            self:AwardBadgeByName(player, "FirstStaff")
+        end
     end)
 
     Players.PlayerRemoving:Connect(function(player: Player)
