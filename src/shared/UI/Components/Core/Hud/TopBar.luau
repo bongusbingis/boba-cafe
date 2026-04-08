@@ -8,6 +8,7 @@
 
 --!nonstrict
 
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Packages = ReplicatedStorage:WaitForChild("Packages")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -15,6 +16,7 @@ local UI = Shared:WaitForChild("UI")
 
 ---> dependencies
 local React = require(Packages.React)
+local RankUtil = require(Shared.Utility.RankUtil)
 
 ---> styles
 local Styles = require(UI.Styles)
@@ -24,18 +26,41 @@ local Pages = UI.Pages
 local Pane = require(UI.Components.Pane)
 local HudTabButton = require(UI.Components.Buttons.HudTabButton)
 
+---> world
+local OrderingSystem = workspace:WaitForChild("Ordering System")
+
 ---> private
 local c = React.createElement
 
 return function(props: {
-    CurrentPage: ModuleScript,
+	CurrentPage: ModuleScript,
 	SetCurrentPage: (pageComponent: ModuleScript | nil, ...any) -> (),
 })
-    local function setPage(page: ModuleScript)
-        return function ()
-            props.SetCurrentPage(page)
-        end
-    end
+	local function setPage(page: ModuleScript)
+		return function()
+			props.SetCurrentPage(page)
+		end
+	end
+
+	---> init register prompts
+	React.useEffect(function()
+		print(1)
+		if RankUtil:CanUseOrderingSystem(Players.LocalPlayer) then
+			print(2)
+			for _, computer: MeshPart in OrderingSystem.Computers:GetChildren() do
+				local prompt = Instance.new("ProximityPrompt")
+				prompt.HoldDuration = 0
+				prompt.UIOffset = Vector2.new(0, 25)
+				prompt.ObjectText = "Register"
+				prompt.ActionText = "Use Ordering System"
+				prompt.RequiresLineOfSight = false
+				prompt.Parent = computer
+				prompt.Triggered:Connect(function()
+					props.SetCurrentPage(Pages.Ordering)
+				end)
+			end
+		end
+	end, {})
 
 	return c(Pane, {
 		Native = {
@@ -115,20 +140,20 @@ return function(props: {
 				Shop = c(HudTabButton, {
 					LayoutOrder = 0,
 					Text = "Shop",
-                    TextColor3 = Styles.OFFWHITE,
-                    OnClick = setPage(Pages.Shop),
+					TextColor3 = Styles.OFFWHITE,
+					OnClick = setPage(Pages.Shop),
 				}),
 				Menu = c(HudTabButton, {
 					LayoutOrder = 1,
 					Text = "Menu",
-                    TextColor3 = Styles.OFFWHITE,
-                    OnClick = setPage(Pages.Menu),
+					TextColor3 = Styles.OFFWHITE,
+					OnClick = setPage(Pages.Ordering),
 				}),
 				Inventory = c(HudTabButton, {
 					LayoutOrder = 2,
 					Text = "Inventory",
-                    TextColor3 = Styles.OFFWHITE,
-                    OnClick = setPage(Pages.Inventory),
+					TextColor3 = Styles.OFFWHITE,
+					OnClick = setPage(Pages.Inventory),
 				}),
 			}),
 		}),

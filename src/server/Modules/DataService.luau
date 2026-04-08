@@ -33,6 +33,7 @@ type ProfileProxy = {
 
 ---> globals
 local Profiles: {} = {}
+local ProfileObjects: {} = {}
 local OnLoadSignals: {} = {}
 local PlayerStore = ProfileStore.New(PROFILE_STORE_NAME, PROFILE_TEMPLATE)
 
@@ -92,6 +93,7 @@ local function loadPlayerProfile(player: Player)
 			end)
 
 			if player.Parent == Players then
+				ProfileObjects[player.UserId] = playerProfile
 				local proxy = createProxyForPlayerProfile(player, playerProfile)
 				local current = os.time()
 				playerProfile.Data.Playtime.MostRecentJoin = current
@@ -190,6 +192,11 @@ function DataService:PlayerAdded(player: Player)
 end
 
 function DataService:PlayerRemoving(player: Player)
+	local profile = ProfileObjects[player.UserId]
+	if profile then
+		profile:EndSession()
+		ProfileObjects[player.UserId] = nil
+	end
 	Profiles[player.UserId] = nil
 end
 

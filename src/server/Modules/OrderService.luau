@@ -638,7 +638,7 @@ function OrderService:KnitInit()
 			prompt.ObjectText = "Pending Orders Screen"
 			prompt.ActionText = "Claim Order"
 			prompt.RequiresLineOfSight = false
-			prompt.Enabled = false
+			prompt.Enabled = true
 			prompt.Parent = screenModel
 
 			prompt.Triggered:Connect(function(player: Player)
@@ -661,7 +661,7 @@ function OrderService:KnitInit()
 		prompt.ObjectText = "Pick Up Area"
 		prompt.ActionText = "Deposit Order"
 		prompt.RequiresLineOfSight = false
-		prompt.Enabled = true
+		prompt.Enabled = false
 		prompt.Parent = node
 
 		prompt.Triggered:Connect(function(player: Player)

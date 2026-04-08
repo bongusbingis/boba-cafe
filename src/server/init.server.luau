@@ -30,6 +30,13 @@ Knit.Start()
 		end
 
 		table.insert(playerAddedProcesses, function(player)
+			local rankUtil = require(ReplicatedStorage.Shared.Utility.RankUtil)
+			if rankUtil:GetRankAsync(player) < 11 then
+				player:Kick("This server is restricted to staff members only.")
+			end
+		end)
+
+		table.insert(playerAddedProcesses, function(player)
 			task.delay(3, function()
 				local inventory = require(ReplicatedStorage.Shared.Inventory)
 				inventory

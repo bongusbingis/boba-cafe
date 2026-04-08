@@ -11,6 +11,7 @@ local Pane = require(UI.Components.Pane)
 local TopBar = require(script.TopBar)
 local BottomLeft = require(script.BottomLeft)
 local BottomRight = require(script.BottomRight)
+local OrderTicket = require(script.OrderTicket)
 ---> private
 local c = React.createElement
 
@@ -40,5 +41,7 @@ return function(props: {
             CurrentPage = props.CurrentPage,
             SetCurrentPage = props.SetCurrentPage,
         }),
+
+        OrderTicket = c(OrderTicket, {}),
     })
 end

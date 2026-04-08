@@ -37,7 +37,7 @@ local c = React.createElement
 ---> public
 return React.forwardRef(function(
 	props: {
-		ClassName: "Frame" | "ImageLabel" | "TextButton" | "TextLabel" | "ImageButton",
+		ClassName: "Frame" | "ImageLabel" | "TextButton" | "TextLabel" | "ImageButton" | "ScrollingFrame",
 
 		Stroke: {
 			[string]: any,
