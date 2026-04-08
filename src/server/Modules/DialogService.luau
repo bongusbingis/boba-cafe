@@ -15,6 +15,7 @@ local DialogService = Knit.CreateService({
 	Name = "DialogService",
 	Client = {
 		DialogSignal = Knit.CreateSignal(),
+		NotificationSignal = Knit.CreateSignal(),
 	},
 })
 
@@ -110,6 +111,15 @@ function DialogService:Resolve(player: Player, data: OnResolution)
 		pending.Resolve(data.value)
 		pendingDialogs[data.id] = nil
 	end
+end
+
+--[=[
+	Sends a toast notification to a specific player.
+	@param player Player
+	@param notification { Title: string, Description: string, Image: string, SoundEnabled: boolean? }
+]=]
+function DialogService:Notify(player: Player, notification: { Title: string, Description: string, Image: string, SoundEnabled: boolean? })
+	self.Client.NotificationSignal:Fire(player, notification)
 end
 
 DialogService.FormatBrackets = formatBrackets

@@ -22,7 +22,7 @@ local c = React.createElement
 local pets = InventoryItemDefinitions.Pets
 
 ---> constants
-local TIER_ORDER = { "Common", "Uncommon", "Rare", "Epic", "Legendary", "Special" }
+local TIER_ORDER = { "Basic", "Uncommon", "Rare", "Epic", "Legendary", "Special" }
 local PET_CELL_SIZE = 90
 
 ---> public

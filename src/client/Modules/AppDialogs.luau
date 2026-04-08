@@ -8,6 +8,7 @@ local UI = Shared:WaitForChild("UI")
 
 local Dialogs = UI.Components.Dialogs
 local Styles = require(UI.Styles)
+local SmallNotification = require(UI.Components.Core.Hud.SmallNotification)
 
 ---> dependencies
 local Knit = require(Packages.Knit)
@@ -28,6 +29,7 @@ local joinDicts = require(UI.Utility.joinDicts)
 local dialogEvent = GoodSignal.new()
 
 ---> constants
+local HINT_INTERVAL = 15
 local HINT_NATIVE = {
 	Size = UDim2.fromScale(0.65, 0.05),
 	Position = UDim2.fromScale(0.5, 0.075),
@@ -149,6 +151,14 @@ end
 
 DialogController.FormatBrackets = formatBrackets
 
+--[=[
+	Pushes a toast notification from the client side.
+	Mirror of DialogService:Notify on the server.
+]=]
+function DialogController:Notify(notification: { Title: string, Description: string, Image: string, SoundEnabled: boolean? })
+	SmallNotification.Push(notification)
+end
+
 function DialogController:KnitInit()
 	local handle = Instance.new("ScreenGui")
 	handle.Name = "Priority"
@@ -159,14 +169,16 @@ function DialogController:KnitInit()
 	local root = ReactRoblox.createRoot(handle)
 	root:render(c(dialogHolder))
 
-    local DialogService = Knit.GetService("DialogService")
-	print(DialogService)
-    DialogService.DialogSignal:Connect(function(action, ...)
-        if action == "CreateDialog" then
-            local dialog: Dialog = ...
-            dialogEvent:Fire(dialog)
-        end
-    end)
+	local DialogService = Knit.GetService("DialogService")
+	DialogService.DialogSignal:Connect(function(action, ...)
+		if action == "CreateDialog" then
+			local dialog: Dialog = ...
+			dialogEvent:Fire(dialog)
+		end
+	end)
+	DialogService.NotificationSignal:Connect(function(notification)
+		SmallNotification.Push(notification)
+	end)
 end
 
 return DialogController

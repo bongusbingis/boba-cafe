@@ -40,39 +40,39 @@ return setmetatable({
 		CanBeSold = true,
 	},
 
-	---> unBasic
+	---> Basic
 	["Cow Pet"] = {
-		Tier = "UnBasic",
+		Tier = "Basic",
 		Icon = "",
 		PetModel = petsStorage["Cow Pet"],
 		CanBeSold = true,
 	},
 	["Ladybug Pet"] = {
-		Tier = "UnBasic",
+		Tier = "Basic",
 		Icon = "",
 		PetModel = petsStorage["Ladybug Pet"],
 		CanBeSold = true,
 	},
 	["Pig Pet"] = {
-		Tier = "UnBasic",
+		Tier = "Basic",
 		Icon = "",
 		PetModel = petsStorage["Pig Pet"],
 		CanBeSold = true,
 	},
 	["Shark Pet"] = {
-		Tier = "UnBasic",
+		Tier = "Basic",
 		Icon = "",
 		PetModel = petsStorage["Shark Pet"],
 		CanBeSold = true,
 	},
 	["Tiger Pet"] = {
-		Tier = "UnBasic",
+		Tier = "Basic",
 		Icon = "",
 		PetModel = petsStorage["Tiger Pet"],
 		CanBeSold = true,
 	},
 	["Whale Pet"] = {
-		Tier = "UnBasic",
+		Tier = "Basic",
 		Icon = "",
 		PetModel = petsStorage["Whale Pet"],
 		CanBeSold = true,

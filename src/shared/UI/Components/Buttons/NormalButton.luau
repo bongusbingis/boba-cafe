@@ -26,7 +26,7 @@ return function(props: {
 })
 	return c(Pane, {
 		ClassName = "Frame",
-		AspectRatio = 5.04762,
+		AspectRatio = 7,
 		Native = {
 			Name = "ButtonWrapper",
 			AnchorPoint = Vector2.new(0.5, 0.5),
@@ -35,16 +35,16 @@ return function(props: {
 			Size = props.Size or UDim2.fromScale(0.921739, 0.0546164),
 		},
 	}, {
-		UISizeConstraint = c("UISizeConstraint", {
-			MaxSize = Vector2.new(240, math.huge),
-			MinSize = Vector2.new(140, math.huge),
-		}),
-
 		Base = c(Pane, {
-			ClassName = "ImageLabel",
+			ClassName = "Frame",
+			CornerRadius = UDim.new(1, 0),
+			Stroke = {
+				Color = Styles.OFFWHITE,
+				Thickness = 2,
+			},
 			Native = {
-				BackgroundTransparency = 1,
-				Image = "http://www.roblox.com/asset/?id=13382242889",
+				BackgroundTransparency = 0,
+				BackgroundColor3 = props.Color,
 				Size = UDim2.fromScale(1, 1),
 			},
 			OnClick = (not props.PlusButton) and props.OnClick or nil,
@@ -72,42 +72,43 @@ return function(props: {
 			}, {
 				Amount = c(Pane, {
 					ClassName = "TextLabel",
-					MaxTextSize = 30,
+					--MaxTextSize = 40,
 					Native = {
 						AnchorPoint = Vector2.new(0.5, 0.5),
-						BackgroundTransparency = 1,
 						FontFace = Styles.FONT_FREDOKA,
 						Position = UDim2.fromScale(0.5, 0.5),
-						Size = UDim2.fromScale(0.65, 0.9),
+						Size = UDim2.fromScale(0.65, 1.15),
 						Text = props.Text,
-						TextColor3 = props.Color or Styles.CORAL,
+						TextColor3 = Styles.OFFWHITE,
 						TextScaled = true,
+						ZIndex = 5,
 					},
 				}),
 
 				Icon = props.Icon and c(Pane, {
 					ClassName = "ImageLabel",
+					AspectRatio = 1,
 					Native = {
 						AnchorPoint = Vector2.new(0, 0.5),
 						BackgroundTransparency = 1,
 						Image = props.Icon or "rbxassetid://13391365805",
-						Position = UDim2.fromScale(0.0713614, 0.483614),
-						ScaleType = Enum.ScaleType.Fit,
-						Size = UDim2.fromScale(0.127882, 0.945269),
+						Position = UDim2.fromScale(0.02, 0.5),
+						Size = UDim2.fromScale(1.35, 1.35),
 					},
 				}),
 
 				Plus = props.PlusButton and c(Pane, {
 					ClassName = "ImageButton",
 					OnClick = props.OnClick,
+					AspectRatio = 1,
 					Native = {
 						AnchorPoint = Vector2.new(1, 0.5),
 						AutoButtonColor = false,
 						BackgroundTransparency = 1,
 						Image = "http://www.roblox.com/asset/?id=13382300733",
-						ImageColor3 = props.Color or Styles.CORAL,
-						Position = UDim2.fromScale(0.94603, 0.5),
-						Size = UDim2.fromScale(0.0820308, 0.60635),
+						ImageColor3 = Styles.OFFWHITE,
+						Position = UDim2.fromScale(0.95, 0.5),
+						Size = UDim2.fromScale(0.75, 0.75),
 					},
 				}),
 			}),

@@ -19,6 +19,7 @@ local ItemCard = require(UI.Components.Buttons.ItemCard)
 ---> private
 local c = React.createElement
 local mapItemDefinitionsToInventory = require(Shared.UI.Utility.mapItemDefsToInventory)
+local useClock = require(UI.Hooks.useClock)
 
 type playerInventory = {
 	Inventory: {
@@ -215,6 +216,22 @@ local function makeToggleHandler(itemType, id, entry, itemDef, layoutOrder, upda
 	end
 end
 
+local BATCH_SIZE = 16
+local BATCH_DELAY = 0.05
+
+local SPIN_PERIOD = 1.4 -- seconds per full rotation cycle
+
+local function easeInOutBack(t: number): number
+	local c1 = 1.70158
+	local c2 = c1 * 1.525
+	if t < 0.5 then
+		return ((2 * t) ^ 2 * ((c2 + 1) * (2 * t) - c2)) / 2
+	else
+		local x = 2 * t - 2
+		return (x ^ 2 * ((c2 + 1) * x + c2) + 2) / 2
+	end
+end
+
 ---> public
 return function(props: {
 	ItemType: string,
@@ -234,6 +251,8 @@ return function(props: {
 	}
 
 	local gridChildren, updateGridChildren = React.useState(emptyGrid)
+	local isLoading, setIsLoading = React.useState(true)
+	local clockBinding = useClock()
 	local activeDialogRef = React.useRef(nil)
 
 	local function removeActiveDialogRef()
@@ -250,6 +269,9 @@ return function(props: {
 	React.useEffect(function()
 		removeActiveDialogRef()
 		updateGridChildren(emptyGrid)
+		setIsLoading(true)
+		local cancelled = false
+
 		getPlayerInventoryAsync(props.ItemType):andThen(function(playerInventory)
 			playerInventory.OnChange:Connect(function(update)
 				if update.action == "removed" then
@@ -291,7 +313,8 @@ return function(props: {
 					return new
 				end)
 			end)
-			local newCards = {}
+
+			local cardList = {}
 			for id, entry in playerInventory.Inventory do
 				local itemDef = InventoryItemDefinitions[props.ItemType][entry.Name]
 				if not itemDef then
@@ -310,17 +333,47 @@ return function(props: {
 					updateGridChildren,
 					activeDialogRef
 				)
-				newCards[id] = buildCard(props.ItemType, entry, itemDef, layoutOrder, entry:IsEquipped(), onClick)
+				table.insert(cardList, { id = id, card = buildCard(props.ItemType, entry, itemDef, layoutOrder, entry:IsEquipped(), onClick) })
 			end
 
-			updateGridChildren(function(t)
-				local new = table.clone(t)
-				for k, v in newCards do
-					new[k] = v
+			local function applyBatch(startIdx: number)
+				if cancelled then
+					return
 				end
-				return new
-			end)
+				local isLastBatch = startIdx + BATCH_SIZE > #cardList
+				updateGridChildren(function(t)
+					local new = table.clone(t)
+					for i = startIdx, math.min(startIdx + BATCH_SIZE - 1, #cardList) do
+						new[cardList[i].id] = cardList[i].card
+					end
+					return new
+				end)
+				if isLastBatch then
+					setIsLoading(false)
+				else
+					task.delay(BATCH_DELAY, function()
+						applyBatch(startIdx + BATCH_SIZE)
+					end)
+				end
+			end
+
+			if #cardList < BATCH_SIZE * 2 then
+				updateGridChildren(function(t)
+					local new = table.clone(t)
+					for _, entry in cardList do
+						new[entry.id] = entry.card
+					end
+					return new
+				end)
+				setIsLoading(false)
+			else
+				applyBatch(1)
+			end
 		end)
+
+		return function()
+			cancelled = true
+		end
 	end, { props.ItemType })
 
 	local itemCount = 0
@@ -356,9 +409,24 @@ return function(props: {
 			ScrollBarThickness = 5,
 			ScrollingDirection = Enum.ScrollingDirection.Y,
 			Size = UDim2.fromScale(1.02, 0.888),
+			Visible = not isLoading,
 		}, gridChildren),
 
-		EmptyLabel = itemCount == 0 and c("TextLabel", {
+		LoadingSpinner = isLoading and c("ImageLabel", {
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundTransparency = 1,
+			Image = "rbxassetid://5634393881",
+			Position = UDim2.fromScale(0.5, 0.5),
+			Size = UDim2.fromScale(0.175, 0.175),
+			SizeConstraint = Enum.SizeConstraint.RelativeXX,
+			ScaleType = Enum.ScaleType.Fit,
+			Rotation = clockBinding:map(function(clock: number)
+				local t = (clock % SPIN_PERIOD) / SPIN_PERIOD
+				return easeInOutBack(t) * 360
+			end),
+		}) or nil,
+
+		EmptyLabel = (not isLoading) and itemCount == 0 and c("TextLabel", {
 			BackgroundTransparency = 1,
 			FontFace = Styles.FONT_FREDOKA,
 			AnchorPoint = Vector2.new(0.5, 0),

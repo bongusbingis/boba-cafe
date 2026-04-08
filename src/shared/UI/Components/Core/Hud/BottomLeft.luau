@@ -23,6 +23,7 @@ local React = require(Packages.React)
 ---> constants
 local SKIP_HATCH_PRODUCT_ID = 1143554452
 local HATCH_DURATION_SECONDS = 15 * 60
+local BUTTON_SIZE = UDim2.fromScale(1, 1)
 
 ---> styles
 local Styles = require(UI.Styles)
@@ -30,6 +31,7 @@ local Styles = require(UI.Styles)
 ---> components
 local Pane = require(UI.Components.Pane)
 local NormalButton = require(UI.Components.Buttons.NormalButton)
+local SmallNotification = require(script.Parent.SmallNotification)
 
 ---> private
 local c = React.createElement
@@ -148,87 +150,120 @@ return function(props: {
 		end, {})
 	end
 
+	-- outer frame: vertical stack anchored at bottom-left
+	-- LayoutOrder -6 notification sits above the horizontal button row
 	return c(Pane, {
 		ClassName = "Frame",
+		AutomaticSize = Enum.AutomaticSize.Y,
 		Native = {
 			AnchorPoint = Vector2.new(0, 1),
-			Position = UDim2.fromScale(0.025, 0.981),
-			Size = UDim2.new(0, 300, 0.3, 0),
+			Position = UDim2.new(0, 10, 0.985, 0),
+			Size = UDim2.fromScale(0.3, 0),
+			BackgroundTransparency = 1,
 		},
 		ListLayout = {
-			FillDirection = Enum.FillDirection.Horizontal,
+			FillDirection = Enum.FillDirection.Vertical,
 			HorizontalAlignment = Enum.HorizontalAlignment.Left,
 			VerticalAlignment = Enum.VerticalAlignment.Bottom,
-			Padding = UDim.new(0.02, 0),
+			Padding = UDim.new(0, 4),
 			SortOrder = Enum.SortOrder.LayoutOrder,
 		},
 	}, {
-		capsuleHatching and c(Pane, {
-			ClassName = "ImageButton",
-			AspectRatio = 1,
-			OnClick = function()
-				if extractTimeLeft(hatchClockText) <= 30 then
-					return
-				end
-				MarketplaceService:PromptProductPurchase(Players.LocalPlayer, SKIP_HATCH_PRODUCT_ID)
-			end,
-			Native = {
-				Image = "rbxassetid://6073658218",
-				LayoutOrder = 2,
-				Size = UDim2.fromScale(0.4, 0.4),
-			},
+		-- notification card springs in above the buttons (LayoutOrder -6)
+		-- width is clamped to match the CurrencyPanel (0.5 scale of the 300px outer frame)
+		Notification = c("Frame", {
+			AutomaticSize = Enum.AutomaticSize.Y,
+			BackgroundTransparency = 1,
+			ClipsDescendants = false,
+			LayoutOrder = -6,
+			Size = UDim2.fromScale(0.6, 0),
 		}, {
-			c("TextLabel", {
-				AnchorPoint = Vector2.new(0.5, 0.5),
-				BackgroundTransparency = 1,
-				FontFace = Styles.FONT_FREDOKA,
-				Position = UDim2.fromScale(0.5, 0.725),
-				Size = UDim2.fromScale(0.85, 0.3),
-				Text = hatchClockText,
-				TextScaled = true,
-				TextColor3 = Styles.OFFWHITE,
-				ZIndex = 2,
-			}, {
-				UIStroke = c("UIStroke", {
-					Color = Color3.new(0, 0, 0),
-					Thickness = 2,
-				}),
-			}),
+			c(SmallNotification.Component, {}),
 		}),
 
-		c(Pane, {
+		-- horizontal button row
+		ButtonRow = c(Pane, {
 			ClassName = "Frame",
-			ListLayout = {
-				Padding = UDim.new(0.03, 0),
-				HorizontalAlignment = Enum.HorizontalAlignment.Center,
-				VerticalAlignment = Enum.VerticalAlignment.Bottom,
-			},
 			Native = {
-				AnchorPoint = Vector2.new(0, 1),
-				Position = UDim2.fromScale(0, 1),
-				Size = UDim2.fromScale(0.5, 1),
 				BackgroundTransparency = 1,
+				Size = UDim2.new(1, 0, 0, 60),
 				LayoutOrder = 1,
 			},
+			ListLayout = {
+				FillDirection = Enum.FillDirection.Horizontal,
+				HorizontalAlignment = Enum.HorizontalAlignment.Left,
+				VerticalAlignment = Enum.VerticalAlignment.Bottom,
+				Padding = UDim.new(0.02, 0),
+				SortOrder = Enum.SortOrder.LayoutOrder,
+			},
 		}, {
-			Bucks = c(NormalButton, {
-				PlusButton = true,
-				Icon = "rbxassetid://13382286492",
-				Color = Styles.GREEN_LIGHT,
-				Text = currency.BobaBucks,
+			CapsuleButton = capsuleHatching and c(Pane, {
+				ClassName = "ImageButton",
+				AspectRatio = 1,
 				OnClick = function()
-					props.SetCurrentPage(UI.Pages.Shop, "Currency")
+					if extractTimeLeft(hatchClockText) <= 30 then
+						return
+					end
+					MarketplaceService:PromptProductPurchase(Players.LocalPlayer, SKIP_HATCH_PRODUCT_ID)
 				end,
-			}),
+				Native = {
+					Image = "rbxassetid://6073658218",
+					LayoutOrder = 2,
+					Size = UDim2.fromScale(1.25, 1.25),
+				},
+			}, {
+				c("TextLabel", {
+					AnchorPoint = Vector2.new(0.5, 0.5),
+					BackgroundTransparency = 1,
+					FontFace = Styles.FONT_FREDOKA,
+					Position = UDim2.fromScale(0.5, 0.725),
+					Size = UDim2.fromScale(0.85, 0.3),
+					Text = hatchClockText,
+					TextScaled = true,
+					TextColor3 = Styles.OFFWHITE,
+					ZIndex = 2,
+				}, {
+					UIStroke = c("UIStroke", {
+						Color = Color3.new(0, 0, 0),
+						Thickness = 2,
+					}),
+				}),
+			}) or nil,
 
-			Points = c(NormalButton, {
-				PlusButton = true,
-				Icon = "rbxassetid://13391365805",
-				Color = Styles.CORAL,
-				Text = currency.Points,
-				OnClick = function()
-					props.SetCurrentPage(UI.Pages.Shop, "Currency")
-				end,
+			CurrencyPanel = c(Pane, {
+				ClassName = "Frame",
+				ListLayout = {
+					Padding = UDim.new(0.2, 0),
+					HorizontalAlignment = Enum.HorizontalAlignment.Center,
+					VerticalAlignment = Enum.VerticalAlignment.Bottom,
+				},
+				Native = {
+					BackgroundTransparency = 1,
+					LayoutOrder = 1,
+					Size = UDim2.fromScale(0.6, 1),
+				},
+			}, {
+				Bucks = c(NormalButton, {
+					PlusButton = true,
+					Icon = "rbxassetid://13382286492",
+					Size = BUTTON_SIZE,
+					Color = Styles.GREEN_LIGHT,
+					Text = currency.BobaBucks,
+					OnClick = function()
+						props.SetCurrentPage(UI.Pages.Shop, "Currency")
+					end,
+				}),
+
+				Points = c(NormalButton, {
+					PlusButton = true,
+					Icon = "rbxassetid://13391365805",
+					Size = BUTTON_SIZE,
+					Color = Styles.CORAL,
+					Text = currency.Points,
+					OnClick = function()
+						props.SetCurrentPage(UI.Pages.Shop, "Currency")
+					end,
+				}),
 			}),
 		}),
 	})

@@ -17,7 +17,7 @@ local Promise = require(Packages.Promise)
 
 ---> constants
 local IS_MOCK_STORE_ENABLED = false
-local PROFILE_STORE_NAME = "PlayerStore_0001"
+local PROFILE_STORE_NAME = "PlayerStore_0002"
 local REPLICA_CLASS_TOKEN = ReplicaService.NewClassToken("PlayerProfile")
 local PROFILE_TEMPLATE = require(Config:WaitForChild("ProfileTemplate"))
 

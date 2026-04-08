@@ -44,9 +44,9 @@ return function(props: {
 			--BackgroundTransparency = 0.5
 		},
 	}, {
-		Points = c(NormalButton, {
-			Color = Styles.CORAL,
-			Text = "Collapse Buttons",
-		}),
+		-- Points = c(NormalButton, {
+		-- 	Color = Styles.CORAL,
+		-- 	Text = "Collapse Buttons",
+		-- }),
 	})
 end
