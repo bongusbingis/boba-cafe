@@ -62,7 +62,7 @@ end
 
 local function formatBrackets(str: string): string
 	return str:gsub("%[(.-)%]", " <font color='#f5c242'>%1</font> ")
-		:gsub("%|(.-)%|", " <font color='#fa2545'>%1</font> ")
+		:gsub("|(.-)|", " <font color='#fa2545'>%1</font> ")
 end
 
 local function createProxyForPlayerProfile(player: Player, playerProfile: any): { [string]: any }
@@ -194,6 +194,12 @@ end
 function DataService:PlayerRemoving(player: Player)
 	local profile = ProfileObjects[player.UserId]
 	if profile then
+		local mostRecentJoin = profile.Data.Playtime.MostRecentJoin or 0
+		if mostRecentJoin > 0 then
+			local elapsed = math.max(0, os.time() - mostRecentJoin)
+			profile.Data.Statistics.TimePlayed = (profile.Data.Statistics.TimePlayed or 0) + elapsed
+		end
+
 		profile:EndSession()
 		ProfileObjects[player.UserId] = nil
 	end

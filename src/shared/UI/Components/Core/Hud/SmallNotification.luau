@@ -1,8 +1,9 @@
 --[[
 	SmallNotification
-	Queued toast-style notification card that springs in above the bottom-left HUD buttons.
+	Toast-style notification card that springs in above the bottom-left HUD buttons.
 	Each notification slides in, fades its content in, holds for 5 seconds, then slides back out.
-	Queue is processed one at a time; new notifications append to the end.
+	If a new notification is pushed mid-animation, the current one is interrupted and
+	replaced immediately by the new one.
 
 	External API (call from any client script):
 		SmallNotification.Push({
@@ -30,7 +31,7 @@ local Styles = require(UI.Styles)
 ---> private
 local c = React.createElement
 
----> module-level push queue backed by a BindableEvent so any script can call Push
+---> module-level push event so any script can call Push
 local pushEvent = Instance.new("BindableEvent")
 
 ---> constants
@@ -59,6 +60,7 @@ local HINTS = {
 	"Complete quests and unlock new badges!",
 }
 
+local HOLD_DURATION = 5
 local SPRING_SLIDE = { mass = 1, tension = 280, friction = 35 } -- bouncy "Back" feel
 local SPRING_FADE = { mass = 1, tension = 10000, friction = 150 }
 
@@ -69,20 +71,20 @@ export type Notification = {
 	SoundEnabled: boolean?,
 }
 
--- ─── public API ──────────────────────────────────────────────────────────────
-
 local module = {}
 
---[=[
-	Enqueues a notification to display on screen.
-]=]
 function module.Push(notification: Notification)
 	pushEvent:Fire(notification)
 end
 
 module.Component = function()
-	local queue, setQueue = React.useState({} :: { Notification })
-	local processingRef = React.useRef(false)
+	type NotificationEntry = {
+		Id: number,
+		Data: Notification,
+	}
+
+	local activeEntry, setActiveEntry = React.useState(nil :: NotificationEntry?)
+	local nextEntryId = React.useRef(0)
 
 	---> spring: sizeY drives card height (0 → CARD_HEIGHT)
 	---> spring: opacity drives content transparency (1 = invisible, 0 = visible)
@@ -98,7 +100,7 @@ module.Component = function()
 		local this = task.spawn(function()
 			while true do
 				for _, hint in HINTS do
-					task.wait(15)
+					task.wait(60)
 					pushEvent:Fire({
 						Text = hint,
 					})
@@ -113,26 +115,25 @@ module.Component = function()
 	---> listen for newly pushed notifications
 	React.useEffect(function()
 		local conn = pushEvent.Event:Connect(function(notification: Notification)
-			setQueue(function(prev)
-				local next = table.clone(prev)
-				table.insert(next, notification)
-				return next
-			end)
+			nextEntryId.current += 1
+			setActiveEntry({
+				Id = nextEntryId.current,
+				Data = notification,
+			})
 		end)
 		return function()
 			conn:Disconnect()
 		end
 	end, {})
 
-	---> process the head of the queue whenever it changes and we are not already animating
+	---> animate the active notification; new pushes interrupt by replacing activeEntry
 	React.useEffect(function()
-		if processingRef.current or #queue == 0 then
+		if not activeEntry then
 			return
 		end
-		processingRef.current = true
 
 		local thread = task.spawn(function()
-			local current: Notification = queue[1]
+			local currentEntryId = activeEntry.Id
 
 			-- -- optional sound
 			-- if current.SoundEnabled then
@@ -142,13 +143,18 @@ module.Component = function()
 			-- 	end)
 			-- end
 
-			-- slide in (Back-style spring)
-			api.start({ SizeY = CARD_HEIGHT, Opacity = 1, config = SPRING_SLIDE })
+			-- slide in (Back-style spring). 'from' hard-resets state so replacement
+			-- notifications animate cleanly even when interrupting mid-cycle.
+			api.start({
+				from = { SizeY = 0, Opacity = 1 },
+				to = { SizeY = CARD_HEIGHT, Opacity = 1 },
+				config = SPRING_SLIDE,
+			})
 			task.wait(0.8) -- card is mostly open
 
 			-- fade content in
 			api.start({ Opacity = 0, config = SPRING_FADE })
-			task.wait(8) -- hold
+			task.wait(HOLD_DURATION) -- hold
 
 			-- fade content out
 			api.start({ Opacity = 1, config = SPRING_FADE })
@@ -158,24 +164,22 @@ module.Component = function()
 			api.start({ SizeY = 0, config = SPRING_SLIDE })
 			task.wait(0.9)
 
-			-- advance queue
-			setQueue(function(prev)
-				local next = table.clone(prev)
-				table.remove(next, 1)
-				return next
+			-- clear only if this is still the active entry (it may have been replaced)
+			setActiveEntry(function(prev)
+				if prev and prev.Id == currentEntryId then
+					return nil
+				end
+				return prev
 			end)
-			processingRef.current = false
 		end)
 
 		return function()
 			task.cancel(thread)
-			processingRef.current = false
 		end
-	end, { queue })
+	end, { activeEntry })
 
-	---> render nothing when queue is empty and card is fully closed
-	---> (the spring still animates to 0 even after the item is removed)
-	local current: Notification? = queue[1]
+	---> render nothing when there is no active notification
+	local current: Notification? = activeEntry and activeEntry.Data or nil
 
 	return c(Pane, {
 		ClassName = "Frame",

@@ -8,6 +8,10 @@ type InventoryItem = {
     }?,
 }
 
+type InventoryItemStruct = {
+    [string]: InventoryItem,
+}
+
 -- Represents a pet capsule that has been activated and is currently incubating.
 -- The reward is NOT pre-selected; it is rolled when the hatch completes so
 -- that item pool changes during the wait period are respected.
@@ -16,6 +20,28 @@ type InventoryItem = {
 type PendingHatch = {
     CapsuleName: string,   -- definition name of the capsule that was used
     TimeAccumulated: number, -- active-play seconds accumulated so far
+}
+
+type Statistics = {
+    TimePlayed: number,        -- accumulated seconds from ended sessions (current session added client-side)
+    ItemsOrdered: number,
+    BobasOrdered: number,
+    BobaBucksEarned: number,
+    BobaBucksSpent: number,
+    CelebritiesMet: number,
+    OrdersCreated: number,
+    OrdersPrepared: number,
+    SpillsCleaned: number,
+    TreasureChestsFound: number,
+}
+
+export type PlayerSettings = {
+    HeadlessHead: boolean,
+    FasterWalkSpeed: boolean,
+    MusicEnabled: boolean,
+    SFXEnabled: boolean,
+    SyrupHighlighting: boolean,
+    ShiftTimerEnabled: boolean,
 }
 
 export type ProfileTemplate = {
@@ -29,22 +55,18 @@ export type ProfileTemplate = {
     },
     Inventory: {
         Items: {
-            Nametags: {
-                [string]: InventoryItem,
-            },
-            Pets: {
-                [string]: InventoryItem,
-            },
-            Particles: {
-                [string]: InventoryItem,
-            },
-            Capsules: {
-                [string]: InventoryItem,
-            },
+            Nametags: InventoryItemStruct,
+            Pets: InventoryItemStruct,
+            Particles: InventoryItemStruct,
+            Capsules: InventoryItemStruct,
         },
     },
+    Statistics: Statistics,
     HatchingPet: PendingHatch | false,
     Nickname: string,
+    -- Codes the player has already redeemed; keyed by normalised code string for O(1) lookups.
+    RedeemedCodes: { [string]: boolean },
+    Settings: PlayerSettings,
 }
 
 return {
@@ -64,6 +86,27 @@ return {
             Particles = {},
         },
     },
+    Statistics = {
+        TimePlayed = 0,
+        ItemsOrdered = 0,
+        BobasOrdered = 0,
+        BobaBucksEarned = 0,
+        BobaBucksSpent = 0,
+        CelebritiesMet = 0,
+        OrdersCreated = 0,
+        OrdersPrepared = 0,
+        SpillsCleaned = 0,
+        TreasureChestsFound = 0,
+    },
     HatchingPet = false,
     Nickname = "",
+    RedeemedCodes = {},
+    Settings = {
+        HeadlessHead = false,
+        FasterWalkSpeed = false,
+        MusicEnabled = true,
+        SFXEnabled = true,
+        SyrupHighlighting = true,
+        ShiftTimerEnabled = true,
+    },
 }

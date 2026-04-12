@@ -7,11 +7,13 @@ export type GamepassDefinition = {
 local Gamepasses: { [number]: GamepassDefinition } = {
 	[6202153] = {
 		Name = "Barista",
+		Rank = 8,
 		Description = "Become a Barista immediately without having to train for it!",
 		Icon = "rbxassetid://16709481934",
 	},
 	[15243046] = {
 		Name = "Kitchen Leader",
+		Rank = 10,
 		Description = "Become a Kitchen Leader immediately without having to earn it!",
 		Icon = "rbxassetid://16728123715",
 	},

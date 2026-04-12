@@ -9,8 +9,8 @@ local SIZE_SMALL_MEDIUM_LARGE = { "Small", "Medium", "Large" }
 local SIZE_MUG = { "Mug" }
 local TEMPERATURE_COLD_HOT = { "Cold", "Hot" }
 
-local TOP_MENU_COLOR = Color3.fromRGB(255, 105, 185)
-local TOP_MENU_ITEM_COLOR = Color3.fromRGB(255, 139, 230)
+local TOP_MENU_COLOR = Color3.fromRGB(139, 199, 104)
+local TOP_MENU_ITEM_COLOR = Color3.fromRGB(156, 255, 141)
 
 local SMOOTHIE_NAMES = {
 	"Apricot Smoothie",
@@ -155,107 +155,107 @@ local function buildHotCocoaItems()
 end
 
 local TapiocaFlavor = {
-	['Fruity Twist'] = {
-		Color = Color3.fromRGB(230, 170, 156)
+	["Fruity Twist"] = {
+		Color = Color3.fromRGB(230, 170, 156),
 	},
-	['Passion Madness'] = {
-		Color = Color3.fromRGB(135, 197, 204)
+	["Passion Madness"] = {
+		Color = Color3.fromRGB(135, 197, 204),
 	},
-	['Mystic Burst'] = {
-		Color = Color3.fromRGB(183, 150, 227)
+	["Mystic Burst"] = {
+		Color = Color3.fromRGB(183, 150, 227),
 	},
-	['Tropical Heaven'] = {
-		Color = Color3.fromRGB(207, 242, 203)
+	["Tropical Heaven"] = {
+		Color = Color3.fromRGB(207, 242, 203),
 	},
-	['Marshmallow Delight'] = {
-		Color = Color3.fromRGB(252, 255, 253)
+	["Marshmallow Delight"] = {
+		Color = Color3.fromRGB(252, 255, 253),
 	},
-	['Normal'] = {
-		Color = Color3.fromRGB(17, 17, 17)
+	["Normal"] = {
+		Color = Color3.fromRGB(17, 17, 17),
 	},
-	['Strawberry'] = {
-		Color = Color3.fromRGB(214, 94, 100)
+	["Strawberry"] = {
+		Color = Color3.fromRGB(214, 94, 100),
 	},
-	['Banana Blast'] = {
-		Color = Color3.fromRGB(245, 240, 174)
+	["Banana Blast"] = {
+		Color = Color3.fromRGB(245, 240, 174),
 	},
-	['Tutti Frutti'] = {
-		Color = Color3.fromRGB(171, 196, 219)
+	["Tutti Frutti"] = {
+		Color = Color3.fromRGB(171, 196, 219),
 	},
-	['Pumpkin Paradise'] = {
-		Color = Color3.fromRGB(247, 189, 126)
+	["Pumpkin Paradise"] = {
+		Color = Color3.fromRGB(247, 189, 126),
 	},
 }
 
 local SyrupFlavor = {
-	['Banana'] = {
-		Color = Color3.fromRGB(255, 250, 84)
+	["Banana"] = {
+		Color = Color3.fromRGB(255, 250, 84),
 	},
-	['Classic Milk Tea'] = {
-		Color = Color3.fromRGB(255, 250, 214)
+	["Classic Milk Tea"] = {
+		Color = Color3.fromRGB(255, 250, 214),
 	},
-	['Avocado'] = {
-		Color = Color3.fromRGB(104, 184, 88)
+	["Avocado"] = {
+		Color = Color3.fromRGB(104, 184, 88),
 	},
-	['Strawberry Banana'] = {
-		Color = Color3.fromRGB(255, 140, 194)
+	["Strawberry Banana"] = {
+		Color = Color3.fromRGB(255, 140, 194),
 	},
-	['Taro'] = {
-		Color = Color3.fromRGB(224, 166, 255)
+	["Taro"] = {
+		Color = Color3.fromRGB(224, 166, 255),
 	},
-	['Mango'] = {
-		Color = Color3.fromRGB(255, 192, 92)
+	["Mango"] = {
+		Color = Color3.fromRGB(255, 192, 92),
 	},
-	['Honeycomb'] = {
-		Color = Color3.fromRGB(255, 222, 92)
+	["Honeycomb"] = {
+		Color = Color3.fromRGB(255, 222, 92),
 	},
-	['Coconut'] = {
-		Color = Color3.fromRGB(255, 254, 247)
+	["Coconut"] = {
+		Color = Color3.fromRGB(255, 254, 247),
 	},
-	['Matcha'] = {
-		Color = Color3.fromRGB(155, 227, 145)
+	["Matcha"] = {
+		Color = Color3.fromRGB(155, 227, 145),
 	},
-	['Chocolate Banana'] = {
-		Color = Color3.fromRGB(171, 140, 87)
+	["Chocolate Banana"] = {
+		Color = Color3.fromRGB(171, 140, 87),
 	},
-	['Passion Fruit'] = {
-		Color = Color3.fromRGB(255, 247, 105)
+	["Passion Fruit"] = {
+		Color = Color3.fromRGB(255, 247, 105),
 	},
-	['Thai Milk Tea'] = {
-		Color = Color3.fromRGB(255, 170, 51)
+	["Thai Milk Tea"] = {
+		Color = Color3.fromRGB(255, 170, 51),
 	},
-	['Strawberry'] = {
-		Color = Color3.fromRGB(255, 112, 167)
+	["Strawberry"] = {
+		Color = Color3.fromRGB(255, 112, 167),
 	},
-	['Almond'] = {
-		Color = Color3.fromRGB(255, 254, 222)
+	["Almond"] = {
+		Color = Color3.fromRGB(255, 254, 222),
 	},
-	['Brown Sugar'] = {
-		Color = Color3.fromRGB(227, 175, 98)
+	["Brown Sugar"] = {
+		Color = Color3.fromRGB(227, 175, 98),
 	},
-	['Lychee'] = {
-		Color = Color3.fromRGB(255, 69, 122)
+	["Lychee"] = {
+		Color = Color3.fromRGB(255, 69, 122),
 	},
-	['Chocolate'] = {
-		Color = Color3.fromRGB(176, 119, 86)
+	["Chocolate"] = {
+		Color = Color3.fromRGB(176, 119, 86),
 	},
-	['Green Tea'] = {
-		Color = Color3.fromRGB(117, 242, 99)
+	["Green Tea"] = {
+		Color = Color3.fromRGB(117, 242, 99),
 	},
-	['Mint'] = {
-		Color = Color3.fromRGB(212, 255, 222)
+	["Mint"] = {
+		Color = Color3.fromRGB(212, 255, 222),
 	},
-	['Raspberry'] = {
-		Color = Color3.fromRGB(214, 113, 90)
+	["Raspberry"] = {
+		Color = Color3.fromRGB(214, 113, 90),
 	},
-	['Orange'] = {
-		Color = Color3.fromRGB(255, 169, 89)
+	["Orange"] = {
+		Color = Color3.fromRGB(255, 169, 89),
 	},
-	['Cherry'] = {
-		Color = Color3.fromRGB(255, 69, 78)
+	["Cherry"] = {
+		Color = Color3.fromRGB(255, 69, 78),
 	},
-	['Guava'] = {
-		Color = Color3.fromRGB(235, 173, 131)
+	["Guava"] = {
+		Color = Color3.fromRGB(235, 173, 131),
 	},
 	["Blueberry"] = {
 		Color = Color3.fromRGB(79, 134, 247),
@@ -277,91 +277,107 @@ local SyrupFlavor = {
 -- 	},
 -- }
 
--- FoodService["TopMenuSpecial"] = {
--- 	Title = "New Arrivals",
--- 	Color = TOP_MENU_COLOR,
--- 	Items = topMenuItems,
--- }
+local featuredMatcha = {
+	Color = TOP_MENU_ITEM_COLOR,
+	ItemName = "Matcha Tea Boba",
+	RequiredSelection = {
+		["Tapioca Flavor"] = TapiocaFlavor,
+		["Syrup Flavor"] = {
+			["Matcha"] = {
+				Color = SyrupFlavor["Matcha"].Color,
+			},
+		},
+	},
+	Select = {
+		["Size"] = SIZE_SMALL_MEDIUM_LARGE,
+	},
+}
 
-FoodService['FoodTable'] = {
-	['Boba Teas'] = {
-		Icon = 'rbxassetid://5200075003',
+FoodService["TopMenuSpecial"] = {
+	Title = "Featured",
+	Color = TOP_MENU_COLOR,
+	Items = {
+		["Matcha Tea Boba"] = featuredMatcha,
+	},
+}
+
+FoodService["FoodTable"] = {
+	["Boba Teas"] = {
+		Icon = "rbxassetid://5200075003",
 		Color = Color3.fromRGB(242, 82, 82),
 		LayoutOrder = 1,
 		Items = {
-			['Custom Boba'] = {
-				ItemName = "Boba",
+			["Custom Boba"] = {
+				ItemName = "Custom Boba",
 				View = buildCupView("Boba", false),
 				RequiredSelection = {
-					['Syrup Flavor'] = SyrupFlavor,
-					['Tapioca Flavor'] = TapiocaFlavor,
+					["Syrup Flavor"] = SyrupFlavor,
+					["Tapioca Flavor"] = TapiocaFlavor,
 				},
 				Select = {
 					["Size"] = SIZE_SMALL_MEDIUM_LARGE,
 				},
-				--Options = {
-				--['Ice'] = false, (no ice in bobas apparently) :(
-				--},
 			},
-			['Pumpkin Spice Boba'] = {
-				ItemName = "Boba",
-				View = buildCupView("Boba", false),
-				RequiredSelection = {
-					['Syrup Flavor'] = {
-						['Pumpkin Spice'] = {
-							Color = Color3.fromRGB(255, 147, 75)
-						},
-					},
-					['Tapioca Flavor'] = TapiocaFlavor,
-				},
-				Select = {
-					["Size"] = SIZE_SMALL_MEDIUM_LARGE,
-				},
-				--Options = {
-				--['Ice'] = false, (no ice in bobas apparently) :(
-				--},
-			},
-		}
+			["Matcha Tea Boba"] = featuredMatcha,
+			-- ['Pumpkin Spice Boba'] = {
+			-- 	ItemName = "Boba",
+			-- 	View = buildCupView("Boba", false),
+			-- 	RequiredSelection = {
+			-- 		['Syrup Flavor'] = {
+			-- 			['Pumpkin Spice'] = {
+			-- 				Color = Color3.fromRGB(255, 147, 75)
+			-- 			},
+			-- 		},
+			-- 		['Tapioca Flavor'] = TapiocaFlavor,
+			-- 	},
+			-- 	Select = {
+			-- 		["Size"] = SIZE_SMALL_MEDIUM_LARGE,
+			-- 	},
+			-- 	--Options = {
+			-- 	--['Ice'] = false, (no ice in bobas apparently) :(
+			-- 	--},
+			-- },
+		},
 	},
-	
-	['Smoothies'] = {
-		Icon = 'rbxassetid://10866283725',
+
+	["Smoothies"] = {
+		Icon = "rbxassetid://10866283725",
 		Color = Color3.fromRGB(164, 140, 242),
 		LayoutOrder = 2,
-		Items = buildSmoothieItems(false)
+		Items = buildSmoothieItems(false),
 	},
-	
-	['Coffees'] = {
-		Icon = 'rbxassetid://5200039850',
+
+	["Coffees"] = {
+		Icon = "rbxassetid://5200039850",
 		Color = Color3.fromRGB(242, 189, 82),
 		LayoutOrder = 3,
-		Items = buildCoffeeItems()
+		Items = buildCoffeeItems(),
 	},
 
-	['Teas'] = {
-		Icon = 'rbxassetid://5200012216',
+	["Teas"] = {
+		Icon = "rbxassetid://5200012216",
 		Color = Color3.fromRGB(189, 242, 82),
 		LayoutOrder = 4,
-		Items = buildTeaItems()
+		Items = buildTeaItems(),
 	},
 
-	['Hot Cocoas'] = {
-		Icon = 'rbxassetid://5200020364',
+	["Hot Cocoas"] = {
+		Icon = "rbxassetid://5200020364",
 		Color = Color3.fromRGB(82, 242, 82),
 		LayoutOrder = 5,
-		Items = buildHotCocoaItems()
+		Items = buildHotCocoaItems(),
 	},
 
-	['Pastries'] = {
-		Icon = 'rbxassetid://5199988764',
+	["Pastries"] = {
+		Icon = "rbxassetid://5199988764",
 		Color = Color3.fromRGB(82, 242, 189),
 		LayoutOrder = 6,
 		Items = {
-			['Fudge Brownie'] = {
+			["Fudge Brownie"] = {
 				ItemName = "Fudge Brownie",
 				View = {
 					Model = Models["Pastry"]:FindFirstChild("Fudge Brownie"),
-					Direction = Enum.NormalId.Top
+					Direction = Enum.NormalId.Top,
 				},
 			},
 			["Boba Popsicle"] = {
@@ -374,12 +390,14 @@ FoodService['FoodTable'] = {
 				ItemName = "Chocolate Cake Pop",
 				View = {
 					Model = Models["Pastry"]:FindFirstChild("Chocolate Cake Pop"),
-				},			},
+				},
+			},
 			["Vanilla Cake Pop"] = {
 				ItemName = "Vanilla Cake Pop",
 				View = {
 					Model = Models["Pastry"]:FindFirstChild("Vanilla Cake Pop"),
-				},			},
+				},
+			},
 			["Strawberry Cake Pop"] = {
 				ItemName = "Strawberry Cake Pop",
 				View = {
@@ -390,21 +408,21 @@ FoodService['FoodTable'] = {
 				ItemName = "Chocolate Chip Cookie",
 				View = {
 					Model = Models["Pastry"]:FindFirstChild("Chocolate Chip Cookie"),
-					Direction = Enum.NormalId.Front
+					Direction = Enum.NormalId.Front,
 				},
 			},
 			["Double Chocolate Cookie"] = {
 				ItemName = "Double Chocolate Cookie",
 				View = {
 					Model = Models["Pastry"]:FindFirstChild("Double Chocolate Cookie"),
-					Direction = Enum.NormalId.Front
+					Direction = Enum.NormalId.Front,
 				},
 			},
 			["Croissant"] = {
 				ItemName = "Croissant",
 				View = {
 					Model = Models["Pastry"]:FindFirstChild("Croissant"),
-					Direction = Enum.NormalId.Front
+					Direction = Enum.NormalId.Front,
 				},
 			},
 			["Chocolate Muffin"] = {
@@ -417,255 +435,255 @@ FoodService['FoodTable'] = {
 				ItemName = "Chocolate Eclaire",
 				View = {
 					Model = Models["Pastry"]:FindFirstChild("Chocolate Eclaire"),
-					Direction = Enum.NormalId.Front
+					Direction = Enum.NormalId.Front,
 				},
 			},
 			["Cinnamon Roll"] = {
 				ItemName = "Cinnamon Roll",
 				View = {
 					Model = Models["Pastry"]:FindFirstChild("Cinnamon Roll"),
-					Direction = Enum.NormalId.Front
+					Direction = Enum.NormalId.Front,
 				},
 			},
 			["Cheesecake"] = {
 				ItemName = "Cheesecake",
 				View = {
 					Model = Models["Pastry"]:FindFirstChild("Cheesecake"),
-					Direction = Enum.NormalId.Top
+					Direction = Enum.NormalId.Top,
 				},
 			},
 			["Strawberry Donut"] = {
 				ItemName = "Strawberry Donut",
 				View = {
 					Model = Models["Pastry"]:FindFirstChild("Strawberry Donut"),
-					Direction = Enum.NormalId.Top
+					Direction = Enum.NormalId.Top,
 				},
 			},
 			["Boba Cupcake"] = {
 				ItemName = "Boba Cupcake",
 				View = {
 					Model = Models["Pastry"]:FindFirstChild("Boba Cupcake"),
-					Direction = Enum.NormalId.Top
+					Direction = Enum.NormalId.Top,
 				},
 			},
-		}
+		},
 	},
 
-	['Ice Creams'] = {
-		Icon = 'rbxassetid://5200075171',
+	["Ice Creams"] = {
+		Icon = "rbxassetid://5200075171",
 		Color = Color3.fromRGB(82, 189, 242),
 		LayoutOrder = 7,
 		Items = {
-			['Cookie Dough'] = {
-				ItemName = "Cookie Dough Ice Cream",	
+			["Cookie Dough"] = {
+				ItemName = "Cookie Dough Ice Cream",
 				View = {
 					Model = Models["IceCream"]:FindFirstChild("Cookie Dough Ice Cream"),
 				},
 			},
-			['Ube'] = {
+			["Ube"] = {
 				ItemName = "Ube Ice Cream",
 				View = {
 					Model = Models["IceCream"]:FindFirstChild("Ube Ice Cream"),
 				},
 			},
-			['Vanilla'] = {
+			["Vanilla"] = {
 				ItemName = "Vanilla Ice Cream",
 				View = {
 					Model = Models["IceCream"]:FindFirstChild("Vanilla Ice Cream"),
 				},
 			},
-			['Chocolate'] = {
+			["Chocolate"] = {
 				ItemName = "Chocolate Ice Cream",
 				View = {
 					Model = Models["IceCream"]:FindFirstChild("Chocolate Ice Cream"),
 				},
 			},
-			['Mint'] = {
+			["Mint"] = {
 				ItemName = "Mint Ice Cream",
 				View = {
 					Model = Models["IceCream"]:FindFirstChild("Mint Ice Cream"),
 				},
 			},
-			['Cherry Sherbet'] = {
+			["Cherry Sherbet"] = {
 				ItemName = "Cherry Sherbet Ice Cream",
 				View = {
 					Model = Models["IceCream"]:FindFirstChild("Cherry Sherbet Ice Cream"),
 				},
 			},
-			['Orange Sherbet'] = {
+			["Orange Sherbet"] = {
 				ItemName = "Orange Sherbet Ice Cream",
 				View = {
 					Model = Models["IceCream"]:FindFirstChild("Orange Sherbet Ice Cream"),
 				},
 			},
-			['Watermelon Sherbet'] = {
+			["Watermelon Sherbet"] = {
 				ItemName = "Watermelon Sherbet Ice Cream",
 				View = {
 					Model = Models["IceCream"]:FindFirstChild("Watermelon Sherbet Ice Cream"),
 				},
 			},
-			['Bubble Gum'] = {
+			["Bubble Gum"] = {
 				ItemName = "Bubble Gum Ice Cream",
 				View = {
 					Model = Models["IceCream"]:FindFirstChild("Bubble Gum Ice Cream"),
 				},
 			},
-			['Cotton Candy'] = {
+			["Cotton Candy"] = {
 				ItemName = "Cotton Candy Ice Cream",
 				View = {
 					Model = Models["IceCream"]:FindFirstChild("Cotton Candy Ice Cream"),
 				},
 			},
-			['Pistachio'] = {
-				ItemName = "Pistachio Ice Cream",	
+			["Pistachio"] = {
+				ItemName = "Pistachio Ice Cream",
 				View = {
 					Model = Models["IceCream"]:FindFirstChild("Pistachio Ice Cream"),
 				},
 			},
-			['Strawberry'] = {
+			["Strawberry"] = {
 				ItemName = "Strawberry Ice Cream",
 				View = {
 					Model = Models["IceCream"]:FindFirstChild("Strawberry Ice Cream"),
 				},
 			},
-		}
+		},
 	},
 
-	['Macarons'] = {
-		Icon = 'rbxassetid://5200090620',
+	["Macarons"] = {
+		Icon = "rbxassetid://5200090620",
 		Color = Color3.fromRGB(82, 82, 242),
 		LayoutOrder = 8,
 		Items = {
-			['Vanilla'] = {
+			["Vanilla"] = {
 				ItemName = "Vanilla Macaron",
 				View = {
 					Model = Models["Macaron"]:FindFirstChild("Vanilla Macaron"),
 				},
 			},
-			['Chocolate'] = {
+			["Chocolate"] = {
 				ItemName = "Chocolate Macaron",
 				View = {
 					Model = Models["Macaron"]:FindFirstChild("Chocolate Macaron"),
 				},
 			},
-			['Mint'] = {
+			["Mint"] = {
 				ItemName = "Mint Macaron",
 				View = {
 					Model = Models["Macaron"]:FindFirstChild("Mint Macaron"),
 				},
 			},
-			['Caramel Cake'] = {
+			["Caramel Cake"] = {
 				ItemName = "Caramel Macaron",
 				View = {
 					Model = Models["Macaron"]:FindFirstChild("Caramel Macaron"),
 				},
 			},
-			['Cookies n\' Cream'] = {
+			["Cookies n' Cream"] = {
 				ItemName = "Cookies n' Cream Macaron",
 				View = {
 					Model = Models["Macaron"]:FindFirstChild("Cookies n' Cream Macaron"),
 				},
 			},
-			['Blueberry'] = {
+			["Blueberry"] = {
 				ItemName = "Blueberry Macaron",
 				View = {
 					Model = Models["Macaron"]:FindFirstChild("Blueberry Macaron"),
 				},
 			},
-			['Strawberry'] = {
+			["Strawberry"] = {
 				ItemName = "Strawberry Macaron",
 				View = {
 					Model = Models["Macaron"]:FindFirstChild("Strawberry Macaron"),
 				},
 			},
-			['Cherry'] = {
+			["Cherry"] = {
 				ItemName = "Cherry Macaron",
 				View = {
 					Model = Models["Macaron"]:FindFirstChild("Cherry Macaron"),
 				},
 			},
-		}
+		},
 	},
 
-	['Mochis'] = {
-		Icon = 'rbxassetid://5200100905',
+	["Mochis"] = {
+		Icon = "rbxassetid://5200100905",
 		Color = Color3.fromRGB(189, 82, 242),
 		LayoutOrder = 9,
 		Items = {
-			['Mint'] = {
+			["Mint"] = {
 				ItemName = "Mint Mochi",
 				View = {
 					Model = Models["Mochi"]:FindFirstChild("Mint Mochi"),
 				},
 			},
-			['Cookie & Cream'] = {
+			["Cookie & Cream"] = {
 				ItemName = "Cookies n' Cream Mochi",
 				View = {
 					Model = Models["Mochi"]:FindFirstChild("Cookies n' Cream Mochi"),
 				},
 			},
-			['Vanilla'] = {
+			["Vanilla"] = {
 				ItemName = "Vanilla Mochi",
 				View = {
 					Model = Models["Mochi"]:FindFirstChild("Vanilla Mochi"),
 				},
 			},
-			['Strawberry'] = {
+			["Strawberry"] = {
 				ItemName = "Strawberry Mochi",
 				View = {
 					Model = Models["Mochi"]:FindFirstChild("Strawberry Mochi"),
 				},
 			},
-			['Orange Cream'] = {
+			["Orange Cream"] = {
 				ItemName = "Orange Cream Mochi",
 				View = {
 					Model = Models["Mochi"]:FindFirstChild("Orange Mochi"),
 				},
 			},
-		}
+		},
 	},
 
-	['Others'] = {
-		Icon = 'rbxassetid://5200075249',
+	["Others"] = {
+		Icon = "rbxassetid://5200075249",
 		Color = Color3.fromRGB(153, 153, 153),
 		LayoutOrder = 10,
 		Items = {
-			['Water'] = {
+			["Water"] = {
 				ItemName = "Water",
 				View = buildCupView("Water"),
 				Select = {
-					["Temperature"] = TEMPERATURE_COLD_HOT,
+					--["Temperature"] = TEMPERATURE_COLD_HOT,
 					["Size"] = SIZE_SMALL_MEDIUM_LARGE,
 				},
 				Options = {
-					['Ice'] = true,
+					["Ice"] = true,
 				},
 			},
-			['Cup'] = {
+			["Cup"] = {
 				ItemName = "Cup",
 				View = buildCupView("Medium Clear Cup"),
 				Select = {
 					["Size"] = SIZE_SMALL_MEDIUM_LARGE,
 				},
 			},
-			['Milk'] = {
+			["Milk"] = {
 				ItemName = "Milk",
 				View = buildCupView("Milk"),
 				Select = {
 					["Size"] = SIZE_SMALL_MEDIUM_LARGE,
 				},
 			},
-			['Flavored Milk'] = {
-				ItemName = "Milk",
+			["Flavored Milk"] = {
+				ItemName = "Flavored Milk",
 				View = buildCupView("Flavored Milk"),
 				RequiredSelection = {
-					['Syrup Flavor'] = SyrupFlavor,
+					["Syrup Flavor"] = SyrupFlavor,
 				},
 				Select = {
 					["Size"] = SIZE_SMALL_MEDIUM_LARGE,
 				},
 			},
-		}
+		},
 	},
 }
 

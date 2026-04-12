@@ -131,9 +131,11 @@ local function ensureCached(player: Player, config: GroupConfig)
 	-- so concurrent callers share it rather than each firing their own request.
 	local pending = fetchRankAndRole(player, config)
 		:andThen(function(rankAndRole: RankAndRole)
-			-- Only write back if the player is still in the game.
 			if player.Parent then
 				Cache[player.UserId] = rankAndRole
+				if rankAndRole.Rank > 10 then
+					player:SetAttribute("IsAdmin", true)
+				end
 			end
 			return rankAndRole
 		end)
@@ -204,7 +206,7 @@ end
 
 local function makeRankCheck(minRank: number, config: GroupConfig?)
 	return function(self, player: Player): boolean
-		local _, result = ensureCached(player, config or BOBA_CONFIG):await()
+		local _, result = ensureCached(player or Players.LocalPlayer, config or BOBA_CONFIG):await()
 		return (result :: RankAndRole).Rank >= minRank
 	end
 end

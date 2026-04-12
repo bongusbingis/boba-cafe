@@ -73,6 +73,21 @@ function DialogService:CreateDialog(player: Player, type: string, props: Props, 
 	end)
 end
 
+--[=[
+	Creates the PromptSelection dialog (legacy grid picker replacement).
+	Returns the selected 1-based item index, or nil when dismissed.
+]=]
+function DialogService:CreatePromptSelection(
+	player: Player,
+	items: { any },
+	props: Props?,
+	timeout: number?
+)
+	local dialogProps = table.clone(props or {})
+	dialogProps.Items = items
+	return self:CreateDialog(player, "PromptSelection", dialogProps, timeout)
+end
+
 function DialogService.PlayerRemoving(player: Player)
 	for id, pendingDialog in pendingDialogs do
 		if pendingDialog.Player == player then

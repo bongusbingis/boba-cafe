@@ -216,10 +216,49 @@ local function makeToggleHandler(itemType, id, entry, itemDef, layoutOrder, upda
 	end
 end
 
+---> builds a single card representing a stack of same-name items
+local function buildStackCard(itemType, name, ids, playerInventory, itemDef, layoutOrder, updateFn, aDialogRef)
+	local representativeId = ids[1]
+	local equipped = false
+	for _, id in ids do
+		local entry = playerInventory:GetItemFromId(id)
+		if entry and entry:IsEquipped() then
+			representativeId = id
+			equipped = true
+			break
+		end
+	end
+	local representativeEntry = playerInventory:GetItemFromId(representativeId)
+	if not representativeEntry then
+		return nil
+	end
+
+	local count = #ids
+	local onClick = makeToggleHandler(itemType, representativeId, representativeEntry, itemDef, layoutOrder, updateFn, aDialogRef)
+
+	return c(ItemCard, {
+		Name = name,
+		Tier = itemDef.Tier,
+		Image = itemDef.Image,
+		ImageSize = representativeEntry._type == "Particles" and UDim2.fromScale(0.675, 0.675) or UDim2.fromScale(1, 1),
+		Color = itemDef.Color,
+		Model = itemDef.PetModel,
+		Animation = itemDef.Animation,
+		OffSale = itemDef.OffSale,
+		TopBanner = equipped and { Text = "Equipped", Color = Styles.GREEN } or nil,
+		StackCount = count,
+		LayoutOrder = equipped and 0 or layoutOrder,
+		OnClick = onClick,
+	})
+end
+
 local BATCH_SIZE = 16
 local BATCH_DELAY = 0.05
 
 local SPIN_PERIOD = 1.4 -- seconds per full rotation cycle
+
+---> item types where duplicate names are collapsed into one card with a ×N badge
+local STACKABLE_TYPES = { ["Nametags"] = true }
 
 local function easeInOutBack(t: number): number
 	local c1 = 1.70158
@@ -254,6 +293,7 @@ return function(props: {
 	local isLoading, setIsLoading = React.useState(true)
 	local clockBinding = useClock()
 	local activeDialogRef = React.useRef(nil)
+	local stackDataRef = React.useRef(nil) -- { nameToIds: {[string]: {string}}, idToName: {[string]: string} }
 
 	local function removeActiveDialogRef()
 		if activeDialogRef.current then
@@ -273,13 +313,40 @@ return function(props: {
 		local cancelled = false
 
 		getPlayerInventoryAsync(props.ItemType):andThen(function(playerInventory)
+			local isStackableType = STACKABLE_TYPES[props.ItemType]
+
 			playerInventory.OnChange:Connect(function(update)
+				local sd = stackDataRef.current
+
 				if update.action == "removed" then
-					updateGridChildren(function(t)
-						local new = table.clone(t)
-						new[update.itemId] = nil
-						return new
-					end)
+					if isStackableType and sd and sd.idToName[update.itemId] then
+						local name = sd.idToName[update.itemId]
+						sd.idToName[update.itemId] = nil
+						local ids = sd.nameToIds[name]
+						for i, id in ids do
+							if id == update.itemId then
+								table.remove(ids, i)
+								break
+							end
+						end
+						updateGridChildren(function(t)
+							local new = table.clone(t)
+							if #ids == 0 then
+								new["stack:" .. name] = nil
+							else
+								local itemDef = InventoryItemDefinitions[props.ItemType][name]
+								local tier = InventoryItemDefinitions.Tiers[(itemDef and itemDef.Tier) or "Basic"]
+								new["stack:" .. name] = buildStackCard(props.ItemType, name, ids, playerInventory, itemDef, tier.Weight * 1000, updateGridChildren, activeDialogRef)
+							end
+							return new
+						end)
+					else
+						updateGridChildren(function(t)
+							local new = table.clone(t)
+							new[update.itemId] = nil
+							return new
+						end)
+					end
 					return
 				end
 
@@ -292,29 +359,51 @@ return function(props: {
 					return
 				end
 
-				updateGridChildren(function(t)
-					local new = table.clone(t)
-					new[update.itemId] = buildCard(
-						props.ItemType,
-						item,
-						itemDef,
-						0,
-						item:IsEquipped(),
-						makeToggleHandler(
+				if isStackableType and sd then
+					local name = item.Name
+					-- register new items that arrived after initial load
+					if not sd.idToName[update.itemId] then
+						if not sd.nameToIds[name] then
+							sd.nameToIds[name] = {}
+						end
+						table.insert(sd.nameToIds[name], update.itemId)
+						sd.idToName[update.itemId] = name
+					end
+					local ids = sd.nameToIds[name]
+					local tier = InventoryItemDefinitions.Tiers[itemDef.Tier or "Basic"]
+					updateGridChildren(function(t)
+						local new = table.clone(t)
+						new["stack:" .. name] = buildStackCard(props.ItemType, name, ids, playerInventory, itemDef, tier.Weight * 1000, updateGridChildren, activeDialogRef)
+						return new
+					end)
+				else
+					updateGridChildren(function(t)
+						local new = table.clone(t)
+						new[update.itemId] = buildCard(
 							props.ItemType,
-							update.itemId,
 							item,
-							InventoryItemDefinitions[props.ItemType][item.Name],
+							itemDef,
 							0,
-							updateGridChildren,
-							activeDialogRef
+							item:IsEquipped(),
+							makeToggleHandler(
+								props.ItemType,
+								update.itemId,
+								item,
+								InventoryItemDefinitions[props.ItemType][item.Name],
+								0,
+								updateGridChildren,
+								activeDialogRef
+							)
 						)
-					)
-					return new
-				end)
+						return new
+					end)
+				end
 			end)
 
 			local cardList = {}
+			local nameGroups: { [string]: { ids: { string }, itemDef: any, layoutOrder: number } } = {}
+			local newStackData = { nameToIds = {} :: { [string]: { string } }, idToName = {} :: { [string]: string } }
+
 			for id, entry in playerInventory.Inventory do
 				local itemDef = InventoryItemDefinitions[props.ItemType][entry.Name]
 				if not itemDef then
@@ -324,17 +413,28 @@ return function(props: {
 				local tier = InventoryItemDefinitions.Tiers[itemDef.Tier or "Basic"]
 				local layoutOrder = tier.Weight * 1000
 
-				local onClick = makeToggleHandler(
-					props.ItemType,
-					id,
-					entry,
-					itemDef,
-					layoutOrder,
-					updateGridChildren,
-					activeDialogRef
-				)
-				table.insert(cardList, { id = id, card = buildCard(props.ItemType, entry, itemDef, layoutOrder, entry:IsEquipped(), onClick) })
+				if isStackableType then
+					if not nameGroups[entry.Name] then
+						nameGroups[entry.Name] = { ids = {}, itemDef = itemDef, layoutOrder = layoutOrder }
+					end
+					table.insert(nameGroups[entry.Name].ids, id)
+					newStackData.idToName[id] = entry.Name
+				else
+					local onClick = makeToggleHandler(props.ItemType, id, entry, itemDef, layoutOrder, updateGridChildren, activeDialogRef)
+					table.insert(cardList, { id = id, card = buildCard(props.ItemType, entry, itemDef, layoutOrder, entry:IsEquipped(), onClick) })
+				end
 			end
+
+			if isStackableType then
+				for name, group in nameGroups do
+					newStackData.nameToIds[name] = group.ids
+					local card = buildStackCard(props.ItemType, name, group.ids, playerInventory, group.itemDef, group.layoutOrder, updateGridChildren, activeDialogRef)
+					if card then
+						table.insert(cardList, { id = "stack:" .. name, card = card })
+					end
+				end
+			end
+			stackDataRef.current = newStackData
 
 			local function applyBatch(startIdx: number)
 				if cancelled then

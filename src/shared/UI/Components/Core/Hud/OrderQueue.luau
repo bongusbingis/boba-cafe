@@ -24,10 +24,24 @@ local Knit = require(Packages.Knit)
 local React = require(Packages.React)
 
 local Styles = require(UI.Styles)
+local Banner = require(UI.Components.Buttons.Banner)
+local Pane = require(UI.Components.Pane)
+local PromptButton = require(UI.Components.Buttons.PromptButton)
 
 ---> Private
 
 local c = React.createElement
+local BASE_IMAGE = "http://www.roblox.com/asset/?id=13473433246"
+local BORDER_IMAGE = "http://www.roblox.com/asset/?id=13382163077"
+
+local function getStatusText(position: number): string
+	local ahead = position - 1
+	if ahead == 0 then
+		return "You're next!"
+	end
+
+	return ahead .. (ahead == 1 and " barista ahead of you" or " baristas ahead of you")
+end
 
 ---> Component
 
@@ -56,93 +70,97 @@ return function()
 		return nil
 	end
 
-	local ahead = position - 1
-	local statusText = if ahead == 0
-		then "You're next!"
-		else ahead .. (ahead == 1 and " barista ahead of you" or " baristas ahead of you")
+	local statusText = getStatusText(position)
 
-	return c("Frame", {
-		AnchorPoint = Vector2.new(0.5, 1),
-		AutomaticSize = Enum.AutomaticSize.Y,
-		BackgroundColor3 = Color3.fromRGB(245, 245, 245),
-		BorderSizePixel = 0,
-		Position = UDim2.new(0.5, 0, 0.92, 0),
-		Size = UDim2.new(0, 220, 0, 0),
-		ZIndex = 10,
-	}, {
-		Corner = c("UICorner", { CornerRadius = UDim.new(0, 6) }),
-		Stroke = c("UIStroke", { Color = Styles.GREEN_DIM, Thickness = 1 }),
-		Layout = c("UIListLayout", {
-			FillDirection = Enum.FillDirection.Vertical,
-			HorizontalAlignment = Enum.HorizontalAlignment.Center,
-			Padding = UDim.new(0, 0),
-			SortOrder = Enum.SortOrder.LayoutOrder,
-		}),
-
-		-- Header
-		Header = c("Frame", {
-			LayoutOrder = 0,
-			BackgroundColor3 = Styles.GREEN,
-			BorderSizePixel = 0,
-			Size = UDim2.new(1, 0, 0, 28),
-		}, {
-			Corner = c("UICorner", { CornerRadius = UDim.new(0, 6) }),
-			BottomBlocker = c("Frame", {
-				AnchorPoint = Vector2.new(0, 1),
-				BackgroundColor3 = Styles.GREEN,
-				BorderSizePixel = 0,
-				Position = UDim2.fromScale(0, 1),
-				Size = UDim2.new(1, 0, 0, 6),
-			}),
-			Label = c("TextLabel", {
-				BackgroundTransparency = 1,
-				FontFace = Styles.FONT_FREDOKA,
-				Size = UDim2.fromScale(1, 1),
-				Text = "Order Queue",
-				TextColor3 = Styles.OFFWHITE,
-				TextSize = 15,
-			}),
-		}),
-
-		-- Status line
-		Status = c("TextLabel", {
-			LayoutOrder = 1,
-			AutomaticSize = Enum.AutomaticSize.Y,
+	return c(Pane, {
+		ClassName = "Frame",
+		AspectRatio = 2.23008,
+		Native = {
+			AnchorPoint = Vector2.new(0.5, 1),
 			BackgroundTransparency = 1,
-			FontFace = Styles.FONT_FREDOKA,
-			Size = UDim2.new(1, -16, 0, 0),
-			Text = statusText,
-			TextColor3 = Styles.GREEN_DEEP,
-			TextSize = 14,
-			TextWrapped = true,
-			TextXAlignment = Enum.TextXAlignment.Center,
-		}, {
-			PaddingTop = c("UIPadding", { PaddingTop = UDim.new(0, 8) }),
+			Position = UDim2.fromScale(0.5, 0.92),
+			Size = UDim2.fromScale(0.265, 0.175),
+			ZIndex = 10,
+		},
+	}, {
+		UISizeConstraint = c("UISizeConstraint", {
+			MaxSize = Vector2.new(330, 165),
+			MinSize = Vector2.new(210, 105),
 		}),
 
-		-- Leave Queue button
-		LeaveButton = c("TextButton", {
-			LayoutOrder = 2,
-			AutomaticSize = Enum.AutomaticSize.Y,
-			BackgroundColor3 = Styles.CORAL,
-			BorderSizePixel = 0,
-			FontFace = Styles.FONT_FREDOKA,
-			Size = UDim2.new(1, -20, 0, 32),
-			Text = "Leave Queue",
-			TextColor3 = Styles.OFFWHITE,
-			TextSize = 14,
-			[React.Event.Activated] = function()
-				if RunService:IsRunning() then
-					Knit.GetController("OrderController"):LeaveQueue()
-				end
-			end,
+		Base = c(Pane, {
+			ClassName = "ImageLabel",
+			Native = {
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				BackgroundTransparency = 1,
+				Image = BASE_IMAGE,
+				Position = UDim2.fromScale(0.5, 0.5),
+				ScaleType = Enum.ScaleType.Slice,
+				Size = UDim2.fromScale(1, 1),
+				SliceCenter = Rect.new(104, 96, 408, 416),
+			},
 		}, {
-			Corner = c("UICorner", { CornerRadius = UDim.new(0, 4) }),
-			Margin = c("UIPadding", {
-				PaddingLeft = UDim.new(0, 10),
-				PaddingRight = UDim.new(0, 10),
-				PaddingBottom = UDim.new(0, 8),
-				PaddingTop = UDim.new(0, 6),
+			Container = c(Pane, {
+				ClassName = "Frame",
+				ListLayout = {
+					FillDirection = Enum.FillDirection.Vertical,
+					HorizontalAlignment = Enum.HorizontalAlignment.Center,
+					VerticalAlignment = Enum.VerticalAlignment.Center,
+					Padding = UDim.new(0.06, 0),
+				},
+				Native = {
+					AnchorPoint = Vector2.new(0.5, 0),
+					BackgroundTransparency = 1,
+					Position = UDim2.fromScale(0.5, 0.315665),
+					Size = UDim2.fromScale(0.92, 0.63),
+				},
+			}, {
+				Status = c(Pane, {
+					ClassName = "TextLabel",
+					MaxTextSize = 26,
+					Native = {
+						AnchorPoint = Vector2.new(0.5, 0),
+						AutomaticSize = Enum.AutomaticSize.Y,
+						BackgroundTransparency = 1,
+						FontFace = Styles.FONT_FREDOKA,
+						Position = UDim2.fromScale(0.5, 0),
+						Size = UDim2.fromScale(0.95, 0),
+						Text = statusText,
+						TextColor3 = Styles.GREEN_LIGHT,
+						TextScaled = true,
+						TextWrapped = true,
+						TextXAlignment = Enum.TextXAlignment.Center,
+					},
+				}),
+
+				LeaveButton = c(PromptButton, {
+					Text = "Leave Queue",
+					Color = Styles.CORAL,
+					Size = UDim2.fromScale(0.64, 0.38),
+					OnClick = function()
+						if RunService:IsRunning() then
+							Knit.GetController("OrderController"):LeaveQueue()
+						end
+					end,
+				}),
+			}),
+
+			Border = c(Pane, {
+				ClassName = "ImageLabel",
+				Native = {
+					AnchorPoint = Vector2.new(0.5, 0.5),
+					BackgroundTransparency = 1,
+					Image = BORDER_IMAGE,
+					ImageColor3 = Styles.GREEN_LIGHT,
+					Position = UDim2.fromScale(0.5, 0.5),
+					Size = UDim2.fromScale(0.970972, 0.938198),
+				},
+			}),
+
+			Title = c(Banner, {
+				Text = "Order Queue",
+				Color = Styles.GREEN,
+				Size = UDim2.fromScale(1.21645, 0.371931),
 			}),
 		}),
 	})

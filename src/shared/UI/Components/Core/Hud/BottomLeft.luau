@@ -19,6 +19,7 @@ local UI = Shared:WaitForChild("UI")
 ---> dependencies
 local Knit = require(Packages.Knit)
 local React = require(Packages.React)
+local RankUtil = require(Shared.Utility.RankUtil)
 
 ---> constants
 local SKIP_HATCH_PRODUCT_ID = 1143554452
@@ -44,13 +45,15 @@ local function extractTimeLeft(s: string)
 	local secondsNum = tonumber(seconds) or 0
 	return minutesNum * 60 + secondsNum
 end
-	
+
 local function formatClock(totalSeconds: number)
 	totalSeconds = math.max(0, totalSeconds)
 	local minutes = math.floor(totalSeconds / 60)
 	local seconds = totalSeconds % 60
 	return string.format("%02d:%02d", minutes, seconds)
 end
+
+local atJoin = os.time()
 
 return function(props: {
 	CurrentPage: ModuleScript,
@@ -64,6 +67,13 @@ return function(props: {
 	local capsuleHatching, setCapsuleHatching = React.useState(nil)
 	local hatchClockText, setHatchClockText = React.useState("00:00")
 	local requestedReadyHatchRef = React.useRef(false)
+
+	local rank, setRank = React.useState(0)
+	local shiftTimerEnabled, setShiftTimerEnabled = React.useState(false)
+	local shiftTimerText, setShiftTimerText = React.useState("00:00")
+
+	local isStaff = rank > 3
+	local isAdmin = rank > 10
 
 	React.useEffect(function()
 		if not capsuleHatching or capsuleHatching == false then
@@ -104,8 +114,27 @@ return function(props: {
 		end
 	end, { capsuleHatching })
 
+	React.useEffect(function()
+		if not isAdmin then
+			return
+		end
+
+		local this = task.spawn(function()
+			while true do
+				local elapsed = os.time() - atJoin
+				setShiftTimerText(formatClock(elapsed))
+				task.wait(1)
+			end
+		end)
+
+		return function()
+			task.cancel(this)
+		end
+	end, { rank })
+
 	if RunService:IsRunning() then
 		React.useEffect(function()
+			setRank(RankUtil:GetRankAsync(Players.LocalPlayer))
 			Knit.GetController("DataController"):GetDataAsync():andThen(function(playerData)
 				setCurrency(playerData.Currency)
 
@@ -123,8 +152,13 @@ return function(props: {
 				-- 	end
 				-- end)
 
-				playerData:ListenToChange({"HatchingPet"}, function(newValue)
+				playerData:ListenToChange({ "HatchingPet" }, function(newValue)
 					setCapsuleHatching(newValue or false)
+				end)
+
+				setShiftTimerEnabled(playerData.Settings.ShiftTimerEnabled)
+				playerData:ListenToChange({ "Settings" }, function(newValue)
+					setShiftTimerEnabled(newValue.ShiftTimerEnabled)
 				end)
 
 				playerData:ListenToChange({ "HatchingPet", "TimeAccumulated" }, function(newTimeAccumulated)
@@ -171,15 +205,15 @@ return function(props: {
 	}, {
 		-- notification card springs in above the buttons (LayoutOrder -6)
 		-- width is clamped to match the CurrencyPanel (0.5 scale of the 300px outer frame)
-		Notification = c("Frame", {
-			AutomaticSize = Enum.AutomaticSize.Y,
-			BackgroundTransparency = 1,
-			ClipsDescendants = false,
-			LayoutOrder = -6,
-			Size = UDim2.fromScale(0.6, 0),
-		}, {
-			c(SmallNotification.Component, {}),
-		}),
+		-- Notification = c("Frame", {
+		-- 	AutomaticSize = Enum.AutomaticSize.Y,
+		-- 	BackgroundTransparency = 1,
+		-- 	ClipsDescendants = false,
+		-- 	LayoutOrder = -6,
+		-- 	Size = UDim2.fromScale(0.6, 0),
+		-- }, {
+		-- 	c(SmallNotification.Component, {}),
+		-- }),
 
 		-- horizontal button row
 		ButtonRow = c(Pane, {
@@ -243,6 +277,15 @@ return function(props: {
 					Size = UDim2.fromScale(0.6, 1),
 				},
 			}, {
+				Notification = c(SmallNotification.Component, {}),
+
+				ShiftTimer = isAdmin and shiftTimerEnabled and c(NormalButton, {
+					Icon = "rbxassetid://8184068342",
+					Size = BUTTON_SIZE,
+					Color = Styles.ROSE_MID,
+					Text = shiftTimerText,
+				}),
+
 				Bucks = c(NormalButton, {
 					PlusButton = true,
 					Icon = "rbxassetid://13382286492",
@@ -254,7 +297,7 @@ return function(props: {
 					end,
 				}),
 
-				Points = c(NormalButton, {
+				Points = isStaff and c(NormalButton, {
 					PlusButton = true,
 					Icon = "rbxassetid://13391365805",
 					Size = BUTTON_SIZE,

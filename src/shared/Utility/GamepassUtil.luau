@@ -1,23 +1,3 @@
---[[
-    Author: bongusbingis
-    Module: GamepassUtil.lua
-    Created: 10/27/2024
-    Updated: 04/06/2026
-
-    Usage:
-        local GamepassUtil = require(path.to.GamepassUtil)
-
-        -- check ownership
-        local owns = GamepassUtil:PlayerOwnsPassAsync(player, 12345678)
-        local owns = GamepassUtil:PlayerOwnsPassAsync(player, "Faster Walk Speed")
-
-        -- warm cache for all passes upfront
-        GamepassUtil:PrefetchAllPassesAsync(player)
-
-        -- server-only: grant pass without a purchase (e.g. after purchase callback)
-        GamepassUtil:GrantPassToCache(player, 12345678)
---]]
-
 -- Services
 local Players = game:GetService("Players")
 local MarketplaceService = game:GetService("MarketplaceService")
@@ -48,7 +28,7 @@ local GamepassUtil = {}
 
 ---> constants
 local MAX_RETRIES = 3
-local STUDIO_PASSES_ENABLED = true
+local STUDIO_PASSES_ENABLED = false
 local _studioWarningPrinted = false
 
 ---> cache

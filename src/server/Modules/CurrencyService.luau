@@ -21,6 +21,11 @@ function CurrencyService:Modify(player: Player, type: "BobaBucks" | "Points", am
         warn(`Invalid currency type: {type}`)
         return
     end
+
+    if amount == 0 then
+        warn("Amount must be non-zero")
+        return
+    end
     
     Knit.GetService("DataService"):GetDataAsync(player):andThen(function(playerData)
         local current = playerData.Currency[type]
@@ -29,6 +34,12 @@ function CurrencyService:Modify(player: Player, type: "BobaBucks" | "Points", am
             return
         end
 
+        if type == "BobaBucks" then
+            local statisticsService = Knit.GetService("StatisticsService")
+            local statToIncrement = amount > 0 and "BobaBucksEarned" or "BobaBucksSpent"
+            statisticsService:IncrementStat(player, statToIncrement, math.abs(amount))
+        end
+ 
         playerData:SetValue({ "Currency", type }, current + amount)
     end)
 end

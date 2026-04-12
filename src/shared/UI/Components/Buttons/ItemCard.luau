@@ -107,6 +107,7 @@ export type Props = {
 	-- optional
 	Price: string?,
 	TopBanner: Banner.Props?,
+	StackCount: number?, -- shows a ×N badge in the top-right corner when > 1
 	Equipped: boolean?,
 	OffSale: boolean?,
 
@@ -254,6 +255,30 @@ local function buildNameLabel(text: string, _, size: UDim2, strokeThickness: num
 	})
 end
 
+local function buildCountBadge(count: number)
+	return c("Frame", {
+		AnchorPoint = Vector2.new(1, 0),
+		BackgroundColor3 = Color3.fromRGB(30, 30, 30),
+		BackgroundTransparency = 0.25,
+		Position = UDim2.fromScale(1.0, 0.02),
+		Size = UDim2.fromScale(0.38, 0.22),
+		ZIndex = 10,
+	}, {
+		Corner = c("UICorner", { CornerRadius = UDim.new(1, 0) }),
+		Label = c("TextLabel", {
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundTransparency = 1,
+			FontFace = Styles.FONT_FREDOKA,
+			Position = UDim2.fromScale(0.5, 0.5),
+			Size = UDim2.fromScale(0.85, 0.75),
+			Text = "×" .. count,
+			TextColor3 = Color3.new(1, 1, 1),
+			TextScaled = true,
+			ZIndex = 11,
+		}),
+	})
+end
+
 local function buildTierLabel(tier: string, tierColor: Color3?)
 	return c(Pane, {
 		ClassName = "TextLabel",
@@ -326,6 +351,7 @@ return function(props: Props)
 		TierLabel = (not props.OffSale and props.Tier) and buildTierLabel(props.Tier, tierColor) or nil,
 
 		Banner = props.TopBanner and buildBanner(props.TopBanner) or nil,
+		CountBadge = (props.StackCount and props.StackCount > 1) and buildCountBadge(props.StackCount) or nil,
 		ProductPrice = props.Price
 				and buildPriceLabel(props.Price, resolvePricePosition(isShop, props.TopBanner ~= nil), springs, strokes)
 			or nil,

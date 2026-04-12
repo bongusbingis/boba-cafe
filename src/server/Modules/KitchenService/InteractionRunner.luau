@@ -53,14 +53,58 @@ end
 ---> Private
 
 function InteractionRunner:_runSelectFrom(player: Player, model: Model, actionData: ActionData): InteractionResult
-    local promptConfig = actionData[2] :: { Title: string?, Text: string?, Buttons: { { Text: string } } }
+    local promptConfig = actionData[2] :: {
+        Title: string?,
+        Text: string?,
+        Buttons: { { Text: string } }?,
+        DialogType: string?,
+        Items: { { Name: string, Model: Instance?, Color: Color3?, IsTip: boolean? } }?,
+    }
     local branchMap = actionData[3] :: { [string]: { ActionData } }
 
     local DialogService = Knit.GetService("DialogService")
-    local ok, choice = DialogService:CreateDialog(player, "ActionPrompt", promptConfig):await()
+    local choice: string? = nil
 
-    if not ok or choice == nil or choice == "Close" then
-        return { Success = true }
+    if promptConfig.DialogType == "PromptSelection" then
+        local promptItems = promptConfig.Items or {}
+        local okPrompt, selectedIndex = DialogService:CreatePromptSelection(player, promptItems, {
+            Title = promptConfig.Title,
+            Text = promptConfig.Text,
+        }):await()
+
+        if not okPrompt or selectedIndex == nil then
+            return { Success = true }
+        end
+
+        if typeof(selectedIndex) ~= "number" then
+            warn(string.format("[InteractionRunner] PromptSelection returned invalid index: %s", tostring(selectedIndex)))
+            return { Success = false, Error = "SelectFrom: invalid prompt selection" }
+        end
+
+        local selectedItem = promptItems[selectedIndex]
+        if selectedItem and typeof(selectedItem.Name) == "string" and selectedItem.Name ~= "" then
+            choice = selectedItem.Name
+        elseif promptConfig.Buttons and promptConfig.Buttons[selectedIndex] then
+            choice = promptConfig.Buttons[selectedIndex].Text
+        end
+
+        if not choice then
+            warn(string.format("[InteractionRunner] PromptSelection: no option for index '%s'", tostring(selectedIndex)))
+            return { Success = false, Error = "SelectFrom: missing prompt option" }
+        end
+    else
+        local okPrompt, actionChoice = DialogService:CreateDialog(player, "ActionPrompt", promptConfig):await()
+
+        if not okPrompt or actionChoice == nil or actionChoice == "Close" then
+            return { Success = true }
+        end
+
+        if typeof(actionChoice) ~= "string" then
+            warn(string.format("[InteractionRunner] ActionPrompt returned invalid choice: %s", tostring(actionChoice)))
+            return { Success = false, Error = "SelectFrom: invalid choice" }
+        end
+
+        choice = actionChoice
     end
 
     local branch = branchMap[choice]

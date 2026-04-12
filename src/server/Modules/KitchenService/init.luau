@@ -95,12 +95,10 @@ function KitchenService:KnitStart()
                 model,
                 { Label = itemName, ActionText = "Interact", HoldDuration = recipeData.HoldDuration },
                 function(player: Player)
-                    print(RankUtil:GetRankAndRoleAsync(player))
                     if not RankUtil:CanEnterKitchen(player) then
                         return
                     end
 
-                    print("2")
                     local primaryPart = model.PrimaryPart
                     if not primaryPart then
                         return

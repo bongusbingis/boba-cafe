@@ -119,9 +119,11 @@ return function(props: Props)
 	local subHeaderColor = itemColor:Lerp(Color3.new(0, 0, 0), 0.08)
 	local subOptionColor = itemColor:Lerp(Color3.new(1, 1, 1), 0.04)
 
+	local px = usePx()
+
 	local children = {
 		UIListLayout = c("UIListLayout", {
-			Padding = UDim.new(0, 3),
+			Padding = UDim.new(0, px(3)),
 			SortOrder = Enum.SortOrder.LayoutOrder,
 		}),
 

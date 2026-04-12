@@ -46,11 +46,11 @@ Recipes.Tapioca = {
 
 Recipes.Syrups = {
 	["Classic Milk Tea"] = Color3.fromRGB(255, 250, 214),
-	["Avocado"] = Color3.fromRGB(104, 184, 88),
+	--["Avocado"] = Color3.fromRGB(104, 184, 88),
 	["Strawberry Banana"] = Color3.fromRGB(255, 140, 194),
 	["Taro"] = Color3.fromRGB(224, 166, 255),
 	["Mango"] = Color3.fromRGB(255, 192, 92),
-	["Honeycomb"] = Color3.fromRGB(255, 222, 92),
+	--["Honeycomb"] = Color3.fromRGB(255, 222, 92),
 	["Coconut"] = Color3.fromRGB(255, 254, 247),
 	["Matcha"] = Color3.fromRGB(155, 227, 145),
 	["Chocolate Banana"] = Color3.fromRGB(171, 140, 87),
@@ -58,16 +58,16 @@ Recipes.Syrups = {
 	["Thai Milk Tea"] = Color3.fromRGB(255, 170, 51),
 	["Watermelon"] = Color3.fromRGB(255, 54, 111),
 	["Strawberry"] = Color3.fromRGB(255, 112, 167),
-	["Almond"] = Color3.fromRGB(255, 254, 222),
+	--["Almond"] = Color3.fromRGB(255, 254, 222),
 	["Brown Sugar"] = Color3.fromRGB(227, 175, 98),
 	["Lychee"] = Color3.fromRGB(255, 69, 122),
 	["Chocolate"] = Color3.fromRGB(176, 119, 86),
 	["Green Tea"] = Color3.fromRGB(117, 242, 99),
-	["Mint"] = Color3.fromRGB(212, 255, 222),
+	--["Mint"] = Color3.fromRGB(212, 255, 222),
 	["Raspberry"] = Color3.fromRGB(214, 113, 90),
-	["Orange"] = Color3.fromRGB(255, 169, 89),
+	--["Orange"] = Color3.fromRGB(255, 169, 89),
 	["Cherry"] = Color3.fromRGB(255, 69, 78),
-	["Earl Grey"] = Color3.fromRGB(255, 89, 0),
+	--["Earl Grey"] = Color3.fromRGB(255, 89, 0),
 	["Guava"] = Color3.fromRGB(235, 173, 131),
 	["Dragon Fruit"] = Color3.fromRGB(255, 5, 47),
 }
@@ -84,6 +84,23 @@ Recipes.Items = {
 		},
 	},
 
+	["Sink"] = {
+		Actions = {
+			{ "ToolNameValidityCheck", { "#Cup|!Milk" } },
+			{ "SetToolHoldingProperty", "Liquid", "Color", Color3.new(0.392157, 0.729412, 0.992157) },
+			{ "SetToolHoldingProperty", "Liquid", "Transparency", 0 },
+			{
+				"RenameToolHolding",
+				function(old: string)
+					-- old --> "[Flavor] Milk"
+					local strings = old:split(" ")
+					local size = strings[1]
+					return size .. " Water"
+				end,
+			},
+		},
+	},
+
 	["Milk"] = {
 		Actions = {
 			{ "ToolNameValidityCheck", { "#Clear Cup|=Mug" } },
@@ -92,7 +109,9 @@ Recipes.Items = {
 			{
 				"RenameToolHolding",
 				function(old: string)
-					return old .. " + Milk"
+					local isMug = old:find("Mug") ~= nil
+					local append = isMug and " + Steamed Milk" or " + Milk"
+					return old .. append
 				end,
 			},
 		},
@@ -145,12 +164,11 @@ Recipes.Items = {
 	["Ice Machine"] = {
 		HoldDuration = 5,
 		Actions = {
-			{ "ToolNameValidityCheck", { table.concat(RecipeConstructors.getCoffeeNames(), "|") .. "|=Tea", "!Clear", "!Ice" } },
-			{ "SetToolHoldingProperty", "Liquid", "Transparency", 0.5 },
+			{ "ToolNameValidityCheck", { table.concat(RecipeConstructors.getCoffeeNames(), "|") .. "|=Tea|#Water", "!Clear", "!Iced" } },
 			{
 				"RenameToolHolding",
 				function(old: string)
-					return old .. " + Ice"
+					return "Iced " .. old
 				end,
 			},
 		},

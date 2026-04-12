@@ -13,9 +13,13 @@ local Styles = require(UI.Styles)
 local OpenableMenu = require(UI.Components.Core.OpenableMenu)
 
 ---> pages
-local FoodMenu = require(script.FoodMenu)
-local Credits = require(script.Credits)
-local ServerInfo = require(script.ServerInfo)
+local FoodMenu    = require(script.FoodMenu)
+local PromoCodes  = require(script.PromoCodes)
+local Credits     = require(script.Credits)
+local Purchases   = require(script.Purchases)
+local ServerInfo  = require(script.ServerInfo)
+local Settings    = require(script.Settings)
+local Statistics  = require(script.Statistics)
 local c = React.createElement
 
 return function()
@@ -35,16 +39,25 @@ return function()
                 Key = "PromoCodes",
                 Label = "Promo Codes",
                 LayoutOrder = 2,
+                Content = {
+                    Page = c(PromoCodes, {}),
+                },
             },
             {
                 Key = "Statistics",
                 Label = "Statistics",
                 LayoutOrder = 3,
+                Content = {
+                    Page = c(Statistics, {}),
+                },
             },
             {
                 Key = "Purchases",
                 Label = "Purchases",
                 LayoutOrder = 4,
+                Content = {
+                    Page = c(Purchases, {}),
+                },
             },
             {
                 Key = "ServerInfo",
@@ -58,6 +71,9 @@ return function()
                 Key = "Settings",
                 Label = "Settings",
                 LayoutOrder = 6,
+                Content = {
+                    Page = c(Settings, {}),
+                },
             },
             {
                 Key = "Credits",

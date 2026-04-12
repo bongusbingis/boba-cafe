@@ -578,7 +578,7 @@ function OrderService:_handlePickUp(player: Player, area: Model)
 			local tools = orderFolder:GetChildren()
 
 			if self._statisticsService then
-				self._statisticsService:AddToStatistic(player, "Items Ordered", #tools)
+				self._statisticsService:IncrementStat(player, "ItemsOrdered", #tools)
 			end
 
 			for _, item in tools do
@@ -586,7 +586,7 @@ function OrderService:_handlePickUp(player: Player, area: Model)
 					local currentItem: string = (item:FindFirstChild("CurrentItem") and item.CurrentItem.Value) or ""
 					if currentItem == "[Syrup] Boba" then
 						if self._statisticsService then
-							self._statisticsService:AddToStatistic(player, "Bobas Ordered", 1)
+							self._statisticsService:IncrementStat(player, "BobasOrdered", 1)
 						end
 						self._questService:AdvanceQuest(player, "BobaOrdered", 1)
 					elseif string.find(currentItem, "Macaron") then
@@ -671,7 +671,7 @@ function OrderService:_handlePickUp(player: Player, area: Model)
 			self.Client.NotepadUpdated:Fire(player, "ResetOrder")
 
 			if self._statisticsService then
-				self._statisticsService:AddToStatistic(player, "Orders Prepared", 1)
+				self._statisticsService:IncrementStat(player, "OrdersPrepared", 1)
 			end
 
 			playerOrder.status = "Ready for Pick Up"
@@ -727,7 +727,7 @@ function OrderService.Client:CreateOrder(player: Player, customerId: number, ord
 	self.Server:_addOrder(customerId, orderItems)
 
 	if self.Server._statisticsService then
-		self.Server._statisticsService:AddToStatistic(player, "Orders Created", 1)
+		self.Server._statisticsService:IncrementStat(player, "OrdersCreated", 1)
 	end
 
 	task.delay(ORDER_DEBOUNCE_SECONDS, function()
@@ -807,10 +807,8 @@ function OrderService:KnitStart()
 	-- Resolve cross-service references after all services have initialised
 	self._dialogService = Knit.GetService("DialogService")
 
-	local statsOk, statsService = pcall(Knit.GetService, Knit, "StatisticsService")
-	if statsOk then
-		self._statisticsService = statsService
-	end
+
+	self._statisticsService = Knit.GetService("StatisticsService")
 
 	local questOk, questService = pcall(Knit.GetService, Knit, "QuestService")
 	if questOk then

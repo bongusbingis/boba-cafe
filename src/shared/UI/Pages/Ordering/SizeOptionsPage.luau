@@ -24,6 +24,20 @@ local function count(t: {[any]: any})
     return n
 end
 
+local function hasSelectableChoices(selectTable: {[any]: { any }}?): boolean
+	if not selectTable then
+		return false
+	end
+
+	for _, options in selectTable do
+		if typeof(options) == "table" and #options > 1 then
+			return true
+		end
+	end
+
+	return false
+end
+
 return function(props)
 	local item = props.Item
 	if not item then
@@ -58,8 +72,12 @@ return function(props)
 
 	local sectionOrder = 0
 
-	if item.Select and count(item.Select) > 1 then
+	if item.Select then
 		for selType, options in item.Select do
+			if typeof(options) ~= "table" or #options <= 1 then
+				continue
+			end
+
 			sectionOrder += 1
 
 			local btnChildren = {
@@ -145,7 +163,7 @@ return function(props)
 		end
 	end
 
-	if item.Options then
+	if item.Options and count(item.Options) > 0 then
 		sectionOrder += 1
 		local addonChildren = {
 			UIListLayout = c("UIListLayout", {
@@ -193,7 +211,7 @@ return function(props)
 		}, addonChildren)
 	end
 
-    if (not item.Select and not item.Options) or (count(item.Select) <= 1 and count(item.Options) == 0) then
+	if not hasSelectableChoices(item.Select) and count(item.Options) == 0 then
         scrollChildren["NoOptions"] = c(Pane, {
             ClassName = "TextLabel",
             Native = {

@@ -39,9 +39,20 @@ local function label(props: {
 	})
 end
 
+local function getAdminsOnline()
+	local n = 0
+	for _, player in Players:GetPlayers() do
+		if player:GetAttribute("IsAdmin") then
+			n += 1
+		end
+	end
+	return n
+end
+
 return function()
 	local uptime, setUptime = React.useState(math.floor(workspace.DistributedGameTime))
 	local playerCount, setPlayerCount = React.useState(#Players:GetPlayers())
+	local adminsOnline, setAdminsOnline = React.useState(getAdminsOnline())
 
 	React.useEffect(function()
 		local running = true
@@ -80,8 +91,9 @@ return function()
 
 	local infos = {
 		{ Title = "Server Uptime", Text = formatUptime(uptime) },
-		{ Title = "Players Online", Text = tostring(playerCount) },
 		{ Title = "Server Version", Text = tostring(game.PlaceVersion) },
+		{ Title = "Players Online", Text = tostring(playerCount) },
+		{ Title = "Admins Online", Text = tostring(adminsOnline) },
 	}
 
 	local children = {

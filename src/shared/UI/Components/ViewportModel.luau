@@ -12,6 +12,7 @@ export type Props = {
 	Model: Instance,
 	Size: UDim2?,
 	LayoutOrder: number?,
+	ZIndex: number?,
 	ModelRotation: number?,  -- Y-axis rotation of the model in degrees; default 0
 	-- optional camera overrides
 	ElevationAngle: number?, -- degrees above horizontal; default 30
@@ -88,5 +89,6 @@ return function(props: Props)
 		LightDirection = props.LightDirection or Vector3.new(-1, -2, -1),
 		Size = props.Size or UDim2.fromScale(1, 1),
 		LayoutOrder = props.LayoutOrder,
+		ZIndex = props.ZIndex,
 	})
 end
