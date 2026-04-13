@@ -60,6 +60,7 @@ export type ProfileTemplate = {
             Particles: InventoryItemStruct,
             Capsules: InventoryItemStruct,
         },
+        FreeItemsRedeemed: { string },
     },
     Statistics: Statistics,
     HatchingPet: PendingHatch | false,
@@ -85,6 +86,7 @@ return {
             Capsules = {},
             Particles = {},
         },
+        FreeItemsRedeemed = {},
     },
     Statistics = {
         TimePlayed = 0,

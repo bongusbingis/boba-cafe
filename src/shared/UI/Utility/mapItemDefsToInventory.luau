@@ -2,6 +2,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local HttpService = game:GetService("HttpService")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local InventoryItemDefinitions = require(Shared.Configuration.InventoryItemDefinitions)
+local PetConfig = require(Shared.Configuration.PetConfig)
+local PetShared = require(Shared.Pets.PetShared)
 
 ---> item prototype
 
@@ -36,6 +38,14 @@ function MockItem:GetStackCount(): number
 	return self._stackCount
 end
 
+function MockItem:GetDisplayName(): string
+	if self._type ~= "Pets" then
+		return self.Name
+	end
+
+	return PetShared.ResolveDisplayName(self.Name, self._properties)
+end
+
 function MockItem:Equip()
 	self._equipped = true
 end
@@ -54,6 +64,19 @@ end
 
 function MockItem:Use()
 	-- no-op in studio mock
+end
+
+function MockItem:Rename(newName: string)
+	if self._type ~= "Pets" then
+		return
+	end
+
+	local trimmed = PetShared.TrimName(newName)
+	if trimmed == "" then
+		self._properties[PetConfig.RENAME_PROPERTY_KEY] = nil
+	else
+		self._properties[PetConfig.RENAME_PROPERTY_KEY] = trimmed
+	end
 end
 
 ---> inventory prototype

@@ -26,8 +26,9 @@ local OrderController = Knit.CreateController({
 
 local LocalPlayer = Players.LocalPlayer
 local PickupBeam = SharedStorage.Effects.PickupBeam
-local PlayerBeams = {}
 
+local PlayerBeams = {}
+local Highlights = {}
 
 OrderController.CurrentOrder = nil :: { any }?
 OrderController.ReadyNode = nil :: Instance?

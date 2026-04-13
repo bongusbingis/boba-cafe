@@ -24,6 +24,45 @@ local InventoryItem = require(Components.InventoryItem)
 local InventoryShared = require(Components.InventoryShared)
 local Types = require(Components.Types)
 
+local PetNames = {
+	"Max",
+	"Charlie",
+	"Cooper",
+	"Buddy",
+	"Jack",
+	"Rocky",
+	"Duke",
+	"Bear",
+	"Oliver",
+	"Tucker",
+	"Milo",
+	"Bentley",
+	"Toby",
+	"Leo",
+	"Teddy",
+	"Jasper",
+	"Oreo",
+	"Chester",
+	"Bella",
+	"Lucy",
+	"Daisy",
+	"Lola",
+	"Luna",
+	"Sophie",
+	"Chloe",
+	"Coco",
+	"Molly",
+	"Lily",
+	"Zoe",
+	"Maggie",
+	"Roxy",
+	"Maya",
+	"Ava",
+	"Kira",
+	"Emma",
+	"Cookie",
+}
+
 type InventoryItemRoot = Types.InventoryItemRoot
 type OnChangeData = Types.OnChangeData
 type ItemType = Types.ItemType
@@ -208,19 +247,29 @@ function InventoryServer.Prototype:Insert(itemRootData: InventoryItemRoot): stri
 		return nil
 	end
 
+	-- if self.Metadata._type == "Pets" then
+	-- 	itemRootData.Properties.DisplayName = PetNames[math.random(1, #PetNames)]
+	-- end
+
 	local itemId = string.format("%s-%s", itemRootData.Name:lower(), HttpService:GenerateGUID(false))
 	local newItem: InventoryItemRoot = {
 		Name = itemRootData.Name,
 		Tier = itemRootData.Tier,
 		Equipped = itemRootData.Equipped == true,
 		StackCount = itemRootData.StackCount,
-		Properties = Utility.Clone(itemRootData.Properties or {}),
+		Properties = Utility.Clone(itemRootData.Properties or {
+			self.Metadata._type == "Pets" and { DisplayName = PetNames[math.random(1, #PetNames)] } or nil,
+		}),
 	}
 
 	self:_writeRawItem(itemId, newItem)
 	self:_rebuildItem(itemId)
 	self:_fireChanged("added", itemId)
 	return itemId
+end
+
+function InventoryServer:GetPlayerChangeSignal(player: Player)
+	return OnChangeSignals[player.UserId]
 end
 
 function InventoryServer:GetPlayerInventoryAsync(player: Player, itemTypeToReturn: ItemType)
@@ -300,7 +349,8 @@ if RunService:IsRunning() then
 		end
 
 		if packet == "setItemEquipped" then
-			if typeof(data) ~= "table"
+			if
+				typeof(data) ~= "table"
 				or typeof(data.itemType) ~= "string"
 				or typeof(data.itemId) ~= "string"
 				or typeof(data.equipped) ~= "boolean"
@@ -332,7 +382,8 @@ if RunService:IsRunning() then
 		end
 
 		if packet == "useItem" then
-			if typeof(data) ~= "table"
+			if
+				typeof(data) ~= "table"
 				or typeof(data.itemType) ~= "string"
 				or typeof(data.itemId) ~= "string"
 				or typeof(data.actionName) ~= "string"
@@ -358,11 +409,40 @@ if RunService:IsRunning() then
 			return
 		end
 
-		if packet == "sellItem" then
-			if typeof(data) ~= "table"
+		if packet == "renameItem" then
+			if
+				typeof(data) ~= "table"
 				or typeof(data.itemType) ~= "string"
 				or typeof(data.itemId) ~= "string"
+				or typeof(data.name) ~= "string"
 			then
+				warn("[InventoryServer]: Invalid renameItem packet")
+				return
+			end
+			if not ItemsMap[data.itemType] then
+				warn("[InventoryServer]: Invalid renameItem item type", data.itemType)
+				return
+			end
+			if data.itemType ~= "Pets" then
+				warn("[InventoryServer]: renameItem is only supported for pets")
+				return
+			end
+
+			local itemType: ItemType = data.itemType
+
+			InventoryServer:GetPlayerInventoryAsync(player, itemType):andThen(function(inventory)
+				local item = inventory:GetItemFromId(data.itemId)
+				if item == nil then
+					warn("[InventoryServer]: Item not found for rename request", data.itemId)
+					return
+				end
+				item:Rename(data.name)
+			end)
+			return
+		end
+
+		if packet == "sellItem" then
+			if typeof(data) ~= "table" or typeof(data.itemType) ~= "string" or typeof(data.itemId) ~= "string" then
 				warn("[InventoryServer]: Invalid sellItem packet")
 				return
 			end

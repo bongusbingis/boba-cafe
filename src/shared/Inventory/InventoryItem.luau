@@ -8,6 +8,7 @@ local Networking = ReplicatedStorage:WaitForChild("Networking")
 local InventoryEvent = Networking:WaitForChild("InventoryEvent") :: RemoteEvent
 
 local InventoryItemDefinitions = require(ReplicatedStorage.Shared.Configuration.InventoryItemDefinitions)
+local PetShared = require(ReplicatedStorage.Shared.Pets.PetShared)
 local Knit = require(Packages.Knit)
 
 local IS_SERVER = RunService:IsServer()
@@ -56,6 +57,14 @@ end
 
 function InventoryItem.Prototype:GetDefinition()
 	return getItemDefinition(self)
+end
+
+function InventoryItem.Prototype:GetDisplayName(): string
+	if self._type ~= "Pets" then
+		return self.Name
+	end
+
+	return PetShared.ResolveDisplayName(self.Name, self:GetProperties())
 end
 
 function InventoryItem.Prototype:GetProperties(): ItemProperties
@@ -161,6 +170,35 @@ function InventoryItem.Prototype:Sell(): ()
 			data = {
 				itemId = self._id,
 				itemType = self._type,
+			},
+		})
+	end
+end
+
+function InventoryItem.Prototype:Rename(newName: string): ()
+	if self._type ~= "Pets" then
+		warn(("[InventoryItem]: Rename is only supported for pets, got %s/%s"):format(self._type, self.Name))
+		return
+	end
+
+	if typeof(newName) ~= "string" then
+		warn("[InventoryItem]: Rename expected a string")
+		return
+	end
+
+	if IS_SERVER then
+		local petService = Knit.GetService("PetService")
+		local ok, reason = petService:RenamePet(self._player, self, newName)
+		if not ok then
+			warn(("[InventoryItem]: Failed to rename pet %s (%s)"):format(self._id, tostring(reason)))
+		end
+	else
+		InventoryEvent:FireServer({
+			packet = "renameItem",
+			data = {
+				itemId = self._id,
+				itemType = self._type,
+				name = newName,
 			},
 		})
 	end

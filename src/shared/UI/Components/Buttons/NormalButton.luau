@@ -22,7 +22,10 @@ return function(props: {
 
     Size: UDim2?,
     Position: UDim2?,
+	LayoutOrder: number?,
+
 	OnClick: (() -> ())?,
+	OnPlusButtonClick: (() -> ())?,
 })
 	return c(Pane, {
 		ClassName = "Frame",
@@ -33,10 +36,11 @@ return function(props: {
 			BackgroundTransparency = 1,
 			Position = props.Position or UDim2.fromScale(0.0244846, 0.46814),
 			Size = props.Size or UDim2.fromScale(0.921739, 0.0546164),
+			LayoutOrder = props.LayoutOrder,
 		},
 	}, {
 		Base = c(Pane, {
-			ClassName = "Frame",
+			ClassName = "ImageButton",
 			CornerRadius = UDim.new(1, 0),
 			Stroke = {
 				Color = Styles.OFFWHITE,
@@ -47,7 +51,7 @@ return function(props: {
 				BackgroundColor3 = props.Color,
 				Size = UDim2.fromScale(1, 1),
 			},
-			OnClick = (not props.PlusButton) and props.OnClick or nil,
+			OnClick = props.OnClick,
 		}, {
 			Border = c(Pane, {
 				ClassName = "ImageLabel",

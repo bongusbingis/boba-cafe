@@ -36,6 +36,8 @@ local SmallNotification = require(script.Parent.SmallNotification)
 
 ---> private
 local c = React.createElement
+local atJoin = os.time()
+local nextOrder = require(UI.Utility.nextOrderFunctionFactory)()
 
 local function extractTimeLeft(s: string)
 	local t: {} = s:split(":")
@@ -52,8 +54,6 @@ local function formatClock(totalSeconds: number)
 	local seconds = totalSeconds % 60
 	return string.format("%02d:%02d", minutes, seconds)
 end
-
-local atJoin = os.time()
 
 return function(props: {
 	CurrentPage: ModuleScript,
@@ -284,6 +284,18 @@ return function(props: {
 					Size = BUTTON_SIZE,
 					Color = Styles.ROSE_MID,
 					Text = shiftTimerText,
+					LayoutOrder = 0,
+				}),
+
+				Recipes = c(NormalButton, {
+					Icon = "",
+					Size = BUTTON_SIZE,
+					Color = Styles.ROSE_DEEP,
+					Text = "Staff Guide",
+					OnClick = function()
+						props.SetCurrentPage(UI.Pages.Recipes)
+					end,
+					LayoutOrder = 1,
 				}),
 
 				Bucks = c(NormalButton, {
@@ -295,6 +307,7 @@ return function(props: {
 					OnClick = function()
 						props.SetCurrentPage(UI.Pages.Shop, "Currency")
 					end,
+					LayoutOrder = 3,
 				}),
 
 				Points = isStaff and c(NormalButton, {
@@ -306,6 +319,7 @@ return function(props: {
 					OnClick = function()
 						props.SetCurrentPage(UI.Pages.Shop, "Currency")
 					end,
+					LayoutOrder = 2,
 				}),
 			}),
 		}),

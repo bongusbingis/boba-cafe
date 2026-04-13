@@ -7,7 +7,6 @@
 	- PageContent: React node(s) to render inside the page.
 ]]
 
-
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Packages = ReplicatedStorage:WaitForChild("Packages")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -58,12 +57,14 @@ return function(props: {
 			from = { Position = ORIGIN_POSITION, Scale = ORIGIN_SCALE },
 			to = { Position = GOAL_POSITION, Scale = GOAL_SCALE },
 		})
-		props.OnClosing(function()
-			return api.start({
-				from = { Position = GOAL_POSITION, Scale = GOAL_SCALE },
-				to = { Position = ORIGIN_POSITION, Scale = ORIGIN_SCALE },
-			})
-		end)
+		if props.OnClosing then
+			props.OnClosing(function()
+				return api.start({
+					from = { Position = GOAL_POSITION, Scale = GOAL_SCALE },
+					to = { Position = ORIGIN_POSITION, Scale = ORIGIN_SCALE },
+				})
+			end)
+		end
 	end, { props.PageContent })
 
 	return c(Pane, {

@@ -48,7 +48,7 @@ Knit.Start()
 			local InventoryItemDefinitions =
 				require(ReplicatedStorage.Shared.Configuration.InventoryItemDefinitions)
 			local Inventory = require(ReplicatedStorage.Shared.Inventory)
-			local ITEM_TYPES = { "Nametags", "Pets", "Capsules", "Particles" }
+			local ITEM_TYPES = { "Capsules", "Particles" }
 
 			table.insert(playerAddedProcesses, function(player)
 				task.delay(3, function()

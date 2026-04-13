@@ -15,9 +15,11 @@ local ReplicaService = require(Packages.ReplicaService)
 local GoodSignal = require(Packages.GoodSignal)
 local Promise = require(Packages.Promise)
 
+local PlayerSetup = require(script.PlayerSetup)
+
 ---> constants
 local IS_MOCK_STORE_ENABLED = false
-local PROFILE_STORE_NAME = "PlayerStore_0002"
+local PROFILE_STORE_NAME = "PlayerStore_0006"
 local REPLICA_CLASS_TOKEN = ReplicaService.NewClassToken("PlayerProfile")
 local PROFILE_TEMPLATE = require(Config:WaitForChild("ProfileTemplate"))
 
@@ -44,25 +46,6 @@ end
 ---> private
 local function getPlayerKey(player: Player)
 	return `Profile_{player.UserId}`
-end
-
-local function getFilterResult(text: string, fromUserId: number)
-	local filterResult
-	local success, errorMessage = pcall(function()
-		filterResult = TextService:FilterStringAsync(text, fromUserId)
-	end)
-
-	if success then
-		return filterResult
-	else
-		warn("Error generating TextFilterResult:", errorMessage)
-		return nil
-	end
-end
-
-local function formatBrackets(str: string): string
-	return str:gsub("%[(.-)%]", " <font color='#f5c242'>%1</font> ")
-		:gsub("|(.-)|", " <font color='#fa2545'>%1</font> ")
 end
 
 local function createProxyForPlayerProfile(player: Player, playerProfile: any): { [string]: any }
@@ -95,46 +78,8 @@ local function loadPlayerProfile(player: Player)
 			if player.Parent == Players then
 				ProfileObjects[player.UserId] = playerProfile
 				local proxy = createProxyForPlayerProfile(player, playerProfile)
-				local current = os.time()
-				playerProfile.Data.Playtime.MostRecentJoin = current
-				if playerProfile.Data.Playtime.FirstJoin == 0 and not RunService:IsStudio() then
-					playerProfile.Data.Playtime.FirstJoin = current
-
-					local function chooseNicknameRecursive(errorText: string?)
-						local baseMessage = "Choose a roleplay nickname."
-						local toAppend = errorText or "This cannot be changed later, so choose wisely!"
-						Knit.GetService("DialogService"):CreateDialog(player, "TextInputPrompt", {
-							Title = "Roleplay Name",
-							Text = formatBrackets(`{baseMessage} {toAppend}`),
-							PlaceholderText = player.DisplayName,
-							CloseText = "Close",
-						}):andThen(function(nickname)
-							if typeof(nickname) ~= "string" or nickname:gsub(" ", "") == "" then
-								chooseNicknameRecursive("|Invalid nickname. Please try again.|")
-								return
-							end
-
-							if #nickname > 15 then
-								chooseNicknameRecursive("|Nickname must be 15 characters or less.|")
-								return
-							end
-
-							local filterResult = getFilterResult(nickname, player.UserId)
-							if filterResult then
-								local filteredNickname = filterResult:GetNonChatStringForBroadcastAsync()
-								if filteredNickname ~= nickname then
-									chooseNicknameRecursive("|Nickname contains filtered content. Please try again.|")
-									return
-								end
-								proxy:SetValue({ "Nickname" }, nickname)
-							else
-								chooseNicknameRecursive("|An unexpected error occurred. Please try again.|")
-								return
-							end
-						end)
-					end
-
-					task.delay(3, chooseNicknameRecursive)
+				for _, f in PlayerSetup do
+					task.spawn(f, player, proxy)
 				end
 				resolve(proxy)
 			else

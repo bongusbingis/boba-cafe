@@ -14,6 +14,7 @@ local Styles = require(UI.Styles)
 
 ---> components
 local InventoryItemDefinitions = require(Shared.Configuration.InventoryItemDefinitions)
+local PetConfig = require(Shared.Configuration.PetConfig)
 local ItemCard = require(UI.Components.Buttons.ItemCard)
 
 ---> private
@@ -57,9 +58,39 @@ local function getPlayerInventoryAsync(itemType: string)
 	end
 end
 
+local function trimText(raw: string): string
+	return (raw:gsub("^%s*(.-)%s*$", "%1"))
+end
+
+local function hasButton(buttons: { { Text: string } }, buttonText: string): boolean
+	for _, button in ipairs(buttons) do
+		if button.Text == buttonText then
+			return true
+		end
+	end
+
+	return false
+end
+
+local function getEntryDisplayName(entry): string
+	if entry and entry.GetDisplayName then
+		return entry:GetDisplayName()
+	end
+
+	local properties = entry and entry.GetProperties and entry:GetProperties() or nil
+	if properties and typeof(properties.DisplayName) == "string" then
+		local trimmed = trimText(properties.DisplayName)
+		if trimmed ~= "" then
+			return trimmed
+		end
+	end
+
+	return entry.Name
+end
+
 local function buildCard(_, entry, itemDef, layoutOrder, equipped, onClick)
 	return c(ItemCard, {
-		Name = entry.Name,
+		Name = getEntryDisplayName(entry),
 		Tier = itemDef.Tier,
 		Image = itemDef.Image,
 		ImageSize = entry._type == "Particles" and UDim2.fromScale(0.675, 0.675) or UDim2.fromScale(1, 1),
@@ -111,16 +142,21 @@ local function hasActivePetHatch(playerData: any): boolean
 	return false
 end
 
-local function makeToggleHandler(itemType, id, entry, itemDef, layoutOrder, updateFn, activeDialogRef)
+local function makeToggleHandler(itemType, _id, entry, itemDef, _layoutOrder, _updateFn, activeDialogRef)
 	return function()
 		--entry:ToggleEquipped()
 		if not RunService:IsRunning() then
 			return
 		end
 
+		if activeDialogRef.current then
+			return
+		end
+
 		local buttons = { { Text = entry:IsEquipped() and "Unequip" or "Equip" } }
 		local actionOverride = InventoryItemDefinitions[itemType].ActionOverride
 		local displayToAction: { [string]: string } = {}
+		local displayName = getEntryDisplayName(entry)
 
 		local DataController = Knit.GetController("DataController")
 		DataController:GetDataAsync():andThen(function(playerData)
@@ -146,56 +182,91 @@ local function makeToggleHandler(itemType, id, entry, itemDef, layoutOrder, upda
 				end
 			end
 
-			local hasSellButton = false
-			for _, button in ipairs(buttons) do
-				if button.Text == "Sell" then
-					hasSellButton = true
-					break
-				end
-			end
+			local hasSellButton = hasButton(buttons, "Sell")
+			local hasRenameButton = hasButton(buttons, "Rename")
 
 			if itemDef.CanBeSold and not hasSellButton then
 				table.insert(buttons, { Text = "Sell", Color = Styles.ROSE })
 			end
 
+			if itemType == "Pets" and not hasRenameButton then
+				table.insert(buttons, { Text = "Rename", Color = Styles.GOLD })
+			end
+
 			local appDialogs = Knit.GetController("DialogController")
 			local dialog = appDialogs.new("ActionPrompt", {
-				Title = entry.Name,
+				Title = displayName,
 				Text = "Choose an action:",
 				OffsetX = 0.1,
 				Buttons = buttons,
 			})
 			activeDialogRef.current = dialog
 			dialog:Fire():andThen(function(action: string)
-			activeDialogRef.current = nil
-			local resolvedAction = displayToAction[action] or action
-			if resolvedAction == "Close" then
-				return
-			end
+				activeDialogRef.current = nil
+				local resolvedAction = displayToAction[action] or action
+				if resolvedAction == "Close" then
+					return
+				end
 
-			if resolvedAction == "Sell" then
-				local sellPrice = getSellPrice(itemDef.Tier)
-				local priceText = `[{sellPrice} Boba Bucks]`
-				local confirmDialog = appDialogs.new("ButtonPrompt", {
-					Title = "Sell Item",
-					Text = appDialogs.FormatBrackets(`Sell |{entry.Name}| for {priceText}?`),
-					Buttons = {
-						{ Text = "Sell", Color = Styles.GREEN },
-						{ Text = "Cancel", Color = Styles.RED },
-					},
-					OffsetX = 0.1,
-				})
-				activeDialogRef.current = confirmDialog
-				confirmDialog:Fire():andThen(function(choice)
-					activeDialogRef.current = nil
-					if choice == "Sell" then
-						entry:Sell()
+				if resolvedAction == "Sell" then
+					local sellPrice = getSellPrice(itemDef.Tier)
+					local priceText = `[{sellPrice} Boba Bucks]`
+					local confirmDialog = appDialogs.new("ButtonPrompt", {
+						Title = "Sell Item",
+						Text = appDialogs.FormatBrackets(`Sell |{displayName}| for {priceText}?`),
+						Buttons = {
+							{ Text = "Sell", Color = Styles.GREEN },
+							{ Text = "Cancel", Color = Styles.RED },
+						},
+						OffsetX = 0.1,
+					})
+					activeDialogRef.current = confirmDialog
+					confirmDialog:Fire():andThen(function(choice)
+						activeDialogRef.current = nil
+						if choice == "Sell" then
+							entry:Sell()
+						end
+					end)
+					return
+				end
+
+				if resolvedAction == "Rename" and itemType == "Pets" then
+					local function showRenamePrompt(errorText: string?)
+						local text = errorText
+							or string.format(
+								"Enter a new name. Leave blank to reset. Max %d characters.",
+								PetConfig.MAX_RENAME_LENGTH
+							)
+
+						local renameDialog = appDialogs.new("TextInputPrompt", {
+							Title = "Rename Pet",
+							Text = text,
+							PlaceholderText = displayName,
+							OffsetX = 0.1,
+						})
+
+						activeDialogRef.current = renameDialog
+						renameDialog:Fire():andThen(function(newName)
+							activeDialogRef.current = nil
+							if typeof(newName) ~= "string" then
+								return
+							end
+
+							local trimmedName = trimText(newName)
+							if trimmedName ~= "" and #trimmedName > PetConfig.MAX_RENAME_LENGTH then
+								showRenamePrompt(string.format("That name is too long (max %d).", PetConfig.MAX_RENAME_LENGTH))
+								return
+							end
+
+							entry:Rename(trimmedName)
+						end)
 					end
-				end)
-				return
-			end
 
-			-- "Equip"/"Unequip" are direct methods on InventoryItem.
+					showRenamePrompt(nil)
+					return
+				end
+
+				-- "Equip"/"Unequip" are direct methods on InventoryItem.
 				-- Any other action (e.g. "Hatch") is a registered ItemAction.
 				if resolvedAction == "Equip" or resolvedAction == "Unequip" then
 					entry[resolvedAction](entry)

@@ -87,21 +87,46 @@ Recipes.Items = {
 	["Sink"] = {
 		Actions = {
 			{ "ToolNameValidityCheck", { "#Cup|!Milk" } },
-			{ "SetToolHoldingProperty", "Liquid", "Color", Color3.new(0.392157, 0.729412, 0.992157) },
-			{ "SetToolHoldingProperty", "Liquid", "Transparency", 0 },
 			{
-				"RenameToolHolding",
-				function(old: string)
-					-- old --> "[Flavor] Milk"
-					local strings = old:split(" ")
-					local size = strings[1]
-					return size .. " Water"
-				end,
+				"SelectFrom",
+				{
+					Title = "Sink",
+					Text = "Choose water temperature:",
+					Buttons = {
+						{ Text = "Cold Water", Color = Color3.fromRGB(100, 170, 240) },
+						{ Text = "Hot Water", Color = Color3.fromRGB(210, 100, 80) },
+					},
+				},
+				{
+					["Cold Water"] = {
+						{ "SetToolHoldingProperty", "Liquid", "Color", Color3.fromRGB(100, 186, 253) },
+						{ "SetToolHoldingProperty", "Liquid", "Transparency", 0 },
+						{
+							"RenameToolHolding",
+							function(old: string)
+								local size = old:split(" ")[1]
+								return size .. " Cold Water"
+							end,
+						},
+					},
+					["Hot Water"] = {
+						{ "SetToolHoldingProperty", "Liquid", "Color", Color3.fromRGB(255, 180, 140) },
+						{ "SetToolHoldingProperty", "Liquid", "Transparency", 0 },
+						{
+							"RenameToolHolding",
+							function(old: string)
+								local size = old:split(" ")[1]
+								return size .. " Hot Water"
+							end,
+						},
+					},
+				},
 			},
 		},
 	},
 
 	["Milk"] = {
+		Sound = "Pour",
 		Actions = {
 			{ "ToolNameValidityCheck", { "#Clear Cup|=Mug" } },
 			{ "SetToolHoldingProperty", "Liquid", "Color", Color3.new(1, 1, 1) },
@@ -118,6 +143,7 @@ Recipes.Items = {
 	},
 
 	["Coffee Machine"] = {
+		Sound = "Machine",
 		HoldDuration = 7,
 		Actions = {
 			{ "ToolNameValidityCheck", { "#Cup", "!Clear" } },
@@ -126,6 +152,7 @@ Recipes.Items = {
 				{
 					Title = "Coffee Machine",
 					Text = "Choose a coffee:",
+					DialogType = "PromptSelection",
 					Buttons = {
 						{ Text = "Regular" },
 						{ Text = "Decaf" },
@@ -134,6 +161,15 @@ Recipes.Items = {
 						{ Text = "Americano" },
 						{ Text = "Cortado" },
 						{ Text = "Koa Coffee" },
+					},
+					Items = {
+						{ Name = "Regular", ModelName = "Medium Cup" },
+						{ Name = "Decaf", ModelName = "Medium Cup" },
+						{ Name = "Espresso", ModelName = "Medium Cup" },
+						{ Name = "Cappuccino", ModelName = "Medium Cup" },
+						{ Name = "Americano", ModelName = "Medium Cup" },
+						{ Name = "Cortado", ModelName = "Medium Cup" },
+						{ Name = "Koa Coffee", ModelName = "Medium Cup" },
 					},
 				},
 				{
@@ -150,6 +186,7 @@ Recipes.Items = {
 	},
 
 	["Sugar"] = {
+		Sound = "Powder",
 		Actions = {
 			{ "ToolNameValidityCheck", { "!Sugar" } },
 			{
@@ -162,9 +199,10 @@ Recipes.Items = {
 	},
 
 	["Ice Machine"] = {
+		Sound = "IceCubes",
 		HoldDuration = 5,
 		Actions = {
-			{ "ToolNameValidityCheck", { table.concat(RecipeConstructors.getCoffeeNames(), "|") .. "|=Tea|#Water", "!Clear", "!Iced" } },
+			{ "ToolNameValidityCheck", { table.concat(RecipeConstructors.getCoffeeNames(), "|") .. "|#Tea|#Water", "!Cup", "!Iced" } },
 			{
 				"RenameToolHolding",
 				function(old: string)
@@ -175,6 +213,7 @@ Recipes.Items = {
 	},
 
 	["Blender"] = {
+		Sound = "Blender",
 		Actions = {
 			{ "ToolNameValidityCheck", { "#Milk", "#Syrup" } },
 			{
@@ -261,6 +300,7 @@ Recipes.Items = {
 
 for name: string, color: Color3 in Recipes.Syrups do
 	Recipes.Items[name .. " Syrup"] = {
+		Sound = "Pour",
 		Actions = {
 			{ "ToolNameValidityCheck", { "#Cup %+ Milk" } },
 			{ "SetToolHoldingProperty", "Liquid", "Color", color },
@@ -272,8 +312,9 @@ end
 for name: string, color: Color3 in Recipes.Tapioca do
 	name = name .. " Tapioca"
 	Recipes.Items[name] = {
+		Sound = "Pop",
 		Actions = {
-			{ "ToolNameValidityCheck", { "# Milk" } },
+			{ "ToolNameValidityCheck", { "# Milk|#Tea" } },
 			{
 				"SetToolHoldingProperty",
 				"Tapioca",

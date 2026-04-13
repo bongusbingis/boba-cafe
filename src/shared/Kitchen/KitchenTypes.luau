@@ -8,6 +8,7 @@
 export type ActionData = { any }
 
 export type RecipeData = {
+    Sound: string?,
     HoldDuration: number?,
     Actions: { ActionData },
 }

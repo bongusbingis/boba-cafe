@@ -27,8 +27,9 @@ end
 
 function RecipeConstructors.makeTeaVariant(name: string, color: Color3): { { any } }
 	return {
+		Sound = "Powder",
 		Actions = {
-			{ "ToolNameValidityCheck", { "=Hot Water" } },
+			{ "ToolNameValidityCheck", { "#Water" } },
 			{ "SetToolHoldingProperty", "Liquid", "Color", color },
 			{ "SetToolHoldingProperty", "Liquid", "Transparency", 0 },
 			{ "RenameToolHolding", name },
@@ -38,6 +39,7 @@ end
 
 function RecipeConstructors.makeHotChocolateVariant(flavor: string, color: Color3): { { any } }
 	return {
+		Sound = "Powder",
 		Actions = {
 			{ "ToolNameValidityCheck", { "=Mug + Steamed Milk" } },
 			{ "SetToolHoldingProperty", "Liquid", "Color", color },
