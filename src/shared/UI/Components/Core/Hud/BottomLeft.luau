@@ -287,7 +287,7 @@ return function(props: {
 					LayoutOrder = 0,
 				}),
 
-				Recipes = c(NormalButton, {
+				Recipes = isStaff and c(NormalButton, {
 					Icon = "",
 					Size = BUTTON_SIZE,
 					Color = Styles.ROSE_DEEP,
@@ -296,18 +296,6 @@ return function(props: {
 						props.SetCurrentPage(UI.Pages.Recipes)
 					end,
 					LayoutOrder = 1,
-				}),
-
-				Bucks = c(NormalButton, {
-					PlusButton = true,
-					Icon = "rbxassetid://13382286492",
-					Size = BUTTON_SIZE,
-					Color = Styles.GREEN_LIGHT,
-					Text = currency.BobaBucks,
-					OnClick = function()
-						props.SetCurrentPage(UI.Pages.Shop, "Currency")
-					end,
-					LayoutOrder = 3,
 				}),
 
 				Points = isStaff and c(NormalButton, {
@@ -320,6 +308,18 @@ return function(props: {
 						props.SetCurrentPage(UI.Pages.Shop, "Currency")
 					end,
 					LayoutOrder = 2,
+				}),
+
+				Bucks = c(NormalButton, {
+					PlusButton = true,
+					Icon = "rbxassetid://13382286492",
+					Size = BUTTON_SIZE,
+					Color = Styles.GREEN_LIGHT,
+					Text = currency.BobaBucks,
+					OnClick = function()
+						props.SetCurrentPage(UI.Pages.Shop, "Currency")
+					end,
+					LayoutOrder = 3,
 				}),
 			}),
 		}),

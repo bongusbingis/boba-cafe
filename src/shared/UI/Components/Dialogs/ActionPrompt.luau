@@ -1,5 +1,6 @@
 --!strict
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local SoundService = game:GetService("SoundService")
 local Packages = ReplicatedStorage:WaitForChild("Packages")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local UI = Shared:WaitForChild("UI")
@@ -52,8 +53,11 @@ return function(props: {
 		if closeFnRef.current then
 			closeFnRef.current()
 		end
+		SoundService.SFX.UI.Pop2:Play()
 		props.OnResolution(text)
 	end
+
+	SoundService.SFX.UI.Pop1:Play()
 
 	local buttonElements = {}
 	for i, buttonDef in ipairs(props.Buttons) do

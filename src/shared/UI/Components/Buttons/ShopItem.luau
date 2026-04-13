@@ -96,7 +96,7 @@ return function(props: Props)
 				FontFace = Styles.FONT_FREDOKA,
 				LayoutOrder = 1,
 				Size = UDim2.fromScale(0.234582, 0.57),
-				Text = props.Price,
+				Text = "\u{e002} " .. props.Price,
 				TextColor3 = Color3.new(1, 1, 1),
 				TextScaled = true,
 				TextXAlignment = Enum.TextXAlignment.Right,

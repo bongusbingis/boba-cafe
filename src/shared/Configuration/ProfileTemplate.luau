@@ -109,6 +109,6 @@ return {
         MusicEnabled = true,
         SFXEnabled = true,
         SyrupHighlighting = true,
-        ShiftTimerEnabled = true,
+        ShiftTimerEnabled = false,
     },
 }

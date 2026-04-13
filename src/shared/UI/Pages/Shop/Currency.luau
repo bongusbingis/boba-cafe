@@ -18,18 +18,18 @@ local c = React.createElement
 ---> mock data (replace with server-provided data)
 local SHOP_DATA: { BobaBucks: { ShopCategory.Item }, Points: { ShopCategory.Item } } = {
 	BobaBucks = {
-		{ Label = "50 Boba Bucks",     Price = " 500" },
-		{ Label = "150 Boba Bucks",    Price = " 1,300" },
-		{ Label = "500 Boba Bucks",    Price = " 3,500" },
-		{ Label = "1,000 Boba Bucks",  Price = " 6,000" },
-		{ Label = "5,000 Boba Bucks",  Price = " 20,000" },
+		{ Label = "50 Boba Bucks", Price = "500" },
+		{ Label = "150 Boba Bucks", Price = "1,300" },
+		{ Label = "500 Boba Bucks", Price = "3,500" },
+		{ Label = "1,000 Boba Bucks", Price = "6,000" },
+		{ Label = "5,000 Boba Bucks", Price = "20,000" },
 	},
 	Points = {
-		{ Label = "100 Points",    Price = " 500" },
-		{ Label = "500 Points",    Price = " 2,000" },
-		{ Label = "1,500 Points",  Price = " 5,000" },
-		{ Label = "5,000 Points",  Price = " 15,000" },
-		{ Label = "15,000 Points", Price = " 40,000" },
+		{ Label = "100 Points", Price = "500" },
+		{ Label = "500 Points", Price = "2,000" },
+		{ Label = "1,500 Points", Price = "5,000" },
+		{ Label = "5,000 Points", Price = "15,000" },
+		{ Label = "15,000 Points", Price = "40,000" },
 	},
 }
 

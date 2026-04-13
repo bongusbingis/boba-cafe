@@ -23,6 +23,7 @@
 ---> services
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 
 ---> dependencies
 local Packages = ReplicatedStorage:WaitForChild("Packages")
@@ -50,8 +51,10 @@ local RankUtil = {}
 
 ---> constants
 local MAX_RETRIES: number = 3
-local CACHE_TTL_SECONDS: number = 200 -- seconds before a re-fetch
-local PREFETCH_TIMEOUT_SECONDS: number = 10 -- max wait for eager pre-fetch
+local CACHE_TTL_SECONDS: number = 200 --> seconds before a re-fetch
+local PREFETCH_TIMEOUT_SECONDS: number = 10 --> max wait for eager pre-fetch
+
+local STUDIO_SIMULATE_RANK: number = 1
 
 local FALLBACK_RANK_AND_ROLE: RankAndRole = {
 	Rank = 1,
@@ -115,6 +118,15 @@ end
 -- If a fetch is already in-flight, the same Promise is returned (no stampede).
 -- If the cache is fresh, resolves immediately with the cached value.
 local function ensureCached(player: Player, config: GroupConfig)
+	-- Studio simulation: bypass all network fetches and return the override rank.
+	if RunService:IsStudio() and STUDIO_SIMULATE_RANK >= 1 and STUDIO_SIMULATE_RANK <= 255 then
+		return Promise.resolve({
+			Rank = STUDIO_SIMULATE_RANK,
+			Role = "Studio Sim (Rank " .. STUDIO_SIMULATE_RANK .. ")",
+			LastFetched = os.time(),
+		} :: RankAndRole)
+	end
+
 	local entry = Cache[player.UserId]
 
 	-- In-flight Promise — reuse it.

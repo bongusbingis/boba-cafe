@@ -37,16 +37,17 @@ Knit.Start()
 			end
 		end
 
-		table.insert(playerAddedProcesses, function(player)
-			local rankUtil = require(ReplicatedStorage.Shared.Utility.RankUtil)
-			if rankUtil:GetRankAsync(player) < 11 then
-				player:Kick("This server is restricted to staff members only.")
-			end
-		end)
+		if not RunService:IsStudio() then
+			table.insert(playerAddedProcesses, function(player)
+				local rankUtil = require(ReplicatedStorage.Shared.Utility.RankUtil)
+				if rankUtil:GetRankAsync(player) < 11 then
+					player:Kick("This server is restricted to staff members only.")
+				end
+			end)
+		end
 
 		if RunService:IsStudio() and STUDIO_GRANT_ALL_ITEMS then
-			local InventoryItemDefinitions =
-				require(ReplicatedStorage.Shared.Configuration.InventoryItemDefinitions)
+			local InventoryItemDefinitions = require(ReplicatedStorage.Shared.Configuration.InventoryItemDefinitions)
 			local Inventory = require(ReplicatedStorage.Shared.Inventory)
 			local ITEM_TYPES = { "Capsules", "Particles" }
 

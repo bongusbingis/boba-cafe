@@ -47,7 +47,7 @@ local PAGES: { OpenableMenu.Page } = {
 			require((paidRandomItemsRestricted and script.DirectCosmeticsPurchase or script.RandomCosmeticsPurchase))
 		),
 	},
-	{ Key = "Particles", Label = "Particles", Content = c(require(script.BecomeStaff)) },
+	{ Key = "Particles", Label = "Particles", Content = c(require(script.Particles)) },
 }
 
 return function(props)

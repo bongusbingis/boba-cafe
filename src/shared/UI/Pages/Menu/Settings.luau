@@ -1,33 +1,33 @@
-local Players           = game:GetService("Players")
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Packages = ReplicatedStorage:WaitForChild("Packages")
-local Shared   = ReplicatedStorage:WaitForChild("Shared")
-local UI       = Shared:WaitForChild("UI")
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local UI = Shared:WaitForChild("UI")
 
 ---> dependencies
-local React       = require(Packages.React)
-local Knit        = require(Packages.Knit)
+local React = require(Packages.React)
+local Knit = require(Packages.Knit)
 local ReactSpring = require(Packages.ReactSpring)
-local Promise     = require(Packages.Promise)
+local Promise = require(Packages.Promise)
 
 ---> styles / config
-local Styles         = require(UI.Styles)
+local Styles = require(UI.Styles)
 local SettingsConfig = require(Shared.Configuration.SettingsConfig)
-local RankUtil       = require(Shared.Utility.RankUtil)
-local GamepassUtil   = require(Shared.Utility.GamepassUtil)
+local RankUtil = require(Shared.Utility.RankUtil)
+local GamepassUtil = require(Shared.Utility.GamepassUtil)
 
 ---> components / hooks
-local Pane     = require(UI.Components.Pane)
-local usePx    = require(UI.Hooks.usePx)
+local Pane = require(UI.Components.Pane)
+local usePx = require(UI.Hooks.usePx)
 local useClock = require(UI.Hooks.useClock)
 
 ---> private
 local c = React.createElement
 
-local SPRING_CFG      = Styles.SPRING_STANDARD
-local CATEGORY_COLOR  = Styles.GREEN_LIGHT
-local SUBTITLE_COLOR  = Color3.fromRGB(210, 230, 200)
+local SPRING_CFG = Styles.SPRING_STANDARD
+local CATEGORY_COLOR = Styles.GREEN_LIGHT
+local SUBTITLE_COLOR = Color3.fromRGB(210, 230, 200)
 
 ---> loading spinner (matches InventoryComponent)
 local SPIN_PERIOD = 1.4
@@ -57,46 +57,46 @@ local function Toggle(props: {
 	local px = usePx()
 
 	-- Elliptical knob: wider than tall, small vertical padding from track edges
-	local TRACK_W  = px(80)
-	local TRACK_H  = px(30)
-	local KNOB_W   = px(34)
-	local KNOB_H   = px(22)
+	local TRACK_W = px(80)
+	local TRACK_H = px(30)
+	local KNOB_W = px(34)
+	local KNOB_H = px(22)
 	local KNOB_PAD = px(3)
 
-	local knobOnX  = TRACK_W - KNOB_W - KNOB_PAD
+	local knobOnX = TRACK_W - KNOB_W - KNOB_PAD
 	local knobOffX = KNOB_PAD
 
 	-- Label areas: the half of the track not occupied by the knob
 	-- OFF: label sits right of knob rest (x = KNOB_PAD + KNOB_W + KNOB_PAD)
 	-- ON:  label sits left of knob rest  (x = KNOB_PAD)
 	local labelAreaW = TRACK_W - KNOB_W - KNOB_PAD * 3
-	local labelX     = if props.Value then KNOB_PAD else (KNOB_W + KNOB_PAD * 2)
+	local labelX = if props.Value then KNOB_PAD else (KNOB_W + KNOB_PAD * 2)
 
-	local trackOn  = CATEGORY_COLOR
+	local trackOn = CATEGORY_COLOR
 	local trackOff = Color3.fromRGB(170, 170, 170)
 
 	local styles = ReactSpring.useSpring({
-		knobX      = if props.Value then knobOnX  else knobOffX,
-		trackColor = if props.Value then trackOn  else trackOff,
-		config     = SPRING_CFG,
+		knobX = if props.Value then knobOnX else knobOffX,
+		trackColor = if props.Value then trackOn else trackOff,
+		config = SPRING_CFG,
 	})
 
 	return c("TextButton", {
-		AutoButtonColor  = false,
+		AutoButtonColor = false,
 		BackgroundColor3 = styles.trackColor,
-		BorderSizePixel  = 0,
-		Size             = UDim2.fromOffset(TRACK_W, TRACK_H),
-		Text             = "",
+		BorderSizePixel = 0,
+		Size = UDim2.fromOffset(TRACK_W, TRACK_H),
+		Text = "",
 		[React.Event.Activated] = if not props.Disabled then props.OnToggle else nil,
 	}, {
 		UICorner = c("UICorner", { CornerRadius = UDim.new(1, 0) }),
 
 		-- Elliptical sliding knob
 		Knob = c("Frame", {
-			AnchorPoint      = Vector2.new(0, 0.5),
+			AnchorPoint = Vector2.new(0, 0.5),
 			BackgroundColor3 = Color3.new(1, 1, 1),
-			BorderSizePixel  = 0,
-			Position         = styles.knobX:map(function(x)
+			BorderSizePixel = 0,
+			Position = styles.knobX:map(function(x)
 				return UDim2.new(0, x, 0.5, 0)
 			end),
 			Size = UDim2.fromOffset(KNOB_W, KNOB_H),
@@ -106,15 +106,15 @@ local function Toggle(props: {
 
 		-- ON / OFF label — anchored in the non-knob half, never overlaps knob
 		Label = c("TextLabel", {
-			AnchorPoint            = Vector2.new(0, 0.5),
+			AnchorPoint = Vector2.new(0, 0.5),
 			BackgroundTransparency = 1,
-			FontFace               = Styles.FONT_FREDOKA,
-			Position               = UDim2.new(0, labelX, 0.5, 0),
-			Size                   = UDim2.fromOffset(labelAreaW, TRACK_H * 0.6),
-			Text                   = if props.Value then "ON" else "OFF",
-			TextColor3             = Color3.new(1, 1, 1),
-			TextScaled             = true,
-			TextXAlignment         = Enum.TextXAlignment.Center,
+			FontFace = Styles.FONT_FREDOKA,
+			Position = UDim2.new(0, labelX, 0.5, 0),
+			Size = UDim2.fromOffset(labelAreaW, TRACK_H * 0.6),
+			Text = if props.Value then "ON" else "OFF",
+			TextColor3 = Color3.new(1, 1, 1),
+			TextScaled = true,
+			TextXAlignment = Enum.TextXAlignment.Center,
 		}),
 	})
 end
@@ -129,43 +129,43 @@ local function ActionButton(props: {
 })
 	local px = usePx()
 
-	local TRACK_W  = px(80)
-	local TRACK_H  = px(30)
-	local KNOB_H   = px(22)
+	local TRACK_W = px(80)
+	local TRACK_H = px(30)
+	local KNOB_H = px(22)
 	local KNOB_PAD = px(3)
 
 	-- Green button spans the full knob travel range: left pad → right pad
 	local btnW = TRACK_W - KNOB_PAD * 2
 
 	return c("TextButton", {
-		AutoButtonColor  = false,
+		AutoButtonColor = false,
 		BackgroundColor3 = Color3.new(1, 1, 1),
-		BorderSizePixel  = 0,
-		Size             = UDim2.fromOffset(TRACK_W, TRACK_H),
-		Text             = "",
+		BorderSizePixel = 0,
+		Size = UDim2.fromOffset(TRACK_W, TRACK_H),
+		Text = "",
 		[React.Event.Activated] = if not props.Disabled then props.OnAction else nil,
 	}, {
 		UICorner = c("UICorner", { CornerRadius = UDim.new(1, 0) }),
 
 		Button = c("Frame", {
-			AnchorPoint             = Vector2.new(0, 0.5),
-			BackgroundColor3        = CATEGORY_COLOR,
-			BackgroundTransparency  = if props.Disabled then 0.5 else 0,
-			BorderSizePixel         = 0,
-			Position                = UDim2.new(0, KNOB_PAD, 0.5, 0),
-			Size                    = UDim2.fromOffset(btnW, KNOB_H),
+			AnchorPoint = Vector2.new(0, 0.5),
+			BackgroundColor3 = CATEGORY_COLOR,
+			BackgroundTransparency = if props.Disabled then 0.5 else 0,
+			BorderSizePixel = 0,
+			Position = UDim2.new(0, KNOB_PAD, 0.5, 0),
+			Size = UDim2.fromOffset(btnW, KNOB_H),
 		}, {
 			UICorner = c("UICorner", { CornerRadius = UDim.new(1, 0) }),
 
 			Label = c("TextLabel", {
 				BackgroundTransparency = 1,
-				FontFace               = Styles.FONT_FREDOKA,
-				Size                   = UDim2.fromScale(1, 1),
-				Text                   = props.Label or "",
-				TextColor3             = Color3.new(1, 1, 1),
-				TextTransparency       = if props.Disabled then 0.45 else 0,
-				TextScaled             = true,
-				TextXAlignment         = Enum.TextXAlignment.Center,
+				FontFace = Styles.FONT_FREDOKA,
+				Size = UDim2.fromScale(1, 1),
+				Text = props.Label or "",
+				TextColor3 = Color3.new(1, 1, 1),
+				TextTransparency = if props.Disabled then 0.45 else 0,
+				TextScaled = true,
+				TextXAlignment = Enum.TextXAlignment.Center,
 			}),
 		}),
 	})
@@ -174,59 +174,61 @@ end
 -- ─────────────────────────────────────────────────────────────────────────────
 --  Single setting row — plain Frame (toggle or action button on the right)
 -- ─────────────────────────────────────────────────────────────────────────────
-local function SettingRow(props: {
-	Label: string,
-	-- Toggle settings
-	Value: boolean?,
-	OnToggle: (() -> ())?,
-	-- Action settings
-	OnAction: (() -> ())?,
-	ActionLabel: string?,
-	-- Shared
-	Disabled: boolean?,
-	LayoutOrder: number,
-})
+local function SettingRow(
+	props: {
+		Label: string,
+		-- Toggle settings
+		Value: boolean?,
+		OnToggle: (() -> ())?,
+		-- Action settings
+		OnAction: (() -> ())?,
+		ActionLabel: string?,
+		-- Shared
+		Disabled: boolean?,
+		LayoutOrder: number,
+	}
+)
 	local px = usePx()
-	local itemColor = Styles.GREEN  -- matches ShopCategory's default item color
+	local itemColor = Styles.GREEN -- matches ShopCategory's default item color
 	local textAlpha = if props.Disabled then 0.45 else 0
 
 	return c("Frame", {
-		BackgroundColor3    = itemColor,
+		BackgroundColor3 = itemColor,
 		BackgroundTransparency = 0,
-		BorderSizePixel     = 0,
-		LayoutOrder         = props.LayoutOrder,
-		Size                = UDim2.fromScale(0.981, 0.065),
-		SizeConstraint      = Enum.SizeConstraint.RelativeXX,
+		BorderSizePixel = 0,
+		LayoutOrder = props.LayoutOrder,
+		Size = UDim2.fromScale(0.981, 0.065),
+		SizeConstraint = Enum.SizeConstraint.RelativeXX,
 	}, {
 		-- Setting name (left-aligned)
 		Label = c("TextLabel", {
-			AnchorPoint         = Vector2.new(0, 0.5),
+			AnchorPoint = Vector2.new(0, 0.5),
 			BackgroundTransparency = 1,
-			FontFace            = Styles.FONT_FREDOKA,
-			Position            = UDim2.new(0, px(12), 0.5, 0),
-			Size                = UDim2.fromScale(0.65, 0.57),
-			Text                = props.Label,
-			TextColor3          = Color3.new(1, 1, 1),
-			TextTransparency    = textAlpha,
-			TextScaled          = true,
-			TextXAlignment      = Enum.TextXAlignment.Left,
+			FontFace = Styles.FONT_FREDOKA,
+			Position = UDim2.new(0, px(12), 0.5, 0),
+			Size = UDim2.fromScale(0.65, 0.57),
+			Text = props.Label,
+			TextColor3 = Color3.new(1, 1, 1),
+			TextTransparency = textAlpha,
+			TextScaled = true,
+			TextXAlignment = Enum.TextXAlignment.Left,
 		}),
 
 		-- Toggle or action button (right-aligned)
 		ControlHolder = c("Frame", {
-			AnchorPoint         = Vector2.new(1, 0.5),
+			AnchorPoint = Vector2.new(1, 0.5),
 			BackgroundTransparency = 1,
-			Position            = UDim2.new(1, -px(12), 0.5, 0),
-			Size                = UDim2.fromOffset(px(80), px(30)),
+			Position = UDim2.new(1, -px(12), 0.5, 0),
+			Size = UDim2.fromOffset(px(80), px(30)),
 		}, {
 			Control = if props.OnAction
 				then c(ActionButton, {
-					Label    = props.ActionLabel,
+					Label = props.ActionLabel,
 					Disabled = props.Disabled,
 					OnAction = props.OnAction,
 				})
 				else c(Toggle, {
-					Value    = props.Value,
+					Value = props.Value,
 					Disabled = props.Disabled,
 					OnToggle = props.OnToggle,
 				}),
@@ -250,7 +252,7 @@ local function SettingCategory(props: {
 
 	local rows: { [string]: any } = {
 		Layout = c("UIListLayout", {
-			Padding   = gap,
+			Padding = gap,
 			SortOrder = Enum.SortOrder.LayoutOrder,
 		}),
 	}
@@ -260,100 +262,94 @@ local function SettingCategory(props: {
 
 		if setting.Type == "Action" then
 			rows[setting.Key] = c(SettingRow, {
-				Label       = setting.Label,
+				Label = setting.Label,
 				ActionLabel = setting.ButtonLabel,
-				Disabled    = isDisabled,
+				Disabled = isDisabled,
 				LayoutOrder = i,
-				OnAction    = if not isDisabled and setting.ClientCallback
-					then setting.ClientCallback
-					else nil,
+				OnAction = if not isDisabled and setting.ClientCallback then setting.ClientCallback else nil,
 			})
 		else
-			local value = if props.Values[setting.Key] ~= nil
-				then props.Values[setting.Key]
-				else setting.Default
-
+			local value = if props.Values[setting.Key] ~= nil then props.Values[setting.Key] else setting.Default
 			rows[setting.Key] = c(SettingRow, {
-				Label       = setting.Label,
-				Value       = value,
-				Disabled    = isDisabled,
+				Label = setting.Label,
+				Value = value,
+				Disabled = isDisabled,
 				LayoutOrder = i,
-				OnToggle    = function()
+				OnToggle = function()
 					props.OnToggle(setting.Key, not value)
+					if setting.ClientCallback then
+						setting.ClientCallback(not value)
+					end
 				end,
 			})
 		end
 	end
 
 	return c("Frame", {
-		AutomaticSize          = Enum.AutomaticSize.Y,
+		AutomaticSize = Enum.AutomaticSize.Y,
 		BackgroundTransparency = 1,
-		LayoutOrder            = props.LayoutOrder,
-		Size                   = UDim2.fromScale(1, 0),
+		LayoutOrder = props.LayoutOrder,
+		Size = UDim2.fromScale(1, 0),
 	}, {
-		-- Consistent gap between header, rows, and footer
 		Layout = c("UIListLayout", {
-			Padding   = gap,
+			Padding = gap,
 			SortOrder = Enum.SortOrder.LayoutOrder,
 		}),
 
-		-- Header (slightly taller than ShopCategory to fit "SETTING" subtitle)
 		Header = c(Pane, {
 			ClassName = "ImageLabel",
 			Native = {
 				BackgroundTransparency = 1,
-				Image                  = HEADER_IMAGE,
-				ImageColor3            = CATEGORY_COLOR,
-				LayoutOrder            = 1,
-				Size                   = UDim2.fromScale(0.981, 0.085),
-				SizeConstraint         = Enum.SizeConstraint.RelativeXX,
-				SliceCenter            = Rect.new(0, 0, 1019, 40),
+				Image = HEADER_IMAGE,
+				ImageColor3 = CATEGORY_COLOR,
+				LayoutOrder = 1,
+				Size = UDim2.fromScale(0.981, 0.085),
+				SizeConstraint = Enum.SizeConstraint.RelativeXX,
+				SliceCenter = Rect.new(0, 0, 1019, 40),
 			},
 		}, {
 			Title = c("TextLabel", {
-				AnchorPoint         = Vector2.new(0, 0),
+				AnchorPoint = Vector2.new(0, 0),
 				BackgroundTransparency = 1,
-				FontFace            = Styles.FONT_FREDOKA,
-				Position            = UDim2.fromOffset(px(14), px(6)),
-				Size                = UDim2.new(1, -px(14), 0, px(30)),
-				Text                = props.Title,
-				TextColor3          = Color3.new(1, 1, 1),
-				TextScaled          = true,
-				TextXAlignment      = Enum.TextXAlignment.Left,
+				FontFace = Styles.FONT_FREDOKA,
+				Position = UDim2.fromOffset(px(14), px(6)),
+				Size = UDim2.new(1, -px(14), 0, px(30)),
+				Text = props.Title,
+				TextColor3 = Color3.new(1, 1, 1),
+				TextScaled = true,
+				TextXAlignment = Enum.TextXAlignment.Left,
 			}),
 
 			Subtitle = c("TextLabel", {
-				AnchorPoint         = Vector2.new(0, 0),
+				AnchorPoint = Vector2.new(0, 0),
 				BackgroundTransparency = 1,
-				FontFace            = Styles.FONT_FREDOKA,
-				Position            = UDim2.fromOffset(px(14), px(38)),
-				Size                = UDim2.new(1, -px(14), 0, px(13)),
-				Text                = "SETTING",
-				TextColor3          = SUBTITLE_COLOR,
-				TextScaled          = false,
-				TextSize            = px(11),
-				TextXAlignment      = Enum.TextXAlignment.Left,
+				FontFace = Styles.FONT_FREDOKA,
+				Position = UDim2.fromOffset(px(14), px(38)),
+				Size = UDim2.new(1, -px(14), 0, px(13)),
+				Text = "SETTING",
+				TextColor3 = SUBTITLE_COLOR,
+				TextScaled = false,
+				TextSize = px(11),
+				TextXAlignment = Enum.TextXAlignment.Left,
 			}),
 		}),
 
-		-- Setting rows
 		Rows = c("Frame", {
-			AutomaticSize          = Enum.AutomaticSize.Y,
+			AutomaticSize = Enum.AutomaticSize.Y,
 			BackgroundTransparency = 1,
-			LayoutOrder            = 2,
-			Size                   = UDim2.fromScale(1, 0),
+			LayoutOrder = 2,
+			Size = UDim2.fromScale(1, 0),
 		}, rows),
 
-		-- Footer
 		Footer = c(Pane, {
 			ClassName = "ImageLabel",
 			Native = {
 				BackgroundTransparency = 1,
-				Image                  = FOOTER_IMAGE,
-				ImageColor3            = CATEGORY_COLOR,
-				LayoutOrder            = 3,
-				Size                   = UDim2.fromScale(0.981, 0.02),
-				SizeConstraint         = Enum.SizeConstraint.RelativeXX,
+				Image = FOOTER_IMAGE,
+				ImageColor3 = CATEGORY_COLOR,
+				LayoutOrder = 3,
+				Size = UDim2.fromScale(0.981, 0.02),
+				SizeConstraint = Enum.SizeConstraint.RelativeXX,
 			},
 		}),
 	})
@@ -363,11 +359,11 @@ end
 --  Page root
 -- ─────────────────────────────────────────────────────────────────────────────
 return function()
-	local settings, setSettings         = React.useState(nil :: { [string]: boolean }?)
-	local playerRank, setPlayerRank     = React.useState(0)
+	local settings, setSettings = React.useState(nil :: { [string]: boolean }?)
+	local playerRank, setPlayerRank = React.useState(0)
 	local ownedPassIds, setOwnedPassIds = React.useState({} :: { [number]: boolean })
-	local isLoading, setIsLoading       = React.useState(true)
-	local clockBinding                  = useClock()
+	local isLoading, setIsLoading = React.useState(true)
+	local clockBinding = useClock()
 
 	React.useEffect(function()
 		local cancelled = false
@@ -471,9 +467,11 @@ return function()
 	local visibleCategories = {}
 	for _, category in ipairs(SettingsConfig) do
 		local visibleSettings = getVisibleSettings(category)
-		if #visibleSettings == 0 then continue end
+		if #visibleSettings == 0 then
+			continue
+		end
 
-		local allGated    = true
+		local allGated = true
 		local categoryMin = math.huge
 		for _, setting in ipairs(visibleSettings) do
 			if not setting.MinRank then
@@ -489,64 +487,64 @@ return function()
 
 	local cards: { [string]: any } = {
 		Layout = c("UIListLayout", {
-			Padding   = UDim.new(0, 10),
+			Padding = UDim.new(0, 10),
 			SortOrder = Enum.SortOrder.LayoutOrder,
 		}),
 		Spacer = c("Frame", {
 			BackgroundTransparency = 1,
-			LayoutOrder            = math.huge,
-			Size                   = UDim2.fromScale(1, 0.04),
+			LayoutOrder = math.huge,
+			Size = UDim2.fromScale(1, 0.04),
 		}),
 	}
 
 	for i, entry in ipairs(visibleCategories) do
 		cards[entry.Data.Category] = c(SettingCategory, {
-			Title       = entry.Data.Category,
-			Settings    = entry.Settings,
-			Values      = settings or {},
-			PlayerRank  = playerRank,
+			Title = entry.Data.Category,
+			Settings = entry.Settings,
+			Values = settings or {},
+			PlayerRank = playerRank,
 			LayoutOrder = i,
-			OnToggle    = handleToggle,
+			OnToggle = handleToggle,
 		})
 	end
 
 	return c("Frame", {
 		BackgroundTransparency = 1,
-		Size                   = UDim2.fromScale(1, 1),
+		Size = UDim2.fromScale(1, 1),
 	}, {
 		Title = c("TextLabel", {
-			AnchorPoint         = Vector2.new(0.5, 0),
+			AnchorPoint = Vector2.new(0.5, 0),
 			BackgroundTransparency = 1,
-			FontFace            = Styles.FONT_FREDOKA,
-			Position            = UDim2.fromScale(0.470149, 0),
-			Size                = UDim2.fromScale(0.94, 0.09),
-			Text                = "Settings",
-			TextColor3          = Styles.GREEN,
-			TextScaled          = true,
+			FontFace = Styles.FONT_FREDOKA,
+			Position = UDim2.fromScale(0.470149, 0),
+			Size = UDim2.fromScale(0.94, 0.09),
+			Text = "Settings",
+			TextColor3 = Styles.GREEN,
+			TextScaled = true,
 		}),
 
 		Body = c("ScrollingFrame", {
-			Active                 = true,
-			AutomaticCanvasSize    = Enum.AutomaticSize.Y,
+			Active = true,
+			AutomaticCanvasSize = Enum.AutomaticSize.Y,
 			BackgroundTransparency = 1,
-			CanvasSize             = UDim2.new(),
-			Position               = UDim2.fromScale(0, 0.1),
-			ScrollBarImageColor3   = Color3.new(),
-			ScrollBarThickness     = 4,
-			ScrollingDirection     = Enum.ScrollingDirection.Y,
-			Size                   = UDim2.fromScale(1, 0.9),
-			Visible                = not isLoading,
+			CanvasSize = UDim2.new(),
+			Position = UDim2.fromScale(0, 0.1),
+			ScrollBarImageColor3 = Color3.new(),
+			ScrollBarThickness = 4,
+			ScrollingDirection = Enum.ScrollingDirection.Y,
+			Size = UDim2.fromScale(1, 0.9),
+			Visible = not isLoading,
 		}, cards),
 
 		LoadingSpinner = isLoading and c("ImageLabel", {
-			AnchorPoint            = Vector2.new(0.5, 0.5),
+			AnchorPoint = Vector2.new(0.5, 0.5),
 			BackgroundTransparency = 1,
-			Image                  = "rbxassetid://5634393881",
-			Position               = UDim2.fromScale(0.5, 0.55),
-			Size                   = UDim2.fromScale(0.175, 0.175),
-			SizeConstraint         = Enum.SizeConstraint.RelativeXX,
-			ScaleType              = Enum.ScaleType.Fit,
-			Rotation               = clockBinding:map(function(clock: number)
+			Image = "rbxassetid://5634393881",
+			Position = UDim2.fromScale(0.5, 0.55),
+			Size = UDim2.fromScale(0.175, 0.175),
+			SizeConstraint = Enum.SizeConstraint.RelativeXX,
+			ScaleType = Enum.ScaleType.Fit,
+			Rotation = clockBinding:map(function(clock: number)
 				local t = (clock % SPIN_PERIOD) / SPIN_PERIOD
 				return easeInOutBack(t) * 360
 			end),

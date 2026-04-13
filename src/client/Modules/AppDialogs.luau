@@ -1,5 +1,6 @@
 ---> services
 local Players = game:GetService("Players")
+local SoundService = game:GetService("SoundService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -27,6 +28,7 @@ DialogController.Prototype = {}
 local c = React.createElement
 local joinDicts = require(UI.Utility.joinDicts)
 local dialogEvent = GoodSignal.new()
+local uiSfx = SoundService:WaitForChild("SFX").UI
 
 ---> constants
 local HINT_INTERVAL = 15
@@ -136,9 +138,12 @@ function DialogController.Prototype.Destroy(self: DialogObject, resolveTo: any)
 end
 
 function DialogController.Prototype.Fire(self: DialogObject)
+	uiSfx.Pop1:Play()
 	return Promise.new(function(resolve, _)
 		self.onResolution = resolve
 		dialogEvent:Fire(self)
+	end):finally(function()
+		uiSfx.Pop2:Play()
 	end)
 end
 

@@ -1,3 +1,4 @@
+local SoundService = game:GetService("SoundService")
 export type Setting = {
 	Key: string,
 	Label: string,
@@ -69,15 +70,19 @@ local config: { Category } = {
 	{
 		Category = "Game Audio",
 		Settings = {
-			{ Key = "MusicEnabled", Label = "Music", Default = true },
-            { Key = "SFXEnabled", Label = "SFX", Default = true },
+			{ Key = "MusicEnabled", Label = "Music", Default = true, ClientCallback = function(isEnabled)
+				SoundService.Music.Volume = isEnabled and 0.5 or 0
+			end},
+            { Key = "SFXEnabled", Label = "SFX", Default = true, ClientCallback = function(isEnabled)
+				SoundService.SFX.Volume = isEnabled and 0.5 or 0
+			end},
 		},
 	},
 	{
 		Category = "Staff",
 		Settings = {
             { Key = "SyrupHighlighting", Label = "Syrup Highlighting", Default = true, MinRank = MIN_STAFF_RANK },
-            { Key = "ShiftTimerEnabled", Label = "Shift Timer", Default = true, MinRank = 11 },
+            { Key = "ShiftTimerEnabled", Label = "Shift Timer", Default = true, MinRank = MIN_STAFF_RANK },
         },
 	},
 }
