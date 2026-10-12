@@ -88,7 +88,7 @@ function DialogService:CreatePromptSelection(
 	return self:CreateDialog(player, "PromptSelection", dialogProps, timeout)
 end
 
-function DialogService.PlayerRemoving(player: Player)
+function DialogService:PlayerRemoving(player: Player)
 	for id, pendingDialog in pendingDialogs do
 		if pendingDialog.Player == player then
 			pendingDialog.Resolve(nil)

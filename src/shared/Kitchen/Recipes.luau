@@ -85,6 +85,8 @@ Recipes.Items = {
 	},
 
 	["Sink"] = {
+		Sound = "Sink",
+		HoldDuration = 3,
 		Actions = {
 			{ "ToolNameValidityCheck", { "#Cup|!Milk" } },
 			{
@@ -127,6 +129,7 @@ Recipes.Items = {
 
 	["Milk"] = {
 		Sound = "Pour",
+		HoldDuration = 2,
 		Actions = {
 			{ "ToolNameValidityCheck", { "#Clear Cup|=Mug" } },
 			{ "SetToolHoldingProperty", "Liquid", "Color", Color3.new(1, 1, 1) },
@@ -187,6 +190,7 @@ Recipes.Items = {
 
 	["Sugar"] = {
 		Sound = "Powder",
+		HoldDuration = 1,
 		Actions = {
 			{ "ToolNameValidityCheck", { "!Sugar" } },
 			{
@@ -214,6 +218,7 @@ Recipes.Items = {
 
 	["Blender"] = {
 		Sound = "Blender",
+		HoldDuration = 5,
 		Actions = {
 			{ "ToolNameValidityCheck", { "#Milk", "#Syrup" } },
 			{
@@ -250,6 +255,7 @@ Recipes.Items = {
 	["Vanilla Chai Tea Powder"] = makeTeaVariant("Vanilla Chai Tea", Color3.fromRGB(217, 137, 87)),
 
 	["Lids"] = {
+		HoldDuration = 1,
 		Actions = {
 			{
 				"SetToolHoldingProperty",
@@ -301,6 +307,7 @@ Recipes.Items = {
 for name: string, color: Color3 in Recipes.Syrups do
 	Recipes.Items[name .. " Syrup"] = {
 		Sound = "Pour",
+		HoldDuration = 2,
 		Actions = {
 			{ "ToolNameValidityCheck", { "#Cup %+ Milk" } },
 			{ "SetToolHoldingProperty", "Liquid", "Color", color },
@@ -313,6 +320,7 @@ for name: string, color: Color3 in Recipes.Tapioca do
 	name = name .. " Tapioca"
 	Recipes.Items[name] = {
 		Sound = "Pop",
+		HoldDuration = 2,
 		Actions = {
 			{ "ToolNameValidityCheck", { "# Milk|#Tea" } },
 			{

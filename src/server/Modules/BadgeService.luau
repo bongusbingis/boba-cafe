@@ -155,8 +155,20 @@ end
     @param badgeId number
 ]=]
 function Service:AwardBadge(player: Player, badgeId: number)
-    if not self:PlayerHasBadgeAsync(player) then
+    if self:PlayerHasBadgeAsync(player, badgeId) then
+        return
+    end
+
+    local success, err = pcall(function()
         BadgeService:AwardBadge(player.UserId, badgeId)
+    end)
+    if success then
+        if not badgeOwnershipCache[player.UserId] then
+            badgeOwnershipCache[player.UserId] = {}
+        end
+        badgeOwnershipCache[player.UserId][badgeId] = true
+    else
+        warn("[BadgeService] Failed to award badge", badgeId, "to", player.Name, err)
     end
 end
 
