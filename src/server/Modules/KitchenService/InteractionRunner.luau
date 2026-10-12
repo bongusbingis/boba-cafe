@@ -12,6 +12,7 @@ local Knit = require(Packages.Knit)
 
 local KitchenTypes = require(ReplicatedStorage.Shared.Kitchen.KitchenTypes)
 local KitchenConfig = require(ReplicatedStorage.Shared.Configuration.KitchenConfig)
+local ToolNameMatcher = require(ReplicatedStorage.Shared.Kitchen.ToolNameMatcher)
 local KitchenSounds = SoundService:WaitForChild("SFX").Kitchen
 
 ---> Types
@@ -33,6 +34,12 @@ type InteractionRunner = {
 	Run: (self: InteractionRunner, player: Player, recipeData: RecipeData, model: Model) -> (),
 	_runSequence: (self: InteractionRunner, player: Player, model: Model, actions: { ActionData }) -> InteractionResult,
 	_runSelectFrom: (
+		self: InteractionRunner,
+		player: Player,
+		model: Model,
+		actionData: ActionData
+	) -> InteractionResult,
+	_runBranch: (
 		self: InteractionRunner,
 		player: Player,
 		model: Model,
@@ -128,12 +135,45 @@ function InteractionRunner:_runSelectFrom(player: Player, model: Model, actionDa
 	return self:_runSequence(player, model, branch)
 end
 
+-- Picks the first branch whose tool-name pattern matches what the player is holding,
+-- then runs that branch's sequence. Unlike SelectFrom this is silent — the old game
+-- dispatched automatically, e.g. the Blender making flavored milk or a smoothie
+-- depending on the cup. Falls back to an optional "Default" branch.
+function InteractionRunner:_runBranch(player: Player, model: Model, actionData: ActionData): InteractionResult
+	local branches = actionData[2] :: { { any } }
+
+	local character = player.Character
+	local tool = character and character:FindFirstChildWhichIsA("Tool")
+	if not tool then
+		return { Success = false, Error = "Branch: no tool held" }
+	end
+
+	for _, branch in branches do
+		local pattern = branch[1] :: string
+		local actions = branch[2] :: { ActionData }
+
+		if pattern == "Default" or ToolNameMatcher.matchesEntry(tool.Name, pattern) then
+			return self:_runSequence(player, model, actions)
+		end
+	end
+
+	return { Success = false, Error = "You can't use that here." }
+end
+
 function InteractionRunner:_runSequence(player: Player, model: Model, actions: { ActionData }): InteractionResult
 	for _, actionData in actions do
 		local actionName = actionData[1] :: string
 
 		if actionName == "SelectFrom" then
 			local result = self:_runSelectFrom(player, model, actionData)
+			if not result.Success then
+				return result
+			end
+			continue
+		end
+
+		if actionName == "Branch" then
+			local result = self:_runBranch(player, model, actionData)
 			if not result.Success then
 				return result
 			end

@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(selene *)",
+      "Bash(lune run tools/verify-matcher.luau)",
+      "Bash(lune run tools/verify-streak.luau)",
+      "Bash(lune run tools/verify-quests.luau)",
+      "Bash(lune run tools/verify-migration.luau)",
+      "Bash(lune run tools/verify-assets.luau current-baseplate-build.rbxl)",
+      "Bash(lune run tools/verify-assets.luau old-v3.rbxl)"
+    ]
+  }
+}

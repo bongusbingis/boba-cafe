@@ -17,18 +17,24 @@ local Packages = ReplicatedStorage:WaitForChild("Packages")
 
 local Knit = require(Packages.Knit)
 local Promise = require(Packages.Promise)
-local RankUtil = require(ReplicatedStorage.Shared.Utility.RankUtil)
 
 ---> Types
 
 type Order = {
 	orderNum: string,
-	customer: number, -- UserId
+	-- Player UserId, or a CustomerService customer id when isNpc is true.
+	customer: number,
+	isNpc: boolean?,
 	order: { any },
 	numItems: number,
 	status: string,
 	preparedBy: number?, -- UserId
+	-- UserId of the Worker who took the order, so fulfilment can be attributed back to
+	-- them. nil for orders raised by a system rather than a person.
+	takenBy: number?,
 	statusColor: Color3,
+	-- os.clock() at which the current status was entered; drives the abandonment timeout.
+	statusSince: number?,
 }
 
 type ToolEntry = {
@@ -42,6 +48,11 @@ local ORDERING_SYSTEM = workspace["Ordering System"]
 local ORDER_PICKUP_FOLDER = "OrderPickUp"
 
 local ORDER_DEBOUNCE_SECONDS = 5
+
+-- How long a claimed order may sit unprepared before it returns to the queue. Generous
+-- enough that a slow first drink is never snatched away mid-make, short enough that an
+-- abandoned order does not block a waiting customer for the rest of the session.
+local ORDER_ABANDON_SECONDS = 300
 local ORDER_MAX_ITEMS = 4
 local ORDER_MIN_ITEMS = 1
 
@@ -91,6 +102,12 @@ local OrderService = Knit.CreateService({
 	_dialogService = nil :: any,
 	_statisticsService = nil :: any,
 	_questService = nil :: any,
+	-- nil = not looked up yet, false = absent. Resolved lazily rather than in KnitStart
+	-- because CustomerService is optional.
+	_customerService = nil :: any,
+	-- Same lazy pattern, for the same reason the others use it: the spec requires this
+	-- module without starting Knit, so it must be injectable.
+	_onboardingService = nil :: any,
 })
 
 ---> Private Helpers
@@ -173,9 +190,47 @@ function OrderService:_getPlayerOrder(userId: number, status: string): Order?
 	return nil
 end
 
+-- OnboardingService owns every staff permission decision — "the active role permits it, OR
+-- rank grants it" — so the rule is never duplicated across the services that enforce it.
+function OrderService:_getOnboardingService()
+	if self._onboardingService == nil then
+		local ok, service = pcall(function()
+			return Knit.GetService("OnboardingService")
+		end)
+		self._onboardingService = ok and service or false
+	end
+
+	return self._onboardingService or nil
+end
+
+-- Denies by default when the service cannot be reached: a permission check that fails open
+-- is a permission check that does nothing.
+function OrderService:_canTakeOrders(player: Player): boolean
+	local onboarding = self:_getOnboardingService()
+	return onboarding ~= nil and onboarding:CanTakeOrders(player)
+end
+
+function OrderService:_canUseKitchen(player: Player): boolean
+	local onboarding = self:_getOnboardingService()
+	return onboarding ~= nil and onboarding:CanUseKitchen(player)
+end
+
+-- Claiming an order means preparing it, which needs the kitchen — so this is the Barista
+-- gate, not the Worker one.
 function OrderService:_canClaimOrder(player: Player): boolean
-	return RankUtil:CanEnterKitchen(player)
-		and self:_getPlayerOrder(player.UserId, "Being Prepared") == nil
+	return self:_canUseKitchen(player) and self:_getPlayerOrder(player.UserId, "Being Prepared") == nil
+end
+
+-- Tells a player why a staff action was refused. Every one of these used to be a bare
+-- `return`: a new player clicked a staff screen, nothing happened, and there was no
+-- reason given and no unlock path shown.
+function OrderService:_denyStaffAction(player: Player, action: "TakeOrders" | "UseKitchen")
+	local onboarding = self:_getOnboardingService()
+	local reason = if onboarding
+		then onboarding:GetDenialReason(player, action)
+		else "You can't do that right now."
+
+	self.Client.Announcement:Fire(player, "Not yet!", reason, COLOR_ERROR)
 end
 
 function OrderService:_getPendingCount(): number
@@ -201,25 +256,141 @@ function OrderService:_getNextOrder(): Order?
 	return next
 end
 
+--[=[
+	Completes an NPC customer's order once a barista has deposited it.
+
+	NPCs never walk to a pick-up node, so without this their orders would sit at
+	"Ready for Pick Up" forever and the Order_<id> folders would pile up in
+	ServerStorage. Mirrors the customer branch of _handlePickUp.
+
+	Returns the delivered tool names so CustomerService can check them against what the
+	customer actually asked for.
+]=]
+function OrderService:CollectNpcOrder(customerId: number, area: Model?): { string }
+	local delivered: { string } = {}
+
+	local orderFolder = ServerStorage[ORDER_PICKUP_FOLDER]:FindFirstChild("Order_" .. customerId)
+	if orderFolder then
+		for _, item in orderFolder:GetChildren() do
+			local currentItem = item:FindFirstChild("CurrentItem")
+			table.insert(delivered, (currentItem and currentItem.Value) or item.Name)
+		end
+		orderFolder:Destroy()
+	end
+
+	if area then
+		for _, child in area:GetChildren() do
+			if child:IsA("Model") then
+				child:Destroy()
+			end
+		end
+
+		local ownerValue = area:FindFirstChild("OrderOwner")
+		if ownerValue and ownerValue:IsA("IntValue") then
+			ownerValue.Value = 0
+		end
+
+		local prompt = area:FindFirstChildWhichIsA("ProximityPrompt", true)
+		if prompt then
+			prompt.ObjectText = "Pick Up Area"
+			prompt.ActionText = "Deposit Order"
+		end
+	end
+
+	for i = #self._orders, 1, -1 do
+		local order = self._orders[i]
+		if order.isNpc and order.customer == customerId and order.status == "Ready for Pick Up" then
+			table.remove(self._orders, i)
+		end
+	end
+
+	self:_updateStatusScreens()
+	self:_broadcastUpdate()
+
+	return delivered
+end
+
+--- The pick-up area currently holding an order for `customerId`, if any.
+function OrderService:GetPickUpAreaFor(customerId: number): Model?
+	for _, area in self._pickUpAreas do
+		local ownerValue = area:FindFirstChild("OrderOwner")
+		if ownerValue and ownerValue:IsA("IntValue") and ownerValue.Value == customerId then
+			return area
+		end
+	end
+	return nil
+end
+
+-- Resolved lazily: CustomerService may not exist yet (or at all).
+function OrderService:_getCustomerService()
+	if self._customerService == nil then
+		local ok, service = pcall(Knit.GetService, Knit, "CustomerService")
+		self._customerService = ok and service or false
+	end
+
+	return self._customerService or nil
+end
+
+-- Whether an NPC customer is still in the cafe waiting on its order.
+-- A missing service must not silently delete every NPC order, so it answers true.
+function OrderService:_isNpcCustomerActive(customerId: number): boolean
+	local customerService = self:_getCustomerService()
+	if not customerService then
+		return true
+	end
+
+	return customerService:IsCustomerActive(customerId) == true
+end
+
+-- Returns a claimed order to the pending queue and offers it to whoever is waiting.
+function OrderService:_returnOrderToQueue(order: Order)
+	order.status = "Pending Preparation"
+	order.statusColor = COLOR_PENDING
+	order.preparedBy = nil
+	order.statusSince = os.clock()
+
+	self:_tryDispatchFromQueue()
+end
+
 -- Prunes stale orders and clears abandoned pick-up areas.
 -- Iterates in reverse so table.remove does not skip entries.
 function OrderService:_updateOrders()
 	for i = #self._orders, 1, -1 do
 		local order = self._orders[i]
-		local customer = Players:GetPlayerByUserId(order.customer)
+		-- NPC customers have no Player, so their liveness is owned by CustomerService.
+		-- Treating them like players here would prune every NPC order instantly.
+		local customer
+		if order.isNpc then
+			customer = self:_isNpcCustomerActive(order.customer) or nil
+		else
+			customer = Players:GetPlayerByUserId(order.customer)
+		end
 
 		if order.status == "Pending Preparation" or order.status == "Ready for Pick Up" then
 			if not customer then
 				table.remove(self._orders, i)
 			end
 		elseif order.status == "Being Prepared" then
+			local preparer = Players:GetPlayerByUserId(order.preparedBy)
+
 			if not customer then
 				table.remove(self._orders, i)
-			elseif not Players:GetPlayerByUserId(order.preparedBy) then
+			elseif not preparer then
 				-- Staff left — put the order back in the queue
-				order.status = "Pending Preparation"
-				order.statusColor = COLOR_PENDING
-				order.preparedBy = nil
+				self:_returnOrderToQueue(order)
+			elseif os.clock() - (order.statusSince or os.clock()) > ORDER_ABANDON_SECONDS then
+				-- Staff claimed it and never delivered. Until now the order was only
+				-- released if they left the game entirely, so one confused player who
+				-- claimed an order and wandered off blocked it permanently.
+				self:_returnOrderToQueue(order)
+				self.Client.NotepadUpdated:Fire(preparer, "ResetOrder")
+				self.Client.Announcement:Fire(
+					preparer,
+					"Order released",
+					"You had an order for too long, so it went back to the queue. "
+						.. "Claim another when you're ready!",
+					COLOR_PENDING
+				)
 			end
 		end
 	end
@@ -359,16 +530,26 @@ function OrderService:_broadcastUpdate()
 	self:_updateStatusScreens()
 end
 
-function OrderService:_addOrder(customerId: number, orderItems: { any })
+--[=[
+	Adds an order to the board.
+
+	`customerId` is a Player UserId for real customers. NPC customers have no UserId, so
+	CustomerService passes its own id together with `isNpc = true`; those orders are kept
+	alive by CustomerService rather than by a Players lookup (see _updateOrders).
+]=]
+function OrderService:_addOrder(customerId: number, orderItems: { any }, isNpc: boolean?, takenBy: number?)
 	self._currentOrderNum += 1
 	table.insert(self._orders, {
 		orderNum = string.format("%04i", self._currentOrderNum % 1000),
 		customer = customerId,
+		isNpc = isNpc == true,
 		order = orderItems,
 		numItems = #orderItems,
 		status = "Pending Preparation",
 		preparedBy = nil,
+		takenBy = takenBy,
 		statusColor = COLOR_PENDING,
+		statusSince = os.clock(),
 	})
 	-- Immediately hand the order to the first barista in the queue, if any.
 	self:_tryDispatchFromQueue()
@@ -387,6 +568,7 @@ function OrderService:_claimNextOrder(player: Player)
 	nextOrder.status = "Being Prepared"
 	nextOrder.preparedBy = player.UserId
 	nextOrder.statusColor = COLOR_PREPARING
+	nextOrder.statusSince = os.clock()
 
 	self.Client.NotepadUpdated:Fire(player, "SetNewOrder", nextOrder.order)
 
@@ -422,7 +604,8 @@ end
 
 -- Appends a barista to the end of the waiting queue and notifies them.
 function OrderService:_joinQueue(player: Player)
-	if not RankUtil:CanEnterKitchen(player) then
+	if not self:_canUseKitchen(player) then
+		self:_denyStaffAction(player, "UseKitchen")
 		return
 	end
 	if self:_getPlayerOrder(player.UserId, "Being Prepared") then
@@ -490,7 +673,8 @@ end
 --   • Pending orders exist AND queue is empty → claim directly (no wait).
 --   • No pending orders OR queue already has waiters → join queue.
 function OrderService:_handleClaimOrQueue(player: Player)
-	if not RankUtil:CanEnterKitchen(player) then
+	if not self:_canUseKitchen(player) then
+		self:_denyStaffAction(player, "UseKitchen")
 		return
 	end
 	if self:_getPlayerOrder(player.UserId, "Being Prepared") then
@@ -614,6 +798,15 @@ function OrderService:_handlePickUp(player: Player, area: Model)
 		for i = #self._orders, 1, -1 do
 			local order = self._orders[i]
 			if order.customer == player.UserId and order.status == "Ready for Pick Up" then
+				-- The order this Worker took actually reached its customer. That round
+				-- trip is the design's biggest open risk — a Worker taking orders with no
+				-- Barista around to make them — so it is measured directly.
+				local takenBy = order.takenBy and Players:GetPlayerByUserId(order.takenBy)
+				local onboarding = takenBy and self:_getOnboardingService()
+				if onboarding then
+					onboarding:LogOrderServed(takenBy)
+				end
+
 				table.remove(self._orders, i)
 			end
 		end
@@ -676,11 +869,23 @@ function OrderService:_handlePickUp(player: Player, area: Model)
 
 			playerOrder.status = "Ready for Pick Up"
 			playerOrder.statusColor = COLOR_READY
+			playerOrder.statusSince = os.clock()
 			self:_updateStatusScreens()
 
 			local orderFolder = Instance.new("Folder")
 			orderFolder.Name = "Order_" .. playerOrder.customer
 			orderFolder.Parent = ServerStorage[ORDER_PICKUP_FOLDER]
+
+			-- NPCs cannot walk to a pick-up node, so hand the order straight to
+			-- CustomerService once it has been deposited.
+			if playerOrder.isNpc then
+				local customerId = playerOrder.customer
+				task.defer(function()
+					if self:_isNpcCustomerActive(customerId) and self._customerService then
+						self._customerService:OnOrderReady(customerId, area)
+					end
+				end)
+			end
 
 			for i, entry in selected do
 				if PICKUP_MODEL_OFFSETS[i] then
@@ -707,8 +912,12 @@ end
 
 ---> Public Methods
 
--- Called by a staff member (rank ≥ CanUseOrderingSystem) to submit a customer's order.
--- `customerId` is the UserId of the customer being served.
+-- Called by a Worker (or any ranked staff member) to submit a customer's order.
+-- `customerId` is a Player UserId, or a CustomerService customer id when the customer is
+-- an NPC waiting at a register.
+--
+-- Taking orders is Worker work — it is the whole of the entry-level role — so it is gated
+-- on CanTakeOrders, not on the kitchen.
 function OrderService.Client:CreateOrder(player: Player, customerId: number, orderItems: { any })
 	if not customerId or not orderItems then
 		return
@@ -716,7 +925,8 @@ function OrderService.Client:CreateOrder(player: Player, customerId: number, ord
 	if self.Server._orderDebounces[player.UserId] then
 		return
 	end
-	if not RankUtil:CanUseOrderingSystem(player) then
+	if not self.Server:_canTakeOrders(player) then
+		self.Server:_denyStaffAction(player, "TakeOrders")
 		return
 	end
 	if #orderItems < ORDER_MIN_ITEMS or #orderItems > ORDER_MAX_ITEMS then
@@ -724,10 +934,28 @@ function OrderService.Client:CreateOrder(player: Player, customerId: number, ord
 	end
 
 	self.Server._orderDebounces[player.UserId] = true
-	self.Server:_addOrder(customerId, orderItems)
+
+	-- The client says who it is serving, but never whether they are an NPC: that is
+	-- decided here by asking CustomerService whether it has a customer of that id
+	-- actually waiting. An id that is not waiting falls through to the player path and
+	-- gets pruned by _updateOrders if no such player exists.
+	local customerService = self.Server:_getCustomerService()
+	local tookNpcOrder = customerService ~= nil
+		and customerService:TakeOrder(customerId, orderItems, player)
+
+	if not tookNpcOrder then
+		self.Server:_addOrder(customerId, orderItems, nil, player.UserId)
+	end
 
 	if self.Server._statisticsService then
 		self.Server._statisticsService:IncrementStat(player, "OrdersCreated", 1)
+	end
+
+	-- Advances the worker onboarding — the step completes because the player did the
+	-- thing, never because they pressed "Next".
+	local onboarding = self.Server:_getOnboardingService()
+	if onboarding then
+		onboarding:ReportStep(player, "OrderTaken")
 	end
 
 	task.delay(ORDER_DEBOUNCE_SECONDS, function()

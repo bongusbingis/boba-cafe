@@ -23,6 +23,12 @@ local GOLD_MID = Color3.fromRGB(255, 185, 30)
 local GOLD_DEEP = Color3.fromRGB(188, 132, 0)
 local GOLD_BADGE = Color3.fromRGB(232, 234, 121)
 
+---> purple
+local PURPLE = Color3.fromRGB(147, 112, 219)
+local PURPLE_MID = Color3.fromRGB(128, 0, 128)
+local PURPLE_DEEP = Color3.fromRGB(75, 0, 130)
+local PURPLE_TEXT = Color3.fromRGB(106, 90, 205)
+
 ---> misc
 local RED = Color3.fromRGB(255, 87, 90)
 local CORAL = Color3.fromRGB(255, 107, 107)
@@ -51,6 +57,11 @@ return {
 	GREEN_DIM = GREEN_DIM,
 	GREEN_TEXT = GREEN_TEXT,
 	GREEN_BADGE = GREEN_BADGE,
+
+	PURPLE = PURPLE,
+	PURPLE_MID = PURPLE_MID,
+	PURPLE_DEEP = PURPLE_DEEP,
+	PURPLE_TEXT = PURPLE_TEXT,
 
 	ROSE = ROSE,
 	ROSE_MID = ROSE_MID,

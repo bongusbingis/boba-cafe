@@ -1,0 +1,16 @@
+# Toolchain for boba-cafe, managed by Aftman.
+# Run `aftman install` after cloning.
+#
+# rojo must match the Rojo plugin version installed in Studio, or `rojo serve` will
+# refuse to sync with a protocol mismatch. Bump both together.
+#
+# lune must be >= 0.10.5: earlier versions fail to deserialize this project's
+# place files with "Property Accessory.Tags should be SharedString, but it was
+# Tags" (fixed by lune-org/lune#397). The tools/ inspection scripts depend on it.
+
+[tools]
+rojo = "rojo-rbx/rojo@7.7.0"
+wally = "UpliftGames/wally@0.3.2"
+lune = "lune-org/lune@0.10.5"
+selene = "Kampfkarren/selene@0.31.0"
+stylua = "johnnymorganz/stylua@2.5.2"

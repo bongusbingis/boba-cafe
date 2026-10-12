@@ -16,9 +16,11 @@ local GoodSignal = require(Packages.GoodSignal)
 local Promise = require(Packages.Promise)
 
 local PlayerSetup = require(script.PlayerSetup)
+local NicknamePrompt = require(script.NicknamePrompt)
+local V4Migration = require(script.V4Migration)
 
 ---> constants
-local IS_MOCK_STORE_ENABLED = false
+local IS_MOCK_STORE_ENABLED = true
 local PROFILE_STORE_NAME = "PlayerStore_0006"
 local REPLICA_CLASS_TOKEN = ReplicaService.NewClassToken("PlayerProfile")
 local PROFILE_TEMPLATE = require(Config:WaitForChild("ProfileTemplate"))
@@ -78,6 +80,12 @@ local function loadPlayerProfile(player: Player)
 			if player.Parent == Players then
 				ProfileObjects[player.UserId] = playerProfile
 				local proxy = createProxyForPlayerProfile(player, playerProfile)
+
+				-- Must complete before PlayerSetup: those run concurrently via
+				-- task.spawn, and cosmetics replication needs migrated items to
+				-- already be in the profile.
+				V4Migration.Migrate(player, proxy)
+
 				for _, f in PlayerSetup do
 					task.spawn(f, player, proxy)
 				end
@@ -129,6 +137,17 @@ function DataService:GetDataAsync(player: Player)
 			playerData = OnLoadSignals[player.UserId]:Wait()
 		end
 		resolve(playerData)
+	end)
+end
+
+--- Asks the player to choose a roleplay nickname. Deliberately not part of the join path:
+--- OnboardingService calls this once the player is actually playing, and it no-ops if a
+--- nickname is already set, so it is safe to call from more than one place.
+function DataService:PromptNickname(player: Player)
+	self:GetDataAsync(player):andThen(function(proxy)
+		if player.Parent then
+			NicknamePrompt(player, proxy)
+		end
 	end)
 end
 

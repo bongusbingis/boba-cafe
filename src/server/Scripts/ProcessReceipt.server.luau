@@ -46,6 +46,26 @@ MarketplaceService.ProcessReceipt = function(receiptInfo)
         return Enum.ProductPurchaseDecision.NotProcessedYet
     end
 
+    -- Subscription products are declared in SubscriptionsConfig rather than the map
+    -- above, so they are checked first.
+    local subscriptionOk, subscriptionHandled = pcall(function()
+        return Knit.GetService("SubscriptionService"):HandleProductPurchase(player, receiptInfo.ProductId)
+    end)
+
+    if subscriptionOk and subscriptionHandled then
+        ProductPurchaseDatastore:UpdateAsync(player.UserId, function(old)
+            old = old or {}
+            table.insert(old, {
+                ProductName = "Subscription",
+                ProductId = receiptInfo.ProductId,
+                Timestamp = os.time(),
+            })
+            return old
+        end)
+
+        return Enum.ProductPurchaseDecision.PurchaseGranted
+    end
+
     local action = ProductActionMap[receiptInfo.ProductId]
     if action then
         local name = action[1]
@@ -70,6 +90,15 @@ MarketplaceService.ProcessReceipt = function(receiptInfo)
             warn("Purchase action for product", receiptInfo.ProductId, "did not return true, got:", res)
             return Enum.ProductPurchaseDecision.NotProcessedYet
         end
+
+        -- Quest credit for spending Robux. Never let a quest failure void a purchase
+        -- that has already been granted, so this is best-effort.
+        pcall(function()
+            local questService = Knit.GetService("QuestService")
+            if questService and receiptInfo.CurrencySpent then
+                questService:AdvanceQuest(player, "RobuxSpent", receiptInfo.CurrencySpent)
+            end
+        end)
 
         ProductPurchaseDatastore:UpdateAsync(player.UserId, function(old)
             if not old then

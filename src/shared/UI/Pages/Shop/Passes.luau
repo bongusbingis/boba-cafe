@@ -1,3 +1,5 @@
+local MarketplaceService = game:GetService("MarketplaceService")
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Packages = ReplicatedStorage:WaitForChild("Packages")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -9,39 +11,90 @@ local React = require(Packages.React)
 ---> styles
 local Styles = require(UI.Styles)
 
+---> config
+local Gamepasses = require(Shared.Configuration.Gamepasses)
+local GamepassUtil = require(Shared.Utility.GamepassUtil)
+
 ---> components
 local ShopCard = require(UI.Components.Buttons.ShopCard)
 
 ---> private
 local c = React.createElement
 
----> mock data (replace with server-provided data)
 export type Pass = {
+	PassId: number,
 	Name: string,
 	Price: string,
 	Image: string,
-	OffSale: boolean?,
+	Owned: boolean,
 }
 
-local PASSES: { Pass } = {
-	{ Name = "Barista",       Price = " 199", Image = "rbxassetid://5893760810" },
-	{ Name = "Shift Lead",    Price = " 499", Image = "rbxassetid://5893760810" },
-	{ Name = "Manager",       Price = " 999", Image = "rbxassetid://5893760810" },
-	{ Name = "VIP",           Price = " 299", Image = "rbxassetid://5893760810" },
-	{ Name = "2x Boba Bucks", Price = " 399", Image = "rbxassetid://5893760810" },
-	{ Name = "Premium",       Price = " 799", Image = "rbxassetid://5893760810", OffSale = true },
-}
+-- Prices and icons come from Roblox rather than the config, so they stay correct when
+-- they are changed on the pass itself. Falls back to the configured icon on failure.
+local function fetchPasses(): { Pass }
+	local player = Players.LocalPlayer
+	local passes: { Pass } = {}
+
+	for passId, definition in Gamepasses do
+		local price = "—"
+		local image = definition.Icon
+
+		-- GetProductInfo is flagged deprecated by the Luau LSP, but it remains the only
+		-- in-engine way to read a game pass price. Wrapped in pcall so a throttled or
+		-- failed lookup degrades to the placeholder price instead of breaking the page.
+		local ok, info = pcall(function()
+			return MarketplaceService:GetProductInfo(passId, Enum.InfoType.GamePass)
+		end)
+
+		if ok and info then
+			if info.PriceInRobux then
+				price = tostring(info.PriceInRobux)
+			end
+			if info.IconImageAssetId and info.IconImageAssetId ~= 0 then
+				image = "rbxassetid://" .. info.IconImageAssetId
+			end
+		end
+
+		table.insert(passes, {
+			PassId = passId,
+			Name = definition.Name,
+			Price = price,
+			Image = image,
+			Owned = GamepassUtil:PlayerOwnsPassAsync(player, passId),
+		})
+	end
+
+	-- Owned passes sink to the bottom; the rest stay alphabetical for a stable grid.
+	table.sort(passes, function(a, b)
+		if a.Owned ~= b.Owned then
+			return not a.Owned
+		end
+		return a.Name < b.Name
+	end)
+
+	return passes
+end
 
 ---> public
 return function()
-	local onSaleCount = 0
-	for _, pass in ipairs(PASSES) do
-		if not pass.OffSale then
-			onSaleCount += 1
-		end
-	end
+	-- nil = loading, table = loaded
+	local passes, setPasses = React.useState(nil)
 
-	local onSaleIndex, offSaleIndex = 0, onSaleCount
+	React.useEffect(function()
+		local cancelled = false
+
+		task.spawn(function()
+			local result = fetchPasses()
+			if not cancelled then
+				setPasses(result)
+			end
+		end)
+
+		return function()
+			cancelled = true
+		end
+	end, {})
+
 	local gridChildren = {
 		UIGridLayout = c("UIGridLayout", {
 			CellPadding = UDim2.fromScale(0.043, 0.03),
@@ -56,24 +109,32 @@ return function()
 		}),
 	}
 
-	for _, pass in ipairs(PASSES) do
-		local layoutOrder
-		if pass.OffSale then
-			offSaleIndex += 1
-			layoutOrder = offSaleIndex
-		else
-			onSaleIndex += 1
-			layoutOrder = onSaleIndex
-		end
-
-		gridChildren[pass.Name] = c(ShopCard, {
-			Name = pass.Name,
-			Price = pass.Price,
-			Image = pass.Image,
-			ImageSize = UDim2.fromScale(1, 1),
-			OffSale = pass.OffSale,
-			LayoutOrder = layoutOrder,
+	if passes == nil then
+		gridChildren["Loading"] = c("TextLabel", {
+			BackgroundTransparency = 1,
+			FontFace = Styles.FONT_FREDOKA,
+			Size = UDim2.fromScale(1, 0.2),
+			Text = "Loading passes...",
+			TextColor3 = Styles.GRAY,
+			TextScaled = true,
 		})
+	else
+		for index, pass in ipairs(passes) do
+			gridChildren[pass.Name] = c(ShopCard, {
+				Name = pass.Name,
+				Price = pass.Price,
+				Image = pass.Image,
+				ImageSize = UDim2.fromScale(1, 1),
+				-- Owned passes reuse the off-sale styling so they read as unavailable.
+				OffSale = pass.Owned,
+				LayoutOrder = index,
+				OnClick = if pass.Owned
+					then nil
+					else function()
+						MarketplaceService:PromptGamePassPurchase(Players.LocalPlayer, pass.PassId)
+					end,
+			})
+		end
 	end
 
 	return c("Frame", {

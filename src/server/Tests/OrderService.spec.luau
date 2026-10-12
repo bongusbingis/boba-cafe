@@ -12,8 +12,9 @@
       This means _updateOrders will prune every order whose customer is not
       an actual server player. Tests that rely on a "live customer" are
       annotated and tested at the state level only.
-    • RankUtil methods reach the Roblox group API. We monkey-patch them for
-      all rank-gated tests and restore the originals in afterEach.
+    • Staff permission is owned by OnboardingService, which OrderService resolves
+      lazily. We inject a stub for all permission-gated tests and clear it in
+      afterEach.
     • Knit signals are server→client RemoteSignals. We replace them with
       plain mock tables (trackable locally) in beforeEach.
     • _broadcastUpdate calls _updateOrders which prunes orders (see above).
@@ -29,8 +30,6 @@ return function()
 	local ServerScriptService = game:GetService("ServerScriptService")
 	local ReplicatedStorage = game:GetService("ReplicatedStorage")
 	local ServerStorage = game:GetService("ServerStorage")
-
-	local RankUtil = require(ReplicatedStorage.Shared.Utility.RankUtil)
 
 	-- Require the service table. KnitInit/KnitStart are never invoked here,
 	-- so workspace["Ordering System"] is never accessed.
@@ -131,17 +130,31 @@ return function()
 	-- Rank mock helpers
 	-- ──────────────────────────────────────────────────────────────────────
 
-	local _origCanEnterKitchen = RankUtil.CanEnterKitchen
-	local _origCanUseOrdering = RankUtil.CanUseOrderingSystem
-
+	-- Permission now belongs to OnboardingService ("the active role permits it, OR rank
+	-- grants it"), which OrderService resolves lazily through _getOnboardingService. Knit
+	-- is never started here, so we inject a stub instead of patching RankUtil.
+	--
+	-- `enterKitchen` is the Barista gate (claiming and preparing) and `useOrdering` is the
+	-- Worker gate (taking a customer's order), preserving what these tests originally meant.
 	local function mockRank(enterKitchen: boolean, useOrdering: boolean?)
-		RankUtil.CanEnterKitchen = function() return enterKitchen end
-		RankUtil.CanUseOrderingSystem = function() return if useOrdering == nil then enterKitchen else useOrdering end
+		service._onboardingService = {
+			CanUseKitchen = function() return enterKitchen end,
+			CanTakeOrders = function() return if useOrdering == nil then enterKitchen else useOrdering end,
+			GetDenialReason = function() return "denied" end,
+			ReportStep = function() end,
+			LogOrderServed = function() end,
+		}
+	end
+
+	-- Sets only the Worker gate, leaving the Barista gate closed.
+	local function mockCanTakeOrders(allowed: boolean)
+		mockRank(false, allowed)
 	end
 
 	local function restoreRank()
-		RankUtil.CanEnterKitchen = _origCanEnterKitchen
-		RankUtil.CanUseOrderingSystem = _origCanUseOrdering
+		-- nil, not false: false means "looked up and absent", which would deny everything
+		-- for the rest of the run.
+		service._onboardingService = nil
 	end
 
 	-- ──────────────────────────────────────────────────────────────────────
@@ -584,19 +597,19 @@ return function()
 		end)
 
 		it("should reject players without the ordering rank", function()
-			RankUtil.CanUseOrderingSystem = function() return false end
+			mockCanTakeOrders(false)
 			service.Client:CreateOrder(player, 10001, { makeItem() })
 			expect(#service._orders).to.equal(0)
 		end)
 
 		it("should reject an empty order array", function()
-			RankUtil.CanUseOrderingSystem = function() return true end
+			mockCanTakeOrders(true)
 			service.Client:CreateOrder(player, 10001, {})
 			expect(#service._orders).to.equal(0)
 		end)
 
 		it("should reject orders exceeding the 4-item maximum", function()
-			RankUtil.CanUseOrderingSystem = function() return true end
+			mockCanTakeOrders(true)
 			service.Client:CreateOrder(player, 10001, {
 				makeItem(), makeItem(), makeItem(), makeItem(), makeItem(), -- 5 items
 			})
@@ -604,13 +617,13 @@ return function()
 		end)
 
 		it("should accept a valid 1-item order", function()
-			RankUtil.CanUseOrderingSystem = function() return true end
+			mockCanTakeOrders(true)
 			service.Client:CreateOrder(player, 10001, { makeItem() })
 			expect(#service._orders).to.equal(1)
 		end)
 
 		it("should accept a valid 4-item order", function()
-			RankUtil.CanUseOrderingSystem = function() return true end
+			mockCanTakeOrders(true)
 			service.Client:CreateOrder(player, 10001, {
 				makeItem(), makeItem(), makeItem(), makeItem(),
 			})
@@ -619,20 +632,20 @@ return function()
 		end)
 
 		it("should apply a per-player debounce on the second call", function()
-			RankUtil.CanUseOrderingSystem = function() return true end
+			mockCanTakeOrders(true)
 			service.Client:CreateOrder(player, 10001, { makeItem() })
 			service.Client:CreateOrder(player, 10002, { makeItem() }) -- debounced
 			expect(#service._orders).to.equal(1)
 		end)
 
 		it("should set a debounce entry for the ordering player", function()
-			RankUtil.CanUseOrderingSystem = function() return true end
+			mockCanTakeOrders(true)
 			service.Client:CreateOrder(player, 10001, { makeItem() })
 			expect(service._orderDebounces[player.UserId]).to.equal(true)
 		end)
 
 		it("should allow a different player to order while first is debounced", function()
-			RankUtil.CanUseOrderingSystem = function() return true end
+			mockCanTakeOrders(true)
 			local other = makePlayer(999)
 			service.Client:CreateOrder(player, 10001, { makeItem() })
 			service.Client:CreateOrder(other, 10002, { makeItem() })
@@ -640,7 +653,7 @@ return function()
 		end)
 
 		it("should store the customer UserId from the argument", function()
-			RankUtil.CanUseOrderingSystem = function() return true end
+			mockCanTakeOrders(true)
 			service.Client:CreateOrder(player, 77777, { makeItem() })
 			expect(service._orders[1].customer).to.equal(77777)
 		end)

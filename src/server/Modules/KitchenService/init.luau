@@ -18,7 +18,6 @@ local PromptBuilder = require(script.PromptBuilder)
 local Recipes = require(ReplicatedStorage.Shared.Kitchen.Recipes)
 local KitchenConfig = require(ReplicatedStorage.Shared.Configuration.KitchenConfig)
 local KitchenTypes = require(ReplicatedStorage.Shared.Kitchen.KitchenTypes)
-local RankUtil = require(ReplicatedStorage.Shared.Utility.RankUtil)
 
 ---> Types
 
@@ -30,6 +29,9 @@ local KitchenService = Knit.CreateService({
     Name = "KitchenService",
     Client = {
         InteractionFailed = Knit.CreateSignal(),
+        -- Fired by the Animate action so the client can tween a part of the station
+        -- model (e.g. fading a blender lid) while the animation plays.
+        StationEffect = Knit.CreateSignal(),
     },
     _runner = nil :: any,
     _registry = nil :: any,
@@ -95,7 +97,15 @@ function KitchenService:KnitStart()
                 model,
                 { Label = itemName, ActionText = "Interact", HoldDuration = recipeData.HoldDuration },
                 function(player: Player)
-                    if not RankUtil:CanEnterKitchen(player) then
+                    -- Barista gate. Permission is "the active role permits it, OR rank
+                    -- grants it", and OnboardingService is the only place that decides —
+                    -- an ungrouped Worker who has trained must get in, and a rank-8 staff
+                    -- member must never be locked out.
+                    if not Knit.GetService("OnboardingService"):CanUseKitchen(player) then
+                        self.Client.InteractionFailed:Fire(
+                            player,
+                            Knit.GetService("OnboardingService"):GetDenialReason(player, "UseKitchen")
+                        )
                         return
                     end
 

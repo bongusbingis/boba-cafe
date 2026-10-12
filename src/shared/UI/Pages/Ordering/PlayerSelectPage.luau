@@ -19,7 +19,9 @@ return function(props)
 		}),
 	}
 
-	if #props.NearbyPlayers == 0 then
+	-- Entries are players or NPC customers: a player has a UserId (so the card fetches
+	-- their headshot), an NPC brings its own AvatarImage instead.
+	if #props.NearbyCustomers == 0 then
 		playerChildren.Empty = c(Pane, {
 			ClassName = "TextLabel",
 			Native = {
@@ -28,19 +30,20 @@ return function(props)
 				FontFace = Styles.FONT_FREDOKA,
 				Position = UDim2.fromScale(0.5, 0.4),
 				Size = UDim2.fromScale(0.8, 0.15),
-				Text = "No players nearby",
+				Text = "No customers nearby",
 				TextColor3 = Styles.GRAY,
 				TextScaled = true,
 			},
 		})
 	else
-		for i, player in ipairs(props.NearbyPlayers) do
-			playerChildren["Player_" .. i] = c(PlayerCard, {
-				PlayerName = player.Name,
-				UserId = player.UserId,
+		for i, customer in ipairs(props.NearbyCustomers) do
+			playerChildren["Customer_" .. i] = c(PlayerCard, {
+				PlayerName = customer.Name,
+				UserId = customer.UserId,
+				AvatarImage = customer.AvatarImage,
 				LayoutOrder = i,
 				OnClick = function()
-					props.OnPlayerSelected(player)
+					props.OnCustomerSelected(customer)
 				end,
 			})
 		end

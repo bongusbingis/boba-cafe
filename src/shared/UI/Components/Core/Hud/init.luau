@@ -13,6 +13,7 @@ local BottomLeft = require(script.BottomLeft)
 local BottomRight = require(script.BottomRight)
 local OrderTicket = require(script.OrderTicket)
 local OrderQueue = require(script.OrderQueue)
+local ObjectiveCard = require(script.ObjectiveCard)
 ---> private
 local c = React.createElement
 
@@ -45,5 +46,6 @@ return function(props: {
 
         OrderTicket = c(OrderTicket, {}),
         OrderQueue = c(OrderQueue, {}),
+        ObjectiveCard = c(ObjectiveCard, {}),
     })
 end

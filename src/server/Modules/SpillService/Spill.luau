@@ -17,7 +17,6 @@ local Zone = require(Packages.Zone)
 local Janitor = require(Packages.Janitor)
 local ReplicaService = require(Packages.ReplicaService)
 
-local RankUtil = require(Utility.RankUtil)
 local Animator = require(Utility.Animator)
 local ItemFader = require(Utility.ItemFader)
 
@@ -154,15 +153,26 @@ end
 function Spill:_ListenToCleanPrompt()
 	return self.Prompt.Triggered:Connect(function(Player)
 		if Player:GetAttribute("CleaningSpill") or Player:GetAttribute("Restocking") or self.Cleaning then
-			Knit.Services.PromptService:CreatePrompt(Player, "SmallNotification", {
+			-- V3 routed this through PromptService, which is not ported; DialogService
+			-- :Notify is the equivalent (it drives the SmallNotification toast).
+			Knit.GetService("DialogService"):Notify(Player, {
 				Title = "Notification",
-				Text = "You cant do that right now.",
+				Description = "You can't do that right now.",
+				Image = "",
 			})
 			return
 		end
 
-		local IsBarista = RankUtil:CanEnterKitchen(Player)
-		if not IsBarista then
+		-- Cleaning up is basic staff work, so it follows the Worker gate rather than the
+		-- Barista one — otherwise the entry-level role would have exactly one thing it is
+		-- allowed to do. Ranked staff still pass via the bypass inside OnboardingService.
+		local OnboardingService = Knit.GetService("OnboardingService")
+		if not OnboardingService:CanTakeOrders(Player) then
+			Knit.GetService("DialogService"):Notify(Player, {
+				Title = "Notification",
+				Description = OnboardingService:GetDenialReason(Player, "TakeOrders"),
+				Image = "",
+			})
 			return
 		end
 
@@ -183,7 +193,10 @@ function Spill:_ListenToCleanPrompt()
 		local RightTool, LeftTool = self:_GetCleaningTools()
 		local AnimationTrack = self:_GetAnimation(Player)
 
-		self.Janitor:Add(AnimationTrack, "destroy")
+		-- "Destroy", not "destroy": the Animator proxy forwards the lookup to the real
+		-- AnimationTrack, and indexing a member an Instance does not have throws inside
+		-- Janitor:Add — which would abort the clean midway.
+		self.Janitor:Add(AnimationTrack, "Destroy")
 		self.Janitor:Add(RightTool)
 		self.Janitor:Add(LeftTool)
 

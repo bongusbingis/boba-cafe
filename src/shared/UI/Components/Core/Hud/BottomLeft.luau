@@ -20,11 +20,13 @@ local UI = Shared:WaitForChild("UI")
 local Knit = require(Packages.Knit)
 local React = require(Packages.React)
 local RankUtil = require(Shared.Utility.RankUtil)
+local HudLayout = require(script.Parent.HudLayout)
 
 ---> constants
 local SKIP_HATCH_PRODUCT_ID = 1143554452
 local HATCH_DURATION_SECONDS = 15 * 60
-local BUTTON_SIZE = UDim2.fromScale(1, 1)
+-- Shared with BottomRight so both columns stay mirrored; see HudLayout.
+local BUTTON_SIZE = HudLayout.ROW_BUTTON_SIZE
 
 ---> styles
 local Styles = require(UI.Styles)
@@ -37,6 +39,7 @@ local SmallNotification = require(script.Parent.SmallNotification)
 ---> private
 local c = React.createElement
 local atJoin = os.time()
+local usePx = require(UI.Hooks.usePx)
 local nextOrder = require(UI.Utility.nextOrderFunctionFactory)()
 
 local function extractTimeLeft(s: string)
@@ -74,6 +77,8 @@ return function(props: {
 
 	local isStaff = rank > 3
 	local isAdmin = rank > 10
+
+	local px = usePx()
 
 	React.useEffect(function()
 		if not capsuleHatching or capsuleHatching == false then
@@ -188,18 +193,22 @@ return function(props: {
 	-- LayoutOrder -6 notification sits above the horizontal button row
 	return c(Pane, {
 		ClassName = "Frame",
+		-- Kept: the column also grows to fit a notification card springing in above the
+		-- buttons, so its height must stay content-driven.
 		AutomaticSize = Enum.AutomaticSize.Y,
 		Native = {
 			AnchorPoint = Vector2.new(0, 1),
-			Position = UDim2.new(0, 10, 0.985, 0),
-			Size = UDim2.fromScale(0.3, 0),
+			-- Positive inset: a negative offset pushed the column off the left edge, which
+			-- is most visible on phones where the safe area is already tight.
+			Position = UDim2.new(0, px(HudLayout.EDGE_INSET), HudLayout.BOTTOM_ANCHOR, 0),
+			Size = UDim2.fromScale(HudLayout.COLUMN_WIDTH, 0),
 			BackgroundTransparency = 1,
 		},
 		ListLayout = {
 			FillDirection = Enum.FillDirection.Vertical,
 			HorizontalAlignment = Enum.HorizontalAlignment.Left,
 			VerticalAlignment = Enum.VerticalAlignment.Bottom,
-			Padding = UDim.new(0, 4),
+			Padding = UDim.new(0, px(7)),
 			SortOrder = Enum.SortOrder.LayoutOrder,
 		},
 	}, {
@@ -220,7 +229,9 @@ return function(props: {
 			ClassName = "Frame",
 			Native = {
 				BackgroundTransparency = 1,
-				Size = UDim2.new(1, 0, 0, 60),
+				-- Was a raw 60: it did not scale, so the row stayed desktop-sized on
+				-- phones while everything around it shrank.
+				Size = UDim2.new(1, 0, 0, px(HudLayout.ROW_HEIGHT)),
 				LayoutOrder = 1,
 			},
 			ListLayout = {

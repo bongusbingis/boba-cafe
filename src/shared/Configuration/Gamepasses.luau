@@ -57,6 +57,11 @@ local Gamepasses: { [number]: GamepassDefinition } = {
 		Description = "Remove your uniform and wear your own style in the cafe!",
 		Icon = "rbxassetid://16728123822",
 	},
+	[40973940] = {
+		Name = "Mop Whack",
+		Description = "Whack players with a mop to make them drop!",
+		Icon = "rbxassetid://97099155350193",
+	},
 	[219651161] = {
 		Name = "Water Pack",
 		Description = "Buckle up and unleash the thrill as you conquer the waves!",

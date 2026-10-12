@@ -92,28 +92,33 @@ return function(props: {
 		BackgroundTransparency = 1,
 	}))
 
-	local yOffset = #buttonElements / 2 * (BUTTON_HEIGHT + 8) + 20
-
+	-- No fixed AspectRatio: the prompt has to grow and shrink with the number of action
+	-- buttons, and a fixed ratio forced a tall box with dead space under short content.
+	-- Height comes from the children instead; only the width is driven by the viewport.
 	local promptElement = c(Pane, {
 		ClassName = "Frame",
-		AspectRatio = 0.937,
 		Native = {
 			AnchorPoint = Vector2.new(0.5, 0.5),
+			AutomaticSize = Enum.AutomaticSize.Y,
 			BackgroundTransparency = 1,
-			Position = UDim2.fromScale(0.5 + (props.OffsetX or 0), 0.5 - yOffset / 1000),
-			Size = UDim2.fromScale(0.65, 0.65),
+			Position = UDim2.fromScale(0.5 + (props.OffsetX or 0), 0.5),
+			Size = UDim2.fromScale(0.28, 0),
 		},
 	}, {
+		-- Scaled bounds: raw pixel min/max made the prompt tiny on large displays and
+		-- oversized on small ones.
 		UISizeConstraint = c("UISizeConstraint", {
-			MaxSize = Vector2.new(380, math.huge),
-			MinSize = Vector2.new(200, 180),
+			MaxSize = Vector2.new(px(400), math.huge),
+			MinSize = Vector2.new(px(230), 0),
 		}),
 
+		-- Fixed banner height: a 0.15 scale of a now auto-sized parent resolved against a
+		-- height that depends on this element, which is circular.
 		Title = c(Banner, {
 			Text = props.Title or "Notification",
 			Color = Styles.GREEN,
-			Position = UDim2.fromScale(0.5, 0.2),
-			Size = UDim2.fromScale(1.21645, 0.15),
+			Position = UDim2.fromScale(0.5, 0),
+			Size = UDim2.new(1.21645, 0, 0, px(46)),
 		}),
 
 		Base = c(Pane, {
@@ -127,23 +132,33 @@ return function(props: {
 				AnchorPoint = Vector2.new(0.5, 0),
 				BackgroundTransparency = 0,
 				BackgroundColor3 = Styles.OFFWHITE,
-				Position = UDim2.fromScale(0.5, 0.1),
-				Size = UDim2.fromScale(1, 0.5),
+				Position = UDim2.fromOffset(0, 0),
+				-- Zero base height: AutomaticSize supplies it. A 0.5 scale added half
+				-- the parent's height on top of the content, which was the dead space.
+				Size = UDim2.fromScale(1, 0),
 				AutomaticSize = Enum.AutomaticSize.Y,
 			},
 		}, {
+			-- Clears the banner, which overhangs the top of the base.
+			UIPadding = c("UIPadding", {
+				PaddingBottom = UDim.new(0, px(12)),
+				PaddingTop = UDim.new(0, px(34)),
+			}),
+
 			Container = c(Pane, {
 				ClassName = "Frame",
 				ListLayout = {
 					FillDirection = Enum.FillDirection.Vertical,
 					HorizontalAlignment = Enum.HorizontalAlignment.Center,
 					VerticalAlignment = Enum.VerticalAlignment.Top,
-					Padding = UDim.new(0.1, 0),
+					-- Fixed gap, not 10% of the container: a scale padding grew with the
+					-- box and opened a large hole between the first and second buttons.
+					Padding = UDim.new(0, px(8)),
 				},
 				Native = {
 					AnchorPoint = Vector2.new(0.5, 0),
 					BackgroundTransparency = 1,
-					Position = UDim2.fromScale(0.5, 0.3),
+					Position = UDim2.fromScale(0.5, 0),
 					Size = UDim2.fromScale(0.88, 0),
 					AutomaticSize = Enum.AutomaticSize.Y,
 				},
@@ -172,13 +187,16 @@ return function(props: {
 						FillDirection = Enum.FillDirection.Vertical,
 						HorizontalAlignment = Enum.HorizontalAlignment.Center,
 						VerticalAlignment = Enum.VerticalAlignment.Top,
-						--VerticalFlex = Enum.UIFlexAlignment.SpaceEvenly,
-						Padding = UDim.new(0.2, 0),
+						-- Fixed gap. This was 20% of the stack's own height, so every
+						-- extra button widened the gaps as well — the large hole between
+						-- the first and second buttons.
+						Padding = UDim.new(0, px(10)),
 					},
 					Native = {
 						AnchorPoint = Vector2.new(0.5, 0),
 						BackgroundTransparency = 1,
-						Position = UDim2.fromScale(0.5, 0.46),
+						-- Position is managed by the parent's list layout.
+						Position = UDim2.fromScale(0.5, 0),
 						Size = UDim2.fromScale(0.9, 0),
 						AutomaticSize = Enum.AutomaticSize.Y,
 					},

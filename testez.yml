@@ -1,0 +1,27 @@
+# TestEZ globals, injected into spec files by the test runner rather than required.
+# Combined with the Roblox std via `std = "roblox+testez"` in selene.toml.
+---
+globals:
+  describe:
+    args:
+      - type: string
+      - type: function
+  it:
+    args:
+      - type: string
+      - type: function
+  beforeEach:
+    args:
+      - type: function
+  afterEach:
+    args:
+      - type: function
+  beforeAll:
+    args:
+      - type: function
+  afterAll:
+    args:
+      - type: function
+  expect:
+    args:
+      - type: any

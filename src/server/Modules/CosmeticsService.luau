@@ -9,6 +9,12 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Knit = require(Packages.Knit)
 local InventoryServer = require(Shared.Inventory.InventoryServer)
 local InventoryItemDefinitions = require(Shared.Configuration.InventoryItemDefinitions)
+local GamepassUtil = require(Shared.Utility.GamepassUtil)
+
+---> constants
+
+-- "Nametag Customizer" pass. Recolouring is gated on owning it.
+local NAMETAG_CUSTOMIZER_PASS_ID = 29083693
 
 ---> types
 export type PlayerCosmetics = {
@@ -83,9 +89,22 @@ local function getEquippedItem(proxy, itemType: string, all: boolean?)
 	return nil
 end
 
-local function broadcast(player: Player, nickname: string, nametag: string?)
-	cosmeticsCache[player.UserId] = { Nickname = nickname, Nametag = nametag }
-	CosmeticsService.Client.CosmeticsChanged:FireAll(player.UserId, nickname, nametag)
+--- Stored channels -> Color3, or nil when the player has no custom tint.
+local function toColor3(stored): Color3?
+	if typeof(stored) ~= "table" then
+		return nil
+	end
+	return Color3.fromRGB(stored.R or 255, stored.G or 255, stored.B or 255)
+end
+
+local function broadcast(player: Player, nickname: string, nametag: string?, nametagColor: Color3?)
+	-- Preserve the cached colour when a caller does not supply one, so unrelated
+	-- broadcasts (nickname changes, respawns) do not clear a player's custom tint.
+	local cached = cosmeticsCache[player.UserId]
+	local color = nametagColor or (cached and cached.NametagColor)
+
+	cosmeticsCache[player.UserId] = { Nickname = nickname, Nametag = nametag, NametagColor = color }
+	CosmeticsService.Client.CosmeticsChanged:FireAll(player.UserId, nickname, nametag, color)
 end
 
 local function applyParticles(character: Model?, particlesToApply: { string }?)
@@ -124,7 +143,7 @@ local COSMETIC_CHANGE_HANDLERS: { [string]: (player: Player, proxy: any) -> () }
 }
 
 function CosmeticsService:SetupPlayerCosmetics(player: Player, proxy)
-	broadcast(player, proxy.Nickname or "", getEquippedItem(proxy, "Nametags"))
+	broadcast(player, proxy.Nickname or "", getEquippedItem(proxy, "Nametags"), toColor3(proxy.NametagColor))
 	applyParticles(player.Character, getEquippedItem(proxy, "Particles", true))
 
 	characterConnections[player.UserId] = player.CharacterAdded:Connect(function(character)
@@ -149,6 +168,52 @@ end
 function CosmeticsService:NotifyNicknameChanged(player: Player, nickname: string)
 	local cached = cosmeticsCache[player.UserId]
 	broadcast(player, nickname, cached and cached.Nametag)
+end
+
+--[=[
+	Sets the player's custom nametag tint. Requires the Nametag Customizer pass and a
+	non-animated nametag equipped — animated tags drive their own colours, so a static
+	tint would fight the animation (V4 applied the same rule).
+
+	Pass nil to clear. Returns (success, message).
+]=]
+function CosmeticsService.Client:SetNametagColor(player: Player, color: Color3?): (boolean, string)
+	if color ~= nil and typeof(color) ~= "Color3" then
+		return false, "Invalid colour."
+	end
+
+	if not GamepassUtil:PlayerOwnsPassAsync(player, NAMETAG_CUSTOMIZER_PASS_ID) then
+		return false, "You don't own the Nametag Customizer pass."
+	end
+
+	local ok, proxy = Knit.GetService("DataService"):GetDataAsync(player):await()
+	if not ok or not proxy then
+		return false, "Your data could not be loaded."
+	end
+
+	local equipped = getEquippedItem(proxy, "Nametags")
+	if not equipped then
+		return false, "Equip a nametag first."
+	end
+
+	local definition = InventoryItemDefinitions.Nametags[equipped]
+	if definition and definition.Animation then
+		return false, "Animated nametags can't be recoloured."
+	end
+
+	if color == nil then
+		proxy:SetValue({ "NametagColor" }, false)
+	else
+		proxy:SetValue({ "NametagColor" }, {
+			R = math.round(color.R * 255),
+			G = math.round(color.G * 255),
+			B = math.round(color.B * 255),
+		})
+	end
+
+	broadcast(player, proxy.Nickname or "", equipped, color)
+
+	return true, if color then "Nametag colour updated!" else "Nametag colour reset."
 end
 
 function CosmeticsService.Client:GetAllPlayerCosmeticsAsync(): { [number]: PlayerCosmetics }

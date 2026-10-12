@@ -8,7 +8,6 @@
 
 --!nonstrict
 
-local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Packages = ReplicatedStorage:WaitForChild("Packages")
@@ -17,7 +16,7 @@ local UI = Shared:WaitForChild("UI")
 
 ---> dependencies
 local React = require(Packages.React)
-local RankUtil = require(Shared.Utility.RankUtil)
+local Knit = require(Packages.Knit)
 
 ---> styles
 local Styles = require(UI.Styles)
@@ -45,20 +44,49 @@ return function(props: {
 
 	---> init register prompts
 
+	-- The registers are where a Worker takes orders, so their prompts follow the role
+	-- rather than group rank: gating them on rank meant an ungrouped Worker could never
+	-- see the one thing their role exists to do.
+	--
+	-- The prompts are built once and toggled, because the role can change mid-session
+	-- (finishing onboarding, or the state arriving after this mounts). The server still
+	-- enforces the permission on CreateOrder; this only decides what is offered.
 	if RunService:IsRunning() then
 		React.useEffect(function()
-			if RankUtil:CanUseOrderingSystem(Players.LocalPlayer) then
-				for _, computer: MeshPart in OrderingSystem.Computers:GetChildren() do
-					local prompt = Instance.new("ProximityPrompt")
-					prompt.HoldDuration = 0
-					prompt.UIOffset = Vector2.new(0, 25)
-					prompt.ObjectText = "Register"
-					prompt.ActionText = "Use Ordering System"
-					prompt.RequiresLineOfSight = false
-					prompt.Parent = computer
-					prompt.Triggered:Connect(function()
-						props.SetCurrentPage(Pages.Ordering)
-					end)
+			local prompts: { ProximityPrompt } = {}
+
+			for _, computer: MeshPart in OrderingSystem.Computers:GetChildren() do
+				local prompt = Instance.new("ProximityPrompt")
+				prompt.HoldDuration = 0
+				prompt.UIOffset = Vector2.new(0, 25)
+				prompt.ObjectText = "Register"
+				prompt.ActionText = "Use Ordering System"
+				prompt.RequiresLineOfSight = false
+				prompt.Enabled = false
+				prompt.Parent = computer
+				prompt.Triggered:Connect(function()
+					props.SetCurrentPage(Pages.Ordering)
+				end)
+
+				table.insert(prompts, prompt)
+			end
+
+			local controller = Knit.GetController("OnboardingController")
+
+			local function apply(state)
+				local allowed = state ~= nil and (state.ActiveRole == "Worker" or state.HasRankBypass == true)
+				for _, prompt in prompts do
+					prompt.Enabled = allowed
+				end
+			end
+
+			apply(controller.State)
+			local conn = controller.StateChanged:Connect(apply)
+
+			return function()
+				conn:Disconnect()
+				for _, prompt in prompts do
+					prompt:Destroy()
 				end
 			end
 		end, {})

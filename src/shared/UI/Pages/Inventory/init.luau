@@ -1,6 +1,4 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local PolicyService = game:GetService("PolicyService")
-local Players = game:GetService("Players")
 local Packages = ReplicatedStorage:WaitForChild("Packages")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local UI = Shared:WaitForChild("UI")
@@ -16,10 +14,9 @@ local OpenableMenu = require(UI.Components.Core.OpenableMenu)
 
 local c = React.createElement
 
--- local success, playerPolicyInfo: { ArePaidRandomItemsRestricted: boolean } =
--- 	pcall(PolicyService.GetPolicyInfoForPlayerAsync, PolicyService, Players.LocalPlayer)
-
-local paidRandomItemsRestricted = false --success and playerPolicyInfo.ArePaidRandomItemsRestricted or false
+-- No policy gate here: this page only displays capsules the player already owns, which
+-- is not an offer of a paid random item. The gate lives in the Shop page, which is where
+-- capsules are actually sold (see UI.Hooks.usePolicy).
 
 local PAGES: { OpenableMenu.Page } = {
 	{

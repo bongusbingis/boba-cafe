@@ -35,6 +35,15 @@ local DEFAULT_BAR_COLOR = Color3.fromRGB(224, 94, 88)
 local MAX_ORDER_ITEMS = 3
 local CAN_SELF_ORDER = true
 
+--- How far from the register a customer can stand and still be served.
+local CUSTOMER_RANGE = 15
+
+--- Workspace folder CustomerService parents live NPC customers into.
+local NPC_FOLDER_NAME = "Customers"
+
+--- Stand-in portrait for NPC customers, which have no avatar to fetch.
+local NPC_AVATAR_IMAGE = "rbxasset://textures/ui/GuiImagePlaceholder.png"
+
 ---> private
 local c = React.createElement
 
@@ -104,8 +113,10 @@ return function(props: {
 		"rbxasset://textures/ui/GuiImagePlaceholder.png"
 	)
 
-	---> nearby players (populated when entering PlayerSelect)
-	local nearbyPlayers, setNearbyPlayers = React.useState({} :: { Player })
+	---> nearby customers, players and NPCs alike (populated when entering PlayerSelect)
+	--- Each entry is { Name, UserId?, CustomerId?, AvatarImage? }: NPC customers have a
+	--- CustomerId instead of a UserId, and OrderService works out which it was given.
+	local nearbyCustomers, setNearbyCustomers = React.useState({} :: { any })
 
 	---> load local player info once on mount
 	React.useEffect(function()
@@ -130,7 +141,7 @@ return function(props: {
 		end)
 	end, {})
 
-	---> refresh nearby players when entering PlayerSelect
+	---> refresh nearby customers when entering PlayerSelect
 	React.useEffect(function()
 		if page ~= "PlayerSelect" then return end
 
@@ -138,18 +149,42 @@ return function(props: {
 		local localChar = localPlayer.Character
 		local localRoot = localChar and localChar:FindFirstChild("HumanoidRootPart")
 
+		local function isNearby(root: BasePart): boolean
+			return not localRoot or (localRoot.Position - root.Position).Magnitude < CUSTOMER_RANGE
+		end
+
 		local nearby = {}
+
 		for _, p in Players:GetPlayers() do
 			if p == localPlayer and not CAN_SELF_ORDER then continue end
 			local char = p.Character
 			if not char then continue end
 			local root = char:FindFirstChild("HumanoidRootPart")
 			if not root then continue end
-			if not localRoot or (localRoot.Position - root.Position).Magnitude < 15 then
-				table.insert(nearby, p)
+			if isNearby(root) then
+				table.insert(nearby, { Name = p.Name, UserId = p.UserId })
 			end
 		end
-		setNearbyPlayers(nearby)
+
+		-- NPC customers waiting at a register. Without these a Worker depends on another
+		-- player happening to be standing there, which is exactly the dependency the age
+		-- based chat gating makes unreliable.
+		local liveCustomers = workspace:FindFirstChild(NPC_FOLDER_NAME)
+		if liveCustomers then
+			for _, npc in liveCustomers:GetChildren() do
+				if npc:GetAttribute("AwaitingOrder") ~= true then continue end
+				local root = npc:FindFirstChild("HumanoidRootPart")
+				if not root or not isNearby(root) then continue end
+
+				table.insert(nearby, {
+					Name = npc:GetAttribute("CustomerName") or "Customer",
+					CustomerId = npc:GetAttribute("CustomerId"),
+					AvatarImage = NPC_AVATAR_IMAGE,
+				})
+			end
+		end
+
+		setNearbyCustomers(nearby)
 	end, { page } :: { any })
 
 	---> computed TopBar props based on current page
@@ -279,9 +314,11 @@ return function(props: {
 		setOrderItems(newOrder)
 	end
 
-	local function onPlayerSelected(player: Player)
+	local function onCustomerSelected(customer)
 		if RunService:IsRunning() then
-			Knit.GetService("OrderService"):CreateOrder(player.UserId, orderItems)
+			-- One id field either way; the server decides whether it names a player or an
+			-- NPC by asking CustomerService, rather than trusting the client.
+			Knit.GetService("OrderService"):CreateOrder(customer.UserId or customer.CustomerId, orderItems)
 		end
 		setOrderItems({})
 		setSelCategory(nil)
@@ -330,8 +367,8 @@ return function(props: {
 		})
 		elseif page == "PlayerSelect"
 		then c(PlayerSelectPage, {
-			NearbyPlayers = nearbyPlayers,
-			OnPlayerSelected = onPlayerSelected,
+			NearbyCustomers = nearbyCustomers,
+			OnCustomerSelected = onCustomerSelected,
 		})
 		else nil
 

@@ -61,8 +61,10 @@ local config: { Category } = {
 	{
 		Category = "Game Passes",
 		Settings = {
-			--{ Key = "HeadlessHead",    Label = "Headless Head",      Default = false, GamepassId = 6202153 },
-			--{ Key = "FasterWalkSpeed", Label = "Faster Walk Speed",  Default = false, GamepassId = 12385742 },
+			{ Key = "FasterWalkSpeed", Label = "Faster Walk Speed",  Default = false, GamepassId = 12385742 },
+			-- Headless Head is intentionally absent: there is no Headless Head entry in
+			-- Gamepasses.luau, and the id this was previously commented out with
+			-- (6202153) is actually the Barista pass.
             makeClaimRankSetting(8, 6202153), ---> Barista
             makeClaimRankSetting(10, 15243046), ---> Kitchen Leader
         },
@@ -76,6 +78,13 @@ local config: { Category } = {
             { Key = "SFXEnabled", Label = "SFX", Default = true, ClientCallback = function(isEnabled)
 				SoundService.SFX.Volume = isEnabled and 0.5 or 0
 			end},
+		},
+	},
+	{
+		Category = "Gameplay",
+		Settings = {
+			-- Opting out makes the player immune to Mop Whack knockdowns.
+			{ Key = "Ragdollable", Label = "Allow Being Knocked Over", Default = true },
 		},
 	},
 	{

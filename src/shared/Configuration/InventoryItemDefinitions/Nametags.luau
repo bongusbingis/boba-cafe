@@ -258,6 +258,24 @@ return setmetatable({
 			},
 		},
 	},
+
+	---> pass-granted
+	-- Granted by owning the VIP game pass, never bought or rolled from a capsule.
+	-- CanBeSold = false keeps it out of the shop and out of capsule reward pools.
+	["VIP"] = {
+		Tier = "Special",
+		Color = Color3.fromRGB(255, 215, 37),
+		Price = " 0",
+		CanBeSold = false,
+		OffSale = true,
+		Animation = {
+			Frames = {
+				{ Color = Color3.fromRGB(255, 215, 37), Hold = 0, Transition = 0.5 },
+				{ Color = Color3.fromRGB(255, 255, 190), Hold = 0, Transition = 0.5 },
+				{ Color = Color3.fromRGB(230, 170, 20), Hold = 0, Transition = 0.5 },
+			},
+		},
+	},
 }, {
     __index = {
         Capsules = {

@@ -36,13 +36,15 @@ function SpillController:_Trip()
 	Sounds.SFX.Trip_02:Play()
 
 	task.delay(0.25, function()
-		Knit.Controllers.SetCoreAndControls:SetPlayerControlsEnabled(false)
+		Knit.Controllers.SetCoreAndControls:SetPlayerControlsEnabled(false, "Trip")
 		Sounds.SFX.Trip_01:Play()
 	end)
 	self.Animation:Play()
 	self.Animation:AdjustSpeed(1.5)
 	self.Animation.Stopped:Wait()
-	Knit.Controllers.SetCoreAndControls:SetPlayerControlsEnabled(true)
+	-- Named reason: releasing the trip hold must not re-enable movement if the player
+	-- is also mid-clean.
+	Knit.Controllers.SetCoreAndControls:SetPlayerControlsEnabled(true, "Trip")
 	task.wait(1)
 
 	self.Tripped = false
@@ -181,7 +183,10 @@ function SpillController:KnitStart()
 	end)
 
 	LocalPlayer:GetAttributeChangedSignal("CleaningSpill"):Connect(function()
-		Knit.Controllers.SetCoreAndControls:SetPlayerControlsEnabled(not LocalPlayer:GetAttribute("CleaningSpill"))
+		Knit.Controllers.SetCoreAndControls:SetPlayerControlsEnabled(
+			not LocalPlayer:GetAttribute("CleaningSpill"),
+			"Cleaning"
+		)
 	end)
 end
 

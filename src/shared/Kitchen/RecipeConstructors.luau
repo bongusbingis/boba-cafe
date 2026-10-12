@@ -9,10 +9,22 @@ local SelectorModels = ReplicatedStorage:FindFirstChild("SelectorModels")
 
 local Tools = SharedStorage.Tools.Kitchen
 local Animations = SharedStorage.Animations.Kitchen
+local AllAnimations = SharedStorage.Animations
+local TemporaryItems = AllAnimations.TemporaryItems
 
 ---> Module
 
 local RecipeConstructors = {}
+
+-- Scooping powder out of a tub, spoon in the left hand. Shared by the tea and hot
+-- chocolate stations, which used identical timing in the original game.
+local SCOOP_ANIMATION = {
+	Animation = AllAnimations.ScoopAnimation_01,
+	HoldInLeftHand = TemporaryItems.Spoon_01,
+	DoActionAfter = 1.5,
+}
+
+RecipeConstructors.SCOOP_ANIMATION = SCOOP_ANIMATION
 
 local coffeeNames = {}
 
@@ -30,6 +42,7 @@ function RecipeConstructors.makeTeaVariant(name: string, color: Color3): { { any
 		Sound = "Powder",
 		Actions = {
 			{ "ToolNameValidityCheck", { "#Water" } },
+			{ "Animate", SCOOP_ANIMATION },
 			{ "SetToolHoldingProperty", "Liquid", "Color", color },
 			{ "SetToolHoldingProperty", "Liquid", "Transparency", 0 },
 			{ "RenameToolHolding", name },
@@ -42,6 +55,7 @@ function RecipeConstructors.makeHotChocolateVariant(flavor: string, color: Color
 		Sound = "Powder",
 		Actions = {
 			{ "ToolNameValidityCheck", { "=Mug + Steamed Milk" } },
+			{ "Animate", SCOOP_ANIMATION },
 			{ "SetToolHoldingProperty", "Liquid", "Color", color },
 			{ "SetToolHoldingProperty", "Liquid", "Transparency", 0 },
 			{ "RenameToolHolding", flavor .. " Hot Chocolate" },
@@ -136,6 +150,54 @@ function RecipeConstructors.makeGrabSelector(title: string, text: string, tools:
 	return {
 		HoldDuration = 1,
 		Actions = {
+			{
+				"SelectFrom",
+				{
+					Title = title,
+					Text = text,
+					Buttons = buttons,
+					DialogType = "PromptSelection",
+					Items = items,
+				},
+				selectionActions,
+			},
+		},
+	}
+end
+
+-- Fruits Freezer: pick a fruit to drop into a clear cup. The tool keeps its size prefix
+-- and gains a literal "[Fruit]" marker; the real fruit name is stored on the tool by
+-- AddFruit so the Blender can resolve which smoothie to make.
+function RecipeConstructors.makeFruitSelector(title: string, text: string, fruitNames: { string })
+	local fruitCups = SelectorModels and SelectorModels:FindFirstChild("Fruits Cups")
+
+	local buttons = {}
+	local items = {}
+	local selectionActions = {}
+
+	for _, fruitName in fruitNames do
+		table.insert(buttons, { Text = fruitName })
+		table.insert(items, {
+			Name = fruitName,
+			ModelName = fruitName,
+			Model = fruitCups and fruitCups:FindFirstChild(fruitName),
+		})
+		selectionActions[fruitName] = {
+			{ "AnimateRaw", Animations.GrabAnimation_01, true },
+			{ "AddFruit", fruitName },
+			{
+				"RenameToolHolding",
+				function(old: string)
+					return old .. " + [Fruit]"
+				end,
+			},
+		}
+	end
+
+	return {
+		HoldDuration = 1,
+		Actions = {
+			{ "ToolNameValidityCheck", { "#Clear Cup", "!%[Fruit%]" } },
 			{
 				"SelectFrom",
 				{

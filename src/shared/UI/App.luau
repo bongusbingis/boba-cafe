@@ -11,6 +11,7 @@ local React = require(Packages.React)
 local Page = require(UI.Components.Core.Page)
 local Hud = require(UI.Components.Core.Hud)
 local Pane = require(UI.Components.Pane)
+local RoleSelect = require(UI.Pages.RoleSelect)
 
 ---> constants
 local FULL_SCALE = UDim2.fromScale(1, 1)
@@ -78,6 +79,11 @@ local function App()
 			CurrentPage = currentPage,
 			SetCurrentPage = handleSetCurrentPage,
 		}),
+
+		-- Not routed through the page swapper: it has to be able to appear without a HUD
+		-- button being pressed, and it covers everything until a role is chosen. It
+		-- renders nothing once the player has one.
+		RoleSelect = React.createElement(RoleSelect),
 	})
 end
 

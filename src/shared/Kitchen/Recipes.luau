@@ -19,6 +19,9 @@ local Tools = SharedStorage.Tools.Kitchen
 
 ---> Modules
 
+local AllAnimations = SharedStorage.Animations
+local TemporaryItems = AllAnimations.TemporaryItems
+
 local RecipeConstructors = require(script.Parent.RecipeConstructors)
 
 local makeCoffeeVariant = RecipeConstructors.makeCoffeeVariant
@@ -26,6 +29,7 @@ local makeTeaVariant = RecipeConstructors.makeTeaVariant
 local makeHotChocolateVariant = RecipeConstructors.makeHotChocolateVariant
 local makeCupGiver = RecipeConstructors.makeCupGiver
 local makeGrabSelector = RecipeConstructors.makeGrabSelector
+local makeFruitSelector = RecipeConstructors.makeFruitSelector
 
 ---> Recipes
 
@@ -70,6 +74,86 @@ Recipes.Syrups = {
 	--["Earl Grey"] = Color3.fromRGB(255, 89, 0),
 	["Guava"] = Color3.fromRGB(235, 173, 131),
 	["Dragon Fruit"] = Color3.fromRGB(255, 5, 47),
+}
+
+-- Blended liquid colour, keyed by the finished drink name. The key is derived as
+-- `<Fruit> .. " Smoothie"` from the Fruit tag AddFruit leaves on the cup.
+Recipes.Smoothies = {
+	["Apricot Smoothie"] = Color3.fromRGB(230, 156, 12),
+	["Banana Smoothie"] = Color3.fromRGB(235, 183, 119),
+	["Blueberry Smoothie"] = Color3.fromRGB(109, 37, 72),
+	["Cherry Smoothie"] = Color3.fromRGB(185, 7, 12),
+	["Grapefruit Smoothie"] = Color3.fromRGB(229, 89, 72),
+	["Grapes Smoothie"] = Color3.fromRGB(114, 0, 43),
+	["Kiwi Smoothie"] = Color3.fromRGB(170, 173, 55),
+	["Orange Smoothie"] = Color3.fromRGB(232, 155, 18),
+	["Peach Smoothie"] = Color3.fromRGB(237, 112, 6),
+	["Pear Smoothie"] = Color3.fromRGB(203, 160, 89),
+	["Pineapple Smoothie"] = Color3.fromRGB(236, 194, 3),
+	["Strawberry Banana Smoothie"] = Color3.fromRGB(238, 113, 105),
+	["Strawberry Kiwi Smoothie"] = Color3.fromRGB(197, 65, 63),
+	["Strawberry Smoothie"] = Color3.fromRGB(221, 58, 53),
+	["Watermelon Smoothie"] = Color3.fromRGB(234, 39, 80),
+	["Wild Berries Smoothie"] = Color3.fromRGB(194, 75, 80),
+}
+
+-- Garnish slice welded to the cup rim once blended. Values are model names under
+-- ReplicatedStorage.SelectorModels["Fruits Slices"], and are deliberately not 1:1
+-- with the fruit — several smoothies share a slice.
+Recipes.SmoothiesGarnish = {
+	["Apricot Smoothie"] = "Orange",
+	["Banana Smoothie"] = "Banana",
+	["Blueberry Smoothie"] = "Strawberry",
+	["Cherry Smoothie"] = "Kiwi",
+	["Grapefruit Smoothie"] = "Grapefruit",
+	["Grapes Smoothie"] = "Strawberry",
+	["Kiwi Smoothie"] = "Kiwi",
+	["Orange Smoothie"] = "Orange",
+	["Peach Smoothie"] = "Pineapple",
+	["Pear Smoothie"] = "Pineapple",
+	["Pineapple Smoothie"] = "Pineapple",
+	["Strawberry Banana Smoothie"] = "Banana",
+	["Strawberry Kiwi Smoothie"] = "Kiwi",
+	["Strawberry Smoothie"] = "Strawberry",
+	["Watermelon Smoothie"] = "Watermelon",
+	["Wild Berries Smoothie"] = "Strawberry",
+}
+
+-- Explicit order (not derived from the tables above) because this drives the order
+-- fruits appear in the Fruits Freezer selector.
+-- Blending: lid in the left hand while the real lid on the station fades out.
+local BLENDER_ANIMATION = {
+	Animation = AllAnimations.BlenderAnimation_01,
+	HoldInLeftHand = TemporaryItems.BlenderLid_01,
+	DoActionAfter = 1,
+	Effect = { Type = "SetTransparency", Target = "BlenderLid", Value = 1, Duration = 3 },
+}
+
+-- Pouring: jug in the left hand while the milk mesh on the station fades out.
+local MILK_ANIMATION = {
+	Animation = AllAnimations.MilkAnimation_01,
+	HoldInLeftHand = TemporaryItems.Milk_01,
+	DoActionAfter = 1,
+	Effect = { Type = "SetTransparency", Target = "Meshes/milk", Value = 1, Duration = 3.5 },
+}
+
+local FRUIT_NAMES = {
+	"Apricot",
+	"Banana",
+	"Blueberry",
+	"Cherry",
+	"Grapefruit",
+	"Grapes",
+	"Kiwi",
+	"Orange",
+	"Peach",
+	"Pear",
+	"Pineapple",
+	"Strawberry",
+	"Strawberry Banana",
+	"Strawberry Kiwi",
+	"Watermelon",
+	"Wild Berries",
 }
 
 Recipes.Items = {
@@ -128,7 +212,9 @@ Recipes.Items = {
 	["Milk"] = {
 		Sound = "Pour",
 		Actions = {
-			{ "ToolNameValidityCheck", { "#Clear Cup|=Mug" } },
+			-- Fruit cups ("... Clear Cup + [Fruit]") also take milk, on the way to a smoothie.
+			{ "ToolNameValidityCheck", { "#Clear Cup|=Mug", "!%+ Milk" } },
+			{ "Animate", MILK_ANIMATION },
 			{ "SetToolHoldingProperty", "Liquid", "Color", Color3.new(1, 1, 1) },
 			{ "SetToolHoldingProperty", "Liquid", "Transparency", 0 },
 			{
@@ -215,23 +301,45 @@ Recipes.Items = {
 	["Blender"] = {
 		Sound = "Blender",
 		Actions = {
-			{ "ToolNameValidityCheck", { "#Milk", "#Syrup" } },
 			{
-				"SetToolHoldingProperty",
-				"Liquid",
-				"Color",
-				function(liquid)
-					return liquid.Color:Lerp(Color3.new(1, 1, 1), 0.5)
-				end,
-			},
-			{
-				"RenameToolHolding",
-				function(old: string)
-					-- old --> "[Flavor] Milk"
-					local flavor = old:split(" ")
-					flavor = table.concat(flavor, " ", 3, #flavor - 1)
-					return flavor and (flavor .. " Milk") or ""
-				end,
+				"Branch",
+				{
+					-- A fruit cup that has had milk added blends into a smoothie.
+					-- SmoothieLiquid also renames the tool, since it is the only step
+					-- that knows which fruit the cup was tagged with.
+					{
+						"#%[Fruit%] %+ Milk",
+						{
+							{ "Animate", BLENDER_ANIMATION },
+							{ "SmoothieLiquid" },
+						},
+					},
+					-- Otherwise milk + syrup blends into flavored milk.
+					{
+						"#Syrup",
+						{
+							{ "ToolNameValidityCheck", { "#Milk" } },
+							{ "Animate", BLENDER_ANIMATION },
+							{
+								"SetToolHoldingProperty",
+								"Liquid",
+								"Color",
+								function(liquid)
+									return liquid.Color:Lerp(Color3.new(1, 1, 1), 0.5)
+								end,
+							},
+							{
+								"RenameToolHolding",
+								function(old: string)
+									-- old --> "[Flavor] Milk"
+									local flavor = old:split(" ")
+									flavor = table.concat(flavor, " ", 3, #flavor - 1)
+									return flavor and (flavor .. " Milk") or ""
+								end,
+							},
+						},
+					},
+				},
 			},
 		},
 	},
@@ -240,6 +348,7 @@ Recipes.Items = {
 	["Hot Chocolate Powder"] = makeHotChocolateVariant("", Color3.fromRGB(176, 119, 86)),
 	["Caramel Hot Chocolate Powder"] = makeHotChocolateVariant("Caramel", Color3.fromRGB(227, 151, 104)),
 	["Vanilla Hot Chocolate Powder"] = makeHotChocolateVariant("Vanilla", Color3.fromRGB(248, 211, 189)),
+	["Salted Hot Chocolate Powder"] = makeHotChocolateVariant("Salted", Color3.fromRGB(247, 231, 205)),
 
     ---> tea
 	["Caramel Chai Tea Powder"] = makeTeaVariant("Caramel Chai Tea", Color3.fromRGB(204, 161, 135)),
@@ -248,8 +357,11 @@ Recipes.Items = {
 	["Earl Grey Tea Powder"] = makeTeaVariant("Earl Grey Tea", Color3.fromRGB(168, 129, 108)),
 	["Peach Tea Powder"] = makeTeaVariant("Peach Tea", Color3.fromRGB(128, 101, 84)),
 	["Vanilla Chai Tea Powder"] = makeTeaVariant("Vanilla Chai Tea", Color3.fromRGB(217, 137, 87)),
+	["Oolong Tea Powder"] = makeTeaVariant("Oolong Tea", Color3.fromRGB(136, 48, 0)),
 
-	["Lids"] = {
+	-- Must stay "Lid": KitchenService matches recipe keys against model names in
+	-- workspace.Assets.Kitchen.Givers, where the model is named "Lid".
+	["Lid"] = {
 		Actions = {
 			{
 				"SetToolHoldingProperty",
@@ -262,6 +374,9 @@ Recipes.Items = {
 			},
 		},
 	},
+
+	---> fruits freezer
+	["Fruits Freezer"] = makeFruitSelector("Fruits Freezer", "Choose a fruit:", FRUIT_NAMES),
 
 	---> food display
 	["Food Display"] = makeGrabSelector("Food Display", "Choose a treat:", {
