@@ -32,7 +32,7 @@ local Promise = require(Packages:WaitForChild("Promise"))
 ---> types
 type RankAndRole = {
 	Rank: number,
-	Role: string,
+	Role: string?,
 	LastFetched: number,
 }
 
@@ -54,7 +54,7 @@ local MAX_RETRIES: number = 3
 local CACHE_TTL_SECONDS: number = 200 --> seconds before a re-fetch
 local PREFETCH_TIMEOUT_SECONDS: number = 10 --> max wait for eager pre-fetch
 
-local STUDIO_SIMULATE_RANK: number = 1
+local STUDIO_SIMULATE_RANK: number = 0
 
 local FALLBACK_RANK_AND_ROLE: RankAndRole = {
 	Rank = 1,
@@ -84,9 +84,9 @@ local function isFresh(entry: RankAndRole): boolean
 	return (os.time() - entry.LastFetched) < CACHE_TTL_SECONDS
 end
 
--- Core fetch — wraps the two Roblox API calls in a retried Promise.
+-- Core fetch — wraps the Roblox group API calls in a retried Promise.
 -- Returns Promise<RankAndRole>.
-local function fetchRankAndRole(player: Player, config: GroupConfig)
+local function fetchRankAndRole(player: Player, config: GroupConfig, includeRole: boolean)
 	return Promise.retry(function()
 		return Promise.new(function(resolve, reject)
 			local ok, rankOrErr = pcall(function()
@@ -97,17 +97,21 @@ local function fetchRankAndRole(player: Player, config: GroupConfig)
 				return
 			end
 
-			local ok2, roleOrErr = pcall(function()
-				return player:GetRoleInGroupAsync(config.GroupId)
-			end)
-			if not ok2 then
-				reject(roleOrErr)
-				return
+			local role: string? = nil
+			if includeRole then
+				local ok2, roleOrErr = pcall(function()
+					return player:GetRoleInGroupAsync(config.GroupId)
+				end)
+				if not ok2 then
+					reject(roleOrErr)
+					return
+				end
+				role = roleOrErr :: string
 			end
 
 			resolve({
 				Rank = rankOrErr :: number,
-				Role = roleOrErr :: string,
+				Role = role,
 				LastFetched = os.time(),
 			})
 		end)
@@ -117,7 +121,7 @@ end
 -- Ensures the cache for a player is warm, returning Promise<RankAndRole>.
 -- If a fetch is already in-flight, the same Promise is returned (no stampede).
 -- If the cache is fresh, resolves immediately with the cached value.
-local function ensureCached(player: Player, config: GroupConfig)
+local function ensureCached(player: Player, config: GroupConfig, requireRole: boolean)
 	-- Studio simulation: bypass all network fetches and return the override rank.
 	if RunService:IsStudio() and STUDIO_SIMULATE_RANK >= 1 and STUDIO_SIMULATE_RANK <= 255 then
 		return Promise.resolve({
@@ -131,17 +135,30 @@ local function ensureCached(player: Player, config: GroupConfig)
 
 	-- In-flight Promise — reuse it.
 	if entry ~= nil and not isResolved(entry) then
-		return entry
+		if not requireRole then
+			return entry
+		end
+		return (entry :: any):andThen(function(rankAndRole: RankAndRole)
+			if rankAndRole.Role ~= nil then
+				return rankAndRole
+			end
+			Cache[player.UserId] = nil
+			return ensureCached(player, config, true)
+		end)
 	end
 
 	-- Fresh resolved entry — wrap in an already-resolved Promise.
 	if entry ~= nil and isResolved(entry) and isFresh(entry :: RankAndRole) then
+		if requireRole and (entry :: RankAndRole).Role == nil then
+			Cache[player.UserId] = nil
+		else
 		return Promise.resolve(entry)
+		end
 	end
 
 	-- Stale or missing — start a new fetch and store the Promise immediately
 	-- so concurrent callers share it rather than each firing their own request.
-	local pending = fetchRankAndRole(player, config)
+	local pending = fetchRankAndRole(player, config, requireRole)
 		:andThen(function(rankAndRole: RankAndRole)
 			if player.Parent then
 				Cache[player.UserId] = rankAndRole
@@ -161,6 +178,7 @@ local function ensureCached(player: Player, config: GroupConfig)
 				...
 			)
 			-- Do NOT cache the fallback; next call will retry.
+			Cache[player.UserId] = nil
 			return FALLBACK_RANK_AND_ROLE
 		end)
 
@@ -173,7 +191,7 @@ end
 -- downstream calls GetRankAndRoleAsync.
 local function onPlayerAdded(player: Player)
 	Promise.race({
-		ensureCached(player, BOBA_CONFIG),
+		ensureCached(player, BOBA_CONFIG, false),
 		Promise.delay(PREFETCH_TIMEOUT_SECONDS):andThen(function()
 			return Promise.reject("prefetch timed out")
 		end),
@@ -195,18 +213,20 @@ end)
 
 --- Yields until rank and role are available. Near-instant if cache is warm.
 function RankUtil:GetRankAndRoleAsync(player: Player): RankAndRole
-	local _, result = ensureCached(player, BOBA_CONFIG):await()
+	local _, result = ensureCached(player, BOBA_CONFIG, true):await()
 	return result :: RankAndRole
 end
 
 --- Yields until rank is available. Near-instant if cache is warm.
 function RankUtil:GetRankAsync(player: Player): number
-	return self:GetRankAndRoleAsync(player).Rank
+	local _, result = ensureCached(player, BOBA_CONFIG, false):await()
+	return (result :: RankAndRole).Rank
 end
 
 --- Yields until role is available. Near-instant if cache is warm.
 function RankUtil:GetRoleAsync(player: Player): string
-	return self:GetRankAndRoleAsync(player).Role
+	local _, result = ensureCached(player, BOBA_CONFIG, true):await()
+	return (result :: RankAndRole).Role or "Customer"
 end
 
 --- Forces an immediate cache invalidation and re-fetch for a player.
@@ -217,8 +237,8 @@ function RankUtil:InvalidateCache(player: Player)
 end
 
 local function makeRankCheck(minRank: number, config: GroupConfig?)
-	return function(self, player: Player): boolean
-		local _, result = ensureCached(player or Players.LocalPlayer, config or BOBA_CONFIG):await()
+	return function(_self, player: Player): boolean
+		local _, result = ensureCached(player or Players.LocalPlayer, config or BOBA_CONFIG, false):await()
 		return (result :: RankAndRole).Rank >= minRank
 	end
 end
