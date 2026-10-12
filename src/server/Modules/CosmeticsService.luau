@@ -1,6 +1,5 @@
 ---> services
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local ServerStorage = game:GetService("ServerStorage")
 
 ---> dependencies
 local Packages = ReplicatedStorage:WaitForChild("Packages")
@@ -25,6 +24,7 @@ export type PlayerCosmetics = {
 ---> globals
 local cosmeticsCache: { [number]: PlayerCosmetics } = {}
 local characterConnections: { [number]: RBXScriptConnection } = {}
+local inventoryConnections: { [number]: RBXScriptConnection } = {}
 
 ---> service declaration
 local CosmeticsService = Knit.CreateService({
@@ -58,7 +58,6 @@ local function particles(particleName: string, numEquipped: number): ParticleEmi
 		NumberSequenceKeypoint.new(1, 0.5),
 	})
 
-	print(particleName)
 	local itemDef = InventoryItemDefinitions.Particles[particleName]
 	this.Texture = itemDef.Image
 
@@ -137,13 +136,24 @@ local COSMETIC_CHANGE_HANDLERS: { [string]: (player: Player, proxy: any) -> () }
 	end,
 
 	Particles = function(player, proxy)
-		print("n", #getEquippedItem(proxy, "Particles", true))
 		applyParticles(player.Character, getEquippedItem(proxy, "Particles", true))
 	end,
 }
 
 function CosmeticsService:SetupPlayerCosmetics(player: Player, proxy)
-	broadcast(player, proxy.Nickname or "", getEquippedItem(proxy, "Nametags"), toColor3(proxy.NametagColor))
+	local existingCharacterConnection = characterConnections[player.UserId]
+	if existingCharacterConnection then
+		existingCharacterConnection:Disconnect()
+		characterConnections[player.UserId] = nil
+	end
+
+	local existingInventoryConnection = inventoryConnections[player.UserId]
+	if existingInventoryConnection then
+		existingInventoryConnection:Disconnect()
+		inventoryConnections[player.UserId] = nil
+	end
+
+	broadcast(player, proxy.Nickname or "", getEquippedItem(proxy, "Nametags"))
 	applyParticles(player.Character, getEquippedItem(proxy, "Particles", true))
 
 	characterConnections[player.UserId] = player.CharacterAdded:Connect(function(character)
@@ -153,7 +163,7 @@ function CosmeticsService:SetupPlayerCosmetics(player: Player, proxy)
 
 	local signal = InventoryServer:GetPlayerChangeSignal(player)
 	if signal then
-		signal:Connect(function(changeData)
+		inventoryConnections[player.UserId] = signal:Connect(function(changeData)
 			if changeData.action ~= "equipped" then
 				return
 			end
@@ -227,6 +237,12 @@ function CosmeticsService:PlayerRemoving(player: Player)
 	if conn then
 		conn:Disconnect()
 		characterConnections[player.UserId] = nil
+	end
+
+	local inventoryConn = inventoryConnections[player.UserId]
+	if inventoryConn then
+		inventoryConn:Disconnect()
+		inventoryConnections[player.UserId] = nil
 	end
 end
 

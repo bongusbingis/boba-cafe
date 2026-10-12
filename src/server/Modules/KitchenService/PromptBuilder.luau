@@ -34,9 +34,9 @@ function PromptBuilder.Attach(model: Model, config: PromptConfig, callback: (Pla
     model.PrimaryPart = part
 
     local holdDuration = config.HoldDuration or 3
-    if RunService:IsStudio() then
-        holdDuration = 0.1
-    end
+    -- if RunService:IsStudio() then
+    --     holdDuration = 0.1
+    -- end
 
     local prompt = Instance.new("ProximityPrompt")
     -- prompt.Style = Enum.ProximityPromptStyle.Custom

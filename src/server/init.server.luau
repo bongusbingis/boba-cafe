@@ -40,7 +40,7 @@ Knit.Start()
 		if not RunService:IsStudio() then
 			table.insert(playerAddedProcesses, function(player)
 				local rankUtil = require(ReplicatedStorage.Shared.Utility.RankUtil)
-				if rankUtil:GetRankAsync(player) < 11 then
+				if rankUtil:GetRankAsync(player) < 4 then
 					player:Kick("This server is restricted to staff members only.")
 				end
 			end)

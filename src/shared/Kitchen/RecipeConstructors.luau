@@ -40,6 +40,7 @@ end
 function RecipeConstructors.makeTeaVariant(name: string, color: Color3): { { any } }
 	return {
 		Sound = "Powder",
+		HoldDuration = 2,
 		Actions = {
 			{ "ToolNameValidityCheck", { "#Water" } },
 			{ "Animate", SCOOP_ANIMATION },
@@ -53,6 +54,7 @@ end
 function RecipeConstructors.makeHotChocolateVariant(flavor: string, color: Color3): { { any } }
 	return {
 		Sound = "Powder",
+		HoldDuration = 2,
 		Actions = {
 			{ "ToolNameValidityCheck", { "=Mug + Steamed Milk" } },
 			{ "Animate", SCOOP_ANIMATION },
@@ -65,7 +67,7 @@ end
 
 function RecipeConstructors.makeCupGiver(name: "Clear Cup" | "Cup")
 	return {
-		HoldDuration = 0,
+		HoldDuration = 0.5,
 		Actions = {
 			{
 				"SelectFrom",
