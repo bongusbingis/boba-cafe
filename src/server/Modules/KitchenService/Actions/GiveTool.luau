@@ -1,6 +1,13 @@
 --[[
     Module: GiveTool
     Description: Action that clones a tool and equips it to the player's character.
+
+    The clone is marked with the OrderSpec "Item" attribute (REVIVAL-001 M1.1 section 3)
+    before it is equipped: Item = the cloned tool's name, which is right for every grab
+    item (pastries, macarons, mochi, ice cream). An optional third argument, a table of
+    literal attributes, is applied after it and may override Item (the cup givers use it
+    to set Item = "Cup" / "Clear Cup" and Size). Recipe usage:
+    { "GiveTool", tool, { Item = "Cup", Size = "Small" } }
 --]]
 
 ---> Helpers
@@ -11,10 +18,29 @@ end
 
 ---> Action
 
-local function GiveTool(player: Player, _actionModel: Model, toolToClone: Tool): boolean
+local function isLiteral(value: any): boolean
+    local valueType = typeof(value)
+    return valueType == "string" or valueType == "boolean" or valueType == "number"
+end
+
+local function GiveTool(player: Player, _actionModel: Model, toolToClone: Tool, attributes: { [string]: any }?): boolean
     local character = player.Character
     if not character then
         return false
+    end
+
+    -- Check the attributes before touching the held tool, so a bad recipe entry changes nothing.
+    if attributes ~= nil then
+        if typeof(attributes) ~= "table" then
+            warn("[GiveTool] Expected a table of attributes.")
+            return false
+        end
+        for name, value in attributes do
+            if typeof(name) ~= "string" or not isLiteral(value) then
+                warn(string.format("[GiveTool] Attribute '%s' is not a literal; nothing was given.", tostring(name)))
+                return false
+            end
+        end
     end
 
     local held = getHeldTool(player)
@@ -23,6 +49,13 @@ local function GiveTool(player: Player, _actionModel: Model, toolToClone: Tool):
     end
 
     local clone = toolToClone:Clone()
+
+    clone:SetAttribute("Item", toolToClone.Name)
+    if attributes then
+        for name, value in attributes do
+            clone:SetAttribute(name, value)
+        end
+    end
 
     local autoWeld = clone:GetAttribute("AutoWeld")
     if autoWeld == true or autoWeld == nil then

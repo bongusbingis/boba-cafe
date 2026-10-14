@@ -59,8 +59,9 @@ function RecipeConstructors.getTools(paths: { { string } }): { Instance }
 end
 
 -- Returns the action steps that grab `tool`, with the grab animation first when
--- it exists.
-local function grabActions(tool: Instance): { { any } }
+-- it exists. `attributes` (optional) are the tool attributes GiveTool applies on
+-- top of its default Item = the tool's name (see Actions/GiveTool).
+local function grabActions(tool: Instance, attributes: { [string]: any }?): { { any } }
 	local actions = {}
 	local animation = Animations and Animations:FindFirstChild("GrabAnimation_01")
 	if animation then
@@ -69,7 +70,11 @@ local function grabActions(tool: Instance): { { any } }
 		warnedAnimations.GrabAnimation_01 = true
 		warn("[Recipes] Animation Animations.Kitchen.GrabAnimation_01 not found; grabbing plays no animation.")
 	end
-	table.insert(actions, { "GiveTool", tool })
+	if attributes then
+		table.insert(actions, { "GiveTool", tool, attributes })
+	else
+		table.insert(actions, { "GiveTool", tool })
+	end
 	return actions
 end
 
@@ -79,6 +84,7 @@ function RecipeConstructors.makeCoffeeVariant(name: string, color: Color3): { { 
 		{ "SetToolHoldingProperty", "Liquid", "Color", color },
 		{ "SetToolHoldingProperty", "Liquid", "Transparency", 0 },
 		{ "RenameToolHolding", name },
+		{ "SetToolAttributes", { Item = name } },
 	}
 end
 
@@ -91,11 +97,15 @@ function RecipeConstructors.makeTeaVariant(name: string, color: Color3): { { any
 			{ "SetToolHoldingProperty", "Liquid", "Color", color },
 			{ "SetToolHoldingProperty", "Liquid", "Transparency", 0 },
 			{ "RenameToolHolding", name },
+			{ "SetToolAttributes", { Item = name } },
 		},
 	}
 end
 
 function RecipeConstructors.makeHotChocolateVariant(flavor: string, color: Color3): { { any } }
+	-- The Menu item name; the plain recipe (flavor "") is "Hot Chocolate". The tool is
+	-- still renamed `flavor .. " Hot Chocolate"` (unchanged), so only the attribute needs this.
+	local item = if flavor == "" then "Hot Chocolate" else flavor .. " Hot Chocolate"
 	return {
 		Sound = "Powder",
 		HoldDuration = 2,
@@ -104,6 +114,7 @@ function RecipeConstructors.makeHotChocolateVariant(flavor: string, color: Color
 			{ "SetToolHoldingProperty", "Liquid", "Color", color },
 			{ "SetToolHoldingProperty", "Liquid", "Transparency", 0 },
 			{ "RenameToolHolding", flavor .. " Hot Chocolate" },
+			{ "SetToolAttributes", { Item = item } },
 		},
 	}
 end
@@ -116,7 +127,7 @@ function RecipeConstructors.makeCupGiver(name: "Clear Cup" | "Cup")
 		local tool = RecipeConstructors.getTool({ "Cups", size .. " " .. name })
 		if tool then
 			table.insert(buttons, { Text = size })
-			branches[size] = grabActions(tool)
+			branches[size] = grabActions(tool, { Item = name, Size = size })
 		end
 	end
 

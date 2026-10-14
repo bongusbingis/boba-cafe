@@ -9,6 +9,13 @@
     Tools come from SharedStorage.Tools.Kitchen through RecipeConstructors.getTool,
     which warns and returns nil when a tool is missing. A recipe whose tools are
     all missing is left out of Recipes.Items instead of erroring the require.
+
+    Tool attributes (REVIVAL-001 M1.1 section 3): each station ends with a
+    { "SetToolAttributes", { ... } } step (the givers pass attributes to GiveTool
+    instead), so a station whose validity check fails leaves the tool unmarked. The
+    names are the OrderSpec contract: Item, Size, Syrup, Tapioca, Iced, Sugar and Lid.
+    `Item` must equal the Menu item's `ServeItem or ItemName`. Tool names are
+    unchanged and are still what the validity checks read.
 --]]
 
 ---> Modules
@@ -112,7 +119,7 @@ Recipes.Items = {
 		HoldDuration = 0,
 		Actions = {
 			--{ "AnimateRaw", Animations.Grab_01, true },
-			{ "GiveTool", mugTool },
+			{ "GiveTool", mugTool, { Size = "Mug" } }, -- Item defaults to the tool name, "Mug"
 		},
 	} or nil,
 
@@ -142,6 +149,7 @@ Recipes.Items = {
 								return size .. " Cold Water"
 							end,
 						},
+						{ "SetToolAttributes", { Item = "Water" } },
 					},
 					["Hot Water"] = {
 						{ "SetToolHoldingProperty", "Liquid", "Color", Color3.fromRGB(255, 180, 140) },
@@ -153,6 +161,7 @@ Recipes.Items = {
 								return size .. " Hot Water"
 							end,
 						},
+						{ "SetToolAttributes", { Item = "Water" } },
 					},
 				},
 			},
@@ -174,6 +183,7 @@ Recipes.Items = {
 					return old .. append
 				end,
 			},
+			{ "SetToolAttributes", { Item = "Milk" } },
 		},
 	},
 
@@ -231,6 +241,7 @@ Recipes.Items = {
 					return old .. " + Sugar"
 				end,
 			},
+			{ "SetToolAttributes", { Sugar = true } },
 		},
 	},
 
@@ -245,6 +256,7 @@ Recipes.Items = {
 					return "Iced " .. old
 				end,
 			},
+			{ "SetToolAttributes", { Iced = true } },
 		},
 	},
 
@@ -270,6 +282,10 @@ Recipes.Items = {
 					return flavor and (flavor .. " Milk") or ""
 				end,
 			},
+			-- No SetToolAttributes: blending is optional and OrderSpec does not match it
+			-- (PENDING JACK: Q3). If Jack requires the Blender, add
+			-- { "SetToolAttributes", { Blended = true } } here and a `Blended` field to
+			-- OrderSpec.Match; nothing else changes.
 		},
 	},
 
@@ -298,6 +314,8 @@ Recipes.Items = {
 					return customValue and customValue.Value or 0
 				end,
 			},
+			-- Recorded for the recipe card only; OrderSpec.Match does not read it in M1.
+			{ "SetToolAttributes", { Lid = true } },
 		},
 	},
 
@@ -316,11 +334,13 @@ for name: string, color: Color3 in Recipes.Syrups do
 			{ "ToolNameValidityCheck", { "#Cup %+ Milk" } },
 			{ "SetToolHoldingProperty", "Liquid", "Color", color },
 			{ "RenameToolHolding", `Milk + {name} Syrup` },
+			{ "SetToolAttributes", { Item = "Flavored Milk", Syrup = name } },
 		},
 	}
 end
 
 for name: string, color: Color3 in Recipes.Tapioca do
+	local tapiocaFlavor = name -- the Tapioca key, which is the OrderSpec Tapioca value
 	name = name .. " Tapioca"
 	Recipes.Items[name] = {
 		Sound = "Pop",
@@ -353,6 +373,7 @@ for name: string, color: Color3 in Recipes.Tapioca do
 					return flavor and (flavor .. " Boba" .. rest) or old
 				end,
 			},
+			{ "SetToolAttributes", { Item = "Boba", Tapioca = tapiocaFlavor } },
 		},
 	}
 end

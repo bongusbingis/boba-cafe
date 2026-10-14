@@ -38,6 +38,7 @@ return function()
 	-- in KnitStart).
 	local service = require(ServerScriptService.Server.Modules.OrderService)
 	local Menu = require(ReplicatedStorage.Shared.Ordering.Menu)
+	local OrderSpec = require(ReplicatedStorage.Shared.Ordering.OrderSpec)
 
 	-- ──────────────────────────────────────────────────────────────────────
 	-- Test helpers
@@ -66,12 +67,63 @@ return function()
 		}
 	end
 
-	-- Minimal order item
-	local function makeItem(name: string?)
+	-- A stored order item, as CreateOrder builds it: a medium Regular coffee
+	-- (Iced and Sugar default to false). Its spec is Drink / Regular / Medium.
+	local function makeItem()
 		return {
-			DefaultInfo = { ItemName = name or "Boba" },
-			CustomInfo = {},
+			Category = "Coffees",
+			Item = "Regular",
+			DefaultInfo = Menu.FoodTable["Coffees"].Items["Regular"],
+			CustomInfo = { Size = "Medium" },
 		}
+	end
+
+	-- The specs CreateOrder derives for stored order items.
+	local function specsOf(items: { any })
+		local specs = {}
+		for i, item in items do
+			local spec, reason = OrderSpec.FromOrderItem(item)
+			assert(spec, "fixture item has no spec: " .. tostring(reason))
+			specs[i] = spec
+		end
+		return specs
+	end
+
+	-- _addOrder with the specs derived from the items.
+	local function addOrder(customerId: number, items: { any })
+		service:_addOrder(customerId, items, specsOf(items))
+	end
+
+	-- A Tool carrying the attributes the kitchen writes. `parent` defaults to nothing.
+	-- It holds a non-Handle part so the pick-up display model has something to clone.
+	local function makeTool(attrs: { [string]: any }?, parent: Instance?)
+		local tool = Instance.new("Tool")
+		tool.Name = "TestTool"
+		local part = Instance.new("Part")
+		part.Name = "Cup"
+		part.Parent = tool
+		for key, value in attrs or {} do
+			tool:SetAttribute(key, value)
+		end
+		tool.Parent = parent
+		return tool
+	end
+
+	-- Attributes of a tool that exactly matches makeItem()'s spec.
+	local function regularMedium(overrides: { [string]: any }?)
+		local attrs: { [string]: any } = { Item = "Regular", Size = "Medium" }
+		for key, value in overrides or {} do
+			attrs[key] = value
+		end
+		return attrs
+	end
+
+	-- Removes the pick-up folder a deposit creates for a customer.
+	local function cleanPickUpFolder(customerId: number)
+		local folder = ServerStorage.OrderPickUp:FindFirstChild("Order_" .. customerId)
+		if folder then
+			folder:Destroy()
+		end
 	end
 
 	-- A client CreateOrder request item: { Category, Item, CustomInfo }. The
@@ -88,6 +140,7 @@ return function()
 	local COLOR_PENDING = Color3.fromRGB(140, 140, 140)
 	local COLOR_PREPARING = Color3.fromRGB(229, 198, 103)
 	local COLOR_READY = Color3.fromRGB(151, 190, 135)
+	local COLOR_ERROR = Color3.fromRGB(253, 102, 102)
 
 	local function makeOrder(overrides: { [string]: any }?)
 		local base = {
@@ -104,13 +157,20 @@ return function()
 				base[k] = v
 			end
 		end
+		-- Specs follow the (possibly overridden) items unless a test sets them.
+		if base.specs == nil then
+			base.specs = specsOf(base.order)
+		end
 		return base
 	end
 
-	-- Create a mock pick-up area Model with the expected children
+	-- Create a mock pick-up area with the expected children. The real nodes are
+	-- parts (a deposit places display models at area.CFrame), so this is a Part.
 	local function makeArea(ownerUserId: number?)
-		local area = Instance.new("Model")
+		local area = Instance.new("Part")
 		area.Name = "MockPickUpArea"
+		area.Anchored = true
+		area.CanCollide = false
 
 		local ownerVal = Instance.new("IntValue")
 		ownerVal.Name = "OrderOwner"
@@ -151,7 +211,6 @@ return function()
 		"_orders",
 		"_currentOrderNum",
 		"_orderDebounces",
-		"_areaDebounces",
 		"_statusScreens",
 		"_staffScreens",
 		"_pickUpAreas",
@@ -191,7 +250,6 @@ return function()
 		service._orders = {}
 		service._currentOrderNum = 0
 		service._orderDebounces = {}
-		service._areaDebounces = {}
 		service._statusScreens = {}
 		service._staffScreens = {}
 		service._pickUpAreas = {}
@@ -239,76 +297,83 @@ return function()
 
 	describe("_addOrder", function()
 		it("should add an order to the _orders table", function()
-			service:_addOrder(10001, { makeItem() })
+			addOrder(10001, { makeItem() })
 			expect(#service._orders).to.equal(1)
 		end)
 
 		it("should store the correct customer UserId", function()
-			service:_addOrder(42, { makeItem() })
+			addOrder(42, { makeItem() })
 			expect(service._orders[1].customer).to.equal(42)
 		end)
 
 		it("should store the correct order items", function()
-			local items = { makeItem("Tea"), makeItem("Boba") }
-			service:_addOrder(10001, items)
+			local items = { makeItem(), makeItem() }
+			addOrder(10001, items)
 			expect(service._orders[1].numItems).to.equal(2)
 			expect(service._orders[1].order).to.equal(items)
 		end)
 
+		it("should store the specs it is given", function()
+			local items = { makeItem() }
+			local specs = specsOf(items)
+			service:_addOrder(10001, items, specs)
+			expect(service._orders[1].specs).to.equal(specs)
+		end)
+
 		it("should start every order with 'Pending Preparation' status", function()
-			service:_addOrder(10001, { makeItem() })
+			addOrder(10001, { makeItem() })
 			expect(service._orders[1].status).to.equal("Pending Preparation")
 		end)
 
 		it("should start every order with the pending colour", function()
-			service:_addOrder(10001, { makeItem() })
+			addOrder(10001, { makeItem() })
 			expect(service._orders[1].statusColor).to.equal(COLOR_PENDING)
 		end)
 
 		it("should start every order with preparedBy = nil", function()
-			service:_addOrder(10001, { makeItem() })
+			addOrder(10001, { makeItem() })
 			expect(service._orders[1].preparedBy).to.equal(nil)
 		end)
 
 		it("should zero-pad orderNum to 4 digits", function()
-			service:_addOrder(10001, { makeItem() })
+			addOrder(10001, { makeItem() })
 			expect(service._orders[1].orderNum).to.equal("0001")
 		end)
 
 		it("should produce ascending orderNums for sequential calls", function()
-			service:_addOrder(10001, { makeItem() })
-			service:_addOrder(10002, { makeItem() })
+			addOrder(10001, { makeItem() })
+			addOrder(10002, { makeItem() })
 			expect(service._orders[1].orderNum).to.equal("0001")
 			expect(service._orders[2].orderNum).to.equal("0002")
 		end)
 
 		it("should wrap orderNum at 999 (mod 1000)", function()
 			service._currentOrderNum = 999
-			service:_addOrder(10001, { makeItem() })
+			addOrder(10001, { makeItem() })
 			-- 1000 % 1000 == 0 → "0000"
 			expect(service._orders[1].orderNum).to.equal("0000")
 		end)
 
 		it("should produce 'Pending Preparation' wrapped as '0000'", function()
 			service._currentOrderNum = 999
-			service:_addOrder(10001, { makeItem() })
+			addOrder(10001, { makeItem() })
 			expect(service._orders[1].status).to.equal("Pending Preparation")
 		end)
 
 		it("should increment _currentOrderNum", function()
-			service:_addOrder(10001, { makeItem() })
-			service:_addOrder(10002, { makeItem() })
+			addOrder(10001, { makeItem() })
+			addOrder(10002, { makeItem() })
 			expect(service._currentOrderNum).to.equal(2)
 		end)
 	end)
 
 	-- ══════════════════════════════════════════════════════════════════════
-	-- _getPendingCount
+	-- GetPendingCount
 	-- ══════════════════════════════════════════════════════════════════════
 
-	describe("_getPendingCount", function()
+	describe("GetPendingCount", function()
 		it("should return 0 when no orders exist", function()
-			expect(service:_getPendingCount()).to.equal(0)
+			expect(service:GetPendingCount()).to.equal(0)
 		end)
 
 		it("should count only Pending Preparation orders", function()
@@ -318,29 +383,66 @@ return function()
 				makeOrder({ status = "Being Prepared" }),
 				makeOrder({ status = "Ready for Pick Up" }),
 			}
-			expect(service:_getPendingCount()).to.equal(2)
+			expect(service:GetPendingCount()).to.equal(2)
 		end)
 
 		it("should return 0 when all orders are Being Prepared", function()
 			service._orders = {
 				makeOrder({ status = "Being Prepared", preparedBy = 99 }),
 			}
-			expect(service:_getPendingCount()).to.equal(0)
+			expect(service:GetPendingCount()).to.equal(0)
 		end)
 
 		it("should return 0 when all orders are Ready for Pick Up", function()
 			service._orders = {
 				makeOrder({ status = "Ready for Pick Up" }),
 			}
-			expect(service:_getPendingCount()).to.equal(0)
+			expect(service:GetPendingCount()).to.equal(0)
 		end)
 
 		it("should reflect order table changes immediately", function()
-			expect(service:_getPendingCount()).to.equal(0)
+			expect(service:GetPendingCount()).to.equal(0)
 			table.insert(service._orders, makeOrder())
-			expect(service:_getPendingCount()).to.equal(1)
+			expect(service:GetPendingCount()).to.equal(1)
 			table.remove(service._orders, 1)
-			expect(service:_getPendingCount()).to.equal(0)
+			expect(service:GetPendingCount()).to.equal(0)
+		end)
+	end)
+
+	-- ══════════════════════════════════════════════════════════════════════
+	-- HasActiveOrder
+	-- ══════════════════════════════════════════════════════════════════════
+
+	describe("HasActiveOrder", function()
+		local barista = makePlayer(150)
+
+		it("should be false when the player has no order", function()
+			expect(service:HasActiveOrder(barista)).to.equal(false)
+		end)
+
+		it("should be true while the player is preparing an order", function()
+			service._orders = { makeOrder({ status = "Being Prepared", preparedBy = barista.UserId }) }
+			expect(service:HasActiveOrder(barista)).to.equal(true)
+		end)
+
+		it("should be false for a pending order nobody has claimed", function()
+			service._orders = { makeOrder() }
+			expect(service:HasActiveOrder(barista)).to.equal(false)
+		end)
+
+		it("should be false for another player's Being Prepared order", function()
+			service._orders = { makeOrder({ status = "Being Prepared", preparedBy = 999 }) }
+			expect(service:HasActiveOrder(barista)).to.equal(false)
+		end)
+
+		it("should be false once the order is Ready for Pick Up", function()
+			service._orders = { makeOrder({ status = "Ready for Pick Up", preparedBy = barista.UserId }) }
+			expect(service:HasActiveOrder(barista)).to.equal(false)
+		end)
+
+		it("should be false for a customer whose own order is being prepared", function()
+			service._orders = { makeOrder({ customer = barista.UserId, status = "Being Prepared", preparedBy = 999 }) }
+			expect(service:HasActiveOrder(barista)).to.equal(false)
 		end)
 	end)
 
@@ -509,7 +611,7 @@ return function()
 
 		it("should fire NotepadUpdated with SetNewOrder", function()
 			mockClockedIn(true)
-			local items = { makeItem("Tea") }
+			local items = { makeItem() }
 			service._orders = { makeOrder({ order = items }) }
 			service:_claimNextOrder(player)
 
@@ -796,6 +898,38 @@ return function()
 			expect(boba["Tapioca Flavor"]).to.equal("Normal")
 		end)
 
+		it("should store one spec per item, in item order, derived on the server", function()
+			local request = makeRequest("Coffees", "Regular", { Size = "Large", Sugar = true })
+			request.DefaultInfo = { ItemName = "Hacked" } -- the client's DefaultInfo is never used
+			local result = service.Client:CreateOrder(player, player.UserId, {
+				request,
+				makeRequest("Boba Teas", "Custom Boba", {
+					Size = "Medium",
+					["Syrup Flavor"] = "Classic Milk Tea",
+					["Tapioca Flavor"] = "Normal",
+				}),
+				makeRequest(),
+			})
+			expect(result.Success).to.equal(true)
+
+			local specs = service._orders[1].specs
+			expect(#specs).to.equal(3)
+
+			expect(specs[1].Kind).to.equal("Drink")
+			expect(specs[1].Item).to.equal("Regular")
+			expect(specs[1].Size).to.equal("Large")
+			expect(specs[1].Sugar).to.equal(true)
+			expect(specs[1].Iced).to.equal(false)
+
+			expect(specs[2].Kind).to.equal("Drink")
+			expect(specs[2].Size).to.equal("Medium")
+			expect(specs[2].Syrup).to.equal("Classic Milk Tea")
+			expect(specs[2].Tapioca).to.equal("Normal")
+
+			expect(specs[3].Kind).to.equal("Grab")
+			expect(specs[3].Item).to.equal("Fudge Brownie")
+		end)
+
 		it("should not start the debounce for a rejected order", function()
 			service.Client:CreateOrder(player, player.UserId, {})
 			expect(service._orderDebounces[player.UserId]).to.equal(nil)
@@ -975,10 +1109,180 @@ return function()
 	end)
 
 	-- ══════════════════════════════════════════════════════════════════════
+	-- FindServeTools
+	-- ══════════════════════════════════════════════════════════════════════
+
+	describe("FindServeTools", function()
+		local staff
+
+		beforeEach(function()
+			staff = makePlayer(650)
+			staff.Character = Instance.new("Model")
+		end)
+
+		local function specs()
+			return specsOf({ makeItem() })
+		end
+
+		it("should pick a tool whose attributes match, graded Perfect", function()
+			local tool = makeTool(regularMedium(), staff.Backpack)
+			local tools, grade, reasons = service:FindServeTools(staff, specs())
+			expect(tools).to.be.ok()
+			expect(#tools).to.equal(1)
+			expect(tools[1]).to.equal(tool)
+			expect(grade).to.equal("Perfect")
+			expect(#reasons).to.equal(0)
+		end)
+
+		it("should grade one small mistake Close and still return the tool", function()
+			local tool = makeTool(regularMedium({ Size = "Large" }), staff.Backpack)
+			local tools, grade = service:FindServeTools(staff, specs())
+			expect(tools[1]).to.equal(tool)
+			expect(grade).to.equal("Close")
+		end)
+
+		it("should ignore extra attributes such as Lid", function()
+			makeTool(regularMedium({ Lid = true }), staff.Backpack)
+			local tools, grade = service:FindServeTools(staff, specs())
+			expect(tools).to.be.ok()
+			expect(grade).to.equal("Perfect")
+		end)
+
+		it("should return nil, Wrong and the reason for a wrong item", function()
+			makeTool(regularMedium({ Item = "Decaf" }), staff.Backpack)
+			local tools, grade, reasons = service:FindServeTools(staff, specs())
+			expect(tools).to.equal(nil)
+			expect(grade).to.equal("Wrong")
+			expect(#reasons).to.equal(1)
+			expect(reasons[1]).to.equal("Item")
+		end)
+
+		it("should name every wrong field when two or more minor mistakes are made", function()
+			makeTool(regularMedium({ Size = "Large", Iced = true }), staff.Backpack)
+			local tools, grade, reasons = service:FindServeTools(staff, specs())
+			expect(tools).to.equal(nil)
+			expect(grade).to.equal("Wrong")
+			expect(table.concat(reasons, ",")).to.equal("Size,Iced")
+		end)
+
+		it("should never read the tool's name", function()
+			local tool = makeTool(regularMedium(), staff.Backpack)
+			tool.Name = "Totally Not A Coffee"
+			local tools = service:FindServeTools(staff, specs())
+			expect(tools).to.be.ok()
+			expect(tools[1]).to.equal(tool)
+		end)
+
+		it("should treat a tool with no Item attribute as the wrong item", function()
+			makeTool(nil, staff.Backpack)
+			local tools, grade, reasons = service:FindServeTools(staff, specs())
+			expect(tools).to.equal(nil)
+			expect(grade).to.equal("Wrong")
+			expect(reasons[1]).to.equal("Item")
+		end)
+
+		it("should report Missing when the player has no tools", function()
+			local tools, grade, reasons = service:FindServeTools(staff, specs())
+			expect(tools).to.equal(nil)
+			expect(grade).to.equal("Wrong")
+			expect(reasons[1]).to.equal("Missing")
+		end)
+
+		it("should work with no Character", function()
+			staff.Character = nil
+			local tool = makeTool(regularMedium(), staff.Backpack)
+			local tools = service:FindServeTools(staff, specs())
+			expect(tools[1]).to.equal(tool)
+		end)
+
+		it("should prefer the held tool over a backpack tool that also matches", function()
+			makeTool(regularMedium(), staff.Backpack)
+			local held = makeTool(regularMedium(), staff.Character)
+			local tools = service:FindServeTools(staff, specs())
+			expect(tools[1]).to.equal(held)
+		end)
+
+		it("should prefer a Perfect backpack tool over a Close held tool", function()
+			makeTool(regularMedium({ Size = "Large" }), staff.Character)
+			local perfect = makeTool(regularMedium(), staff.Backpack)
+			local tools, grade = service:FindServeTools(staff, specs())
+			expect(tools[1]).to.equal(perfect)
+			expect(grade).to.equal("Perfect")
+		end)
+
+		it("should return one tool per spec, in spec order, using each tool once", function()
+			local items = {
+				makeItem(),
+				{
+					Category = "Pastries",
+					Item = "Fudge Brownie",
+					DefaultInfo = Menu.FoodTable["Pastries"].Items["Fudge Brownie"],
+					CustomInfo = {},
+				},
+			}
+			local brownieTool = makeTool({ Item = "Fudge Brownie" }, staff.Backpack)
+			local coffeeTool = makeTool(regularMedium(), staff.Backpack)
+
+			local tools, grade = service:FindServeTools(staff, specsOf(items))
+			expect(#tools).to.equal(2)
+			expect(tools[1]).to.equal(coffeeTool)
+			expect(tools[2]).to.equal(brownieTool)
+			expect(grade).to.equal("Perfect")
+		end)
+
+		it("should report Missing when only some of several specs can be filled", function()
+			makeTool(regularMedium(), staff.Backpack)
+			local tools, grade, reasons = service:FindServeTools(staff, specsOf({ makeItem(), makeItem() }))
+			expect(tools).to.equal(nil)
+			expect(grade).to.equal("Wrong")
+			expect(reasons[1]).to.equal("Missing")
+		end)
+
+		it("should only read: the tools stay where they were", function()
+			local held = makeTool(regularMedium(), staff.Character)
+			local packed = makeTool(regularMedium({ Item = "Decaf" }), staff.Backpack)
+			service:FindServeTools(staff, specs())
+			expect(held.Parent).to.equal(staff.Character)
+			expect(packed.Parent).to.equal(staff.Backpack)
+		end)
+	end)
+
+	-- ══════════════════════════════════════════════════════════════════════
 	-- _handlePickUp — staff deposit path
 	-- ══════════════════════════════════════════════════════════════════════
 
 	describe("_handlePickUp (staff deposit path)", function()
+		local CUSTOMER_ID = 10001
+
+		-- Builds a staff member who is preparing `order` and a free pick-up area.
+		local function setup(userId: number, orderOverrides: { [string]: any }?)
+			local staff = makePlayer(userId)
+			staff.Character = Instance.new("Model")
+			local area = makeArea(0)
+			local overrides = {
+				customer = CUSTOMER_ID,
+				status = "Being Prepared",
+				preparedBy = staff.UserId,
+			}
+			for key, value in orderOverrides or {} do
+				overrides[key] = value
+			end
+			local order = makeOrder(overrides)
+			service._orders = { order }
+			return staff, area, order
+		end
+
+		local function expectUntouched(order, area)
+			expect(order.status).to.equal("Being Prepared")
+			expect(order.statusColor).to.equal(COLOR_PREPARING)
+			expect(order.grade).to.equal(nil)
+			expect(area.OrderOwner.Value).to.equal(0)
+			expect(#area:GetChildren()).to.equal(2) -- OrderOwner and ProximityPrompt only
+			expect(ServerStorage.OrderPickUp:FindFirstChild("Order_" .. CUSTOMER_ID)).to.equal(nil)
+			expect(#service.Client.NotepadUpdated._calls).to.equal(0)
+			expect(#service.Client.PickUpNodeVisibilityChanged._calls).to.equal(0)
+		end
+
 		it("should do nothing when staff has no active Being Prepared order", function()
 			local staff = makePlayer(600)
 			local area = makeArea(0) -- unclaimed area
@@ -987,48 +1291,26 @@ return function()
 			service:_handlePickUp(staff, area)
 
 			expect(area.OrderOwner.Value).to.equal(0) -- area untouched
+			expect(#service.Client.Announcement._calls).to.equal(0)
 			area:Destroy()
 		end)
 
 		it("should fire Announcement when staff has fewer tools than order requires", function()
-			local staff = makePlayer(600)
-			-- Staff has empty backpack and no character tools
-			staff.Character = Instance.new("Model")
-
-			local area = makeArea(0)
-			service._orders = {
-				makeOrder({
-					customer = 10001,
-					status = "Being Prepared",
-					preparedBy = staff.UserId,
-					order = { makeItem(), makeItem() }, -- requires 2 tools
-					numItems = 2,
-				}),
-			}
+			local staff, area, order = setup(600, { order = { makeItem(), makeItem() }, numItems = 2 })
 
 			service:_handlePickUp(staff, area)
 
 			local calls = service.Client.Announcement._calls
 			expect(#calls).to.equal(1)
 			expect(calls[1][1]).to.equal(staff)
-			-- First string arg is the title
-			expect(calls[1][2]).to.be.a("string")
+			expect(calls[1][2]).to.equal("Cannot Deposit Order!")
+			expect(string.find(calls[1][3], "An item is missing", 1, true)).to.be.ok()
+			expectUntouched(order, area)
 			area:Destroy()
 		end)
 
 		it("should release area (keep OrderOwner = 0) when tools insufficient", function()
-			local staff = makePlayer(601)
-			staff.Character = Instance.new("Model")
-			local area = makeArea(0)
-			service._orders = {
-				makeOrder({
-					customer = 10001,
-					status = "Being Prepared",
-					preparedBy = staff.UserId,
-					order = { makeItem(), makeItem() },
-					numItems = 2,
-				}),
-			}
+			local staff, area = setup(601, { order = { makeItem(), makeItem() }, numItems = 2 })
 
 			service:_handlePickUp(staff, area)
 
@@ -1036,97 +1318,198 @@ return function()
 			area:Destroy()
 		end)
 
-		it("should apply a per-area debounce while a deposit is in progress", function()
-			local staff = makePlayer(602)
-			local area = makeArea(0)
-			service._areaDebounces[area] = true
+		it("should set the order to Ready and move the matching tool to the pick-up folder", function()
+			local staff, area, order = setup(610)
+			local tool = makeTool(regularMedium(), staff.Backpack)
 
 			service:_handlePickUp(staff, area)
 
-			-- Announcement should NOT fire (debounced before any logic runs)
+			expect(order.status).to.equal("Ready for Pick Up")
+			expect(order.statusColor).to.equal(COLOR_READY)
+			expect(order.grade).to.equal("Perfect")
+			expect(area.OrderOwner.Value).to.equal(CUSTOMER_ID)
 			expect(#service.Client.Announcement._calls).to.equal(0)
+
+			local folder = ServerStorage.OrderPickUp:FindFirstChild("Order_" .. CUSTOMER_ID)
+			expect(folder).to.be.ok()
+			expect(tool.Parent).to.equal(folder)
+
+			-- Pick-up display model placed on the area
+			local models = 0
+			for _, child in area:GetChildren() do
+				if child:IsA("Model") then
+					models += 1
+				end
+			end
+			expect(models).to.equal(1)
+
+			-- The barista's notepad is cleared and free nodes are hidden for them
+			local notepad = service.Client.NotepadUpdated._calls
+			expect(#notepad).to.equal(1)
+			expect(notepad[1][1]).to.equal(staff)
+			expect(notepad[1][2]).to.equal("ResetOrder")
+
+			cleanPickUpFolder(CUSTOMER_ID)
+			area:Destroy()
+		end)
+
+		it("should take a matching tool that is held in the Character", function()
+			local staff, area, order = setup(611)
+			local tool = makeTool(regularMedium(), staff.Character)
+
+			service:_handlePickUp(staff, area)
+
+			expect(order.status).to.equal("Ready for Pick Up")
+			expect(tool.Parent).to.equal(ServerStorage.OrderPickUp:FindFirstChild("Order_" .. CUSTOMER_ID))
+
+			cleanPickUpFolder(CUSTOMER_ID)
+			area:Destroy()
+		end)
+
+		it("should accept a Close tool and record the grade", function()
+			local staff, area, order = setup(612)
+			makeTool(regularMedium({ Size = "Large" }), staff.Backpack)
+
+			service:_handlePickUp(staff, area)
+
+			expect(order.status).to.equal("Ready for Pick Up")
+			expect(order.grade).to.equal("Close")
+
+			cleanPickUpFolder(CUSTOMER_ID)
+			area:Destroy()
+		end)
+
+		it("should deposit every item of a multi-item order", function()
+			local staff, area, order = setup(613, { order = { makeItem(), makeItem() }, numItems = 2 })
+			local first = makeTool(regularMedium(), staff.Backpack)
+			local second = makeTool(regularMedium(), staff.Backpack)
+
+			service:_handlePickUp(staff, area)
+
+			local folder = ServerStorage.OrderPickUp:FindFirstChild("Order_" .. CUSTOMER_ID)
+			expect(order.status).to.equal("Ready for Pick Up")
+			expect(first.Parent).to.equal(folder)
+			expect(second.Parent).to.equal(folder)
+
+			cleanPickUpFolder(CUSTOMER_ID)
+			area:Destroy()
+		end)
+
+		it("should show the reason and change nothing when the tool is the wrong item", function()
+			local staff, area, order = setup(620)
+			local tool = makeTool(regularMedium({ Item = "Decaf" }), staff.Backpack)
+
+			service:_handlePickUp(staff, area)
+
+			local calls = service.Client.Announcement._calls
+			expect(#calls).to.equal(1)
+			expect(calls[1][1]).to.equal(staff)
+			expect(calls[1][2]).to.equal("Cannot Deposit Order!")
+			expect(string.find(calls[1][3], "Wrong item", 1, true)).to.be.ok()
+			expect(calls[1][4]).to.equal(COLOR_ERROR)
+			expect(tool.Parent).to.equal(staff.Backpack)
+			expectUntouched(order, area)
+			area:Destroy()
+		end)
+
+		it("should name every wrong field when the tool has two minor mistakes", function()
+			local staff, area, order = setup(621)
+			local tool = makeTool(regularMedium({ Size = "Large", Sugar = true }), staff.Backpack)
+
+			service:_handlePickUp(staff, area)
+
+			local calls = service.Client.Announcement._calls
+			expect(#calls).to.equal(1)
+			expect(string.find(calls[1][3], "Wrong size, Wrong sugar", 1, true)).to.be.ok()
+			expect(tool.Parent).to.equal(staff.Backpack)
+			expectUntouched(order, area)
+			area:Destroy()
+		end)
+
+		it("should refuse a tool with no attributes (a legacy or gamepass tool)", function()
+			local staff, area, order = setup(622)
+			local tool = makeTool(nil, staff.Backpack)
+
+			service:_handlePickUp(staff, area)
+
+			expect(#service.Client.Announcement._calls).to.equal(1)
+			expect(tool.Parent).to.equal(staff.Backpack)
+			expectUntouched(order, area)
+			area:Destroy()
+		end)
+
+		it("should refuse a multi-item order when one tool is wrong and leave every tool in place", function()
+			local staff, area, order = setup(623, { order = { makeItem(), makeItem() }, numItems = 2 })
+			local good = makeTool(regularMedium(), staff.Backpack)
+			local bad = makeTool(regularMedium({ Item = "Decaf" }), staff.Backpack)
+
+			service:_handlePickUp(staff, area)
+
+			expect(#service.Client.Announcement._calls).to.equal(1)
+			expect(good.Parent).to.equal(staff.Backpack)
+			expect(bad.Parent).to.equal(staff.Backpack)
+			expectUntouched(order, area)
+			area:Destroy()
+		end)
+
+		it("should let the barista deposit once they fix a wrong tool", function()
+			local staff, area, order = setup(624)
+			local tool = makeTool(regularMedium({ Item = "Decaf" }), staff.Backpack)
+
+			service:_handlePickUp(staff, area)
+			expect(order.status).to.equal("Being Prepared")
+
+			tool:SetAttribute("Item", "Regular")
+			service:_handlePickUp(staff, area)
+			expect(order.status).to.equal("Ready for Pick Up")
+
+			cleanPickUpFolder(CUSTOMER_ID)
 			area:Destroy()
 		end)
 	end)
 
 	-- ══════════════════════════════════════════════════════════════════════
-	-- collectTools (tested indirectly via _handlePickUp tool count check)
+	-- collectTools (tested indirectly via the deposit's tool search)
 	-- ══════════════════════════════════════════════════════════════════════
 
 	describe("tool collection logic", function()
-		-- We validate collectTools behaviour by confirming that
-		-- _handlePickUp recognises staff with tools vs without tools.
-
-		it("should count tools from the player Backpack", function()
-			local staff = makePlayer(700)
-			staff.Character = Instance.new("Model") -- empty character
-
-			local tool = Instance.new("Tool")
-			tool.Parent = staff.Backpack
-
+		-- collectTools feeds FindServeTools, so a deposit with a correctly
+		-- marked tool succeeds only if the tool was found.
+		local function depositWith(userId: number, parentOf: ((any) -> Instance)?)
+			local staff = makePlayer(userId)
+			staff.Character = Instance.new("Model")
 			local area = makeArea(0)
-			service._orders = {
-				makeOrder({
-					customer = 10001,
-					status = "Being Prepared",
-					preparedBy = staff.UserId,
-					order = { makeItem() }, -- requires 1 tool
-					numItems = 1,
-				}),
-			}
-
-			-- With 1 tool in backpack, the insufficient-tool Announcement
-			-- should NOT fire (enough tools → prompt flow begins instead)
+			local order = makeOrder({ status = "Being Prepared", preparedBy = staff.UserId })
+			service._orders = { order }
+			if parentOf then
+				makeTool(regularMedium(), parentOf(staff))
+			end
 			service:_handlePickUp(staff, area)
-			expect(#service.Client.Announcement._calls).to.equal(0)
-
+			cleanPickUpFolder(order.customer)
 			area:Destroy()
+			return order
+		end
+
+		it("should find tools in the player Backpack", function()
+			local order = depositWith(700, function(staff)
+				return staff.Backpack
+			end)
+			expect(order.status).to.equal("Ready for Pick Up")
+			expect(#service.Client.Announcement._calls).to.equal(0)
 		end)
 
-		it("should count tools worn in the Character", function()
-			local staff = makePlayer(701)
-			local character = Instance.new("Model")
-			staff.Character = character
-
-			local tool = Instance.new("Tool")
-			tool.Parent = character
-
-			local area = makeArea(0)
-			service._orders = {
-				makeOrder({
-					customer = 10001,
-					status = "Being Prepared",
-					preparedBy = staff.UserId,
-					order = { makeItem() },
-					numItems = 1,
-				}),
-			}
-
-			service:_handlePickUp(staff, area)
+		it("should find tools worn in the Character", function()
+			local order = depositWith(701, function(staff)
+				return staff.Character
+			end)
+			expect(order.status).to.equal("Ready for Pick Up")
 			expect(#service.Client.Announcement._calls).to.equal(0)
-
-			area:Destroy()
 		end)
 
 		it("should fire Announcement when player has zero tools", function()
-			local staff = makePlayer(702)
-			staff.Character = Instance.new("Model") -- empty
-
-			local area = makeArea(0)
-			service._orders = {
-				makeOrder({
-					customer = 10001,
-					status = "Being Prepared",
-					preparedBy = staff.UserId,
-					order = { makeItem() },
-					numItems = 1,
-				}),
-			}
-
-			service:_handlePickUp(staff, area)
+			local order = depositWith(702, nil)
+			expect(order.status).to.equal("Being Prepared")
 			expect(#service.Client.Announcement._calls).to.equal(1)
-
-			area:Destroy()
 		end)
 	end)
 
@@ -1136,27 +1519,27 @@ return function()
 
 	describe("order number formatting", function()
 		it("should produce a 4-character string for order 1", function()
-			service:_addOrder(10001, { makeItem() })
+			addOrder(10001, { makeItem() })
 			local num = service._orders[1].orderNum
 			expect(#num).to.equal(4)
 		end)
 
 		it("should produce a 4-character string for order 100", function()
 			service._currentOrderNum = 99
-			service:_addOrder(10001, { makeItem() })
+			addOrder(10001, { makeItem() })
 			local num = service._orders[1].orderNum
 			expect(#num).to.equal(4)
 		end)
 
 		it("should produce '0999' for order 999", function()
 			service._currentOrderNum = 998
-			service:_addOrder(10001, { makeItem() })
+			addOrder(10001, { makeItem() })
 			expect(service._orders[1].orderNum).to.equal("0999")
 		end)
 
 		it("should produce '0000' for order 1000 (wrap)", function()
 			service._currentOrderNum = 999
-			service:_addOrder(10001, { makeItem() })
+			addOrder(10001, { makeItem() })
 			expect(service._orders[1].orderNum).to.equal("0000")
 		end)
 
@@ -1174,7 +1557,7 @@ return function()
 
 	describe("status colours", function()
 		it("new orders start with the pending (grey) colour", function()
-			service:_addOrder(10001, { makeItem() })
+			addOrder(10001, { makeItem() })
 			expect(service._orders[1].statusColor).to.equal(COLOR_PENDING)
 		end)
 

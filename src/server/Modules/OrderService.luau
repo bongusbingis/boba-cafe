@@ -16,14 +16,19 @@ local Packages = ReplicatedStorage:WaitForChild("Packages")
 ---> Dependencies
 
 local Knit = require(Packages.Knit)
-local Promise = require(Packages.Promise)
+local OrderSpec = require(ReplicatedStorage:WaitForChild("Shared").Ordering.OrderSpec)
 
 ---> Types
+
+type Spec = OrderSpec.OrderSpec
+type Grade = OrderSpec.Grade
 
 type Order = {
 	orderNum: string,
 	customer: number, -- UserId
 	order: { any },
+	specs: { Spec }, -- one per item in `order`, derived by the server (OrderSpec.FromOrderItem)
+	grade: Grade?, -- set when the barista deposits the order
 	numItems: number,
 	status: string,
 	preparedBy: number?, -- UserId
@@ -69,6 +74,18 @@ local COLOR_PREPARING = Color3.fromRGB(229, 198, 103)
 local COLOR_READY = Color3.fromRGB(151, 190, 135)
 local COLOR_ERROR = Color3.fromRGB(253, 102, 102)
 
+-- Player-facing text for the reasons OrderSpec.Match / PickTools return. Display
+-- only; an unknown reason is shown as is.
+local REASON_TEXT = {
+	Item = "Wrong item",
+	Size = "Wrong size",
+	Syrup = "Wrong syrup",
+	Tapioca = "Wrong tapioca",
+	Iced = "Wrong ice",
+	Sugar = "Wrong sugar",
+	Missing = "An item is missing",
+}
+
 ---> Service
 
 local OrderService = Knit.CreateService({
@@ -90,11 +107,9 @@ local OrderService = Knit.CreateService({
 	_statusScreens = {} :: { SurfaceGui },
 	_staffScreens = {} :: { SurfaceGui },
 	_pickUpAreas = {} :: { Model },
-	_areaDebounces = {} :: { [Model]: boolean },
 	_orderDebounces = {} :: { [number]: boolean },
 
 	-- Resolved in KnitStart after all services are ready
-	_dialogService = nil :: any,
 	_statisticsService = nil :: any,
 	_questService = nil :: any,
 	_shiftService = nil :: any,
@@ -135,34 +150,34 @@ end
 -- Menu. DefaultInfo is always the Menu definition. CustomInfo may hold only the
 -- choices that item offers: each Select value is one of its listed strings, each
 -- RequiredSelection value is one of its keys (both required), and each Option is
--- a boolean (missing = the Menu default). Returns the item to store, or nil and a
--- reason.
-local function buildOrderItem(menu: { [string]: any }, request: any): ({ [string]: any }?, string?)
+-- a boolean (missing = the Menu default). Returns the item to store with its
+-- OrderSpec, or nil, nil and a reason.
+local function buildOrderItem(menu: { [string]: any }, request: any): ({ [string]: any }?, Spec?, string?)
 	if typeof(request) ~= "table" or typeof(request.Category) ~= "string" or typeof(request.Item) ~= "string" then
-		return nil, "item has no Category/Item"
+		return nil, nil, "item has no Category/Item"
 	end
 	local category = menu[request.Category]
 	local def = category and category.Items[request.Item]
 	if not def then
-		return nil, "unknown menu item"
+		return nil, nil, "unknown menu item"
 	end
 	local customInfo = request.CustomInfo or {}
 	if typeof(customInfo) ~= "table" then
-		return nil, "CustomInfo is not a table"
+		return nil, nil, "CustomInfo is not a table"
 	end
 
 	local clean = {}
 	for key, choices in def.Select or {} do
 		local value = customInfo[key]
 		if typeof(value) ~= "string" or not table.find(choices, value) then
-			return nil, "invalid " .. key
+			return nil, nil, "invalid " .. key
 		end
 		clean[key] = value
 	end
 	for key, choices in def.RequiredSelection or {} do
 		local value = customInfo[key]
 		if typeof(value) ~= "string" or choices[value] == nil then
-			return nil, "invalid " .. key
+			return nil, nil, "invalid " .. key
 		end
 		clean[key] = value
 	end
@@ -171,17 +186,22 @@ local function buildOrderItem(menu: { [string]: any }, request: any): ({ [string
 		if value == nil then
 			value = default
 		elseif typeof(value) ~= "boolean" then
-			return nil, "invalid " .. key
+			return nil, nil, "invalid " .. key
 		end
 		clean[key] = value
 	end
 	for key in customInfo do
 		if clean[key] == nil then
-			return nil, "unexpected CustomInfo key"
+			return nil, nil, "unexpected CustomInfo key"
 		end
 	end
 
-	return { Category = request.Category, Item = request.Item, DefaultInfo = def, CustomInfo = clean }, nil
+	local item = { Category = request.Category, Item = request.Item, DefaultInfo = def, CustomInfo = clean }
+	local spec, specReason = OrderSpec.FromOrderItem(item)
+	if not spec then
+		return nil, nil, "no order spec (" .. tostring(specReason) .. ")"
+	end
+	return item, spec, nil
 end
 
 -- Builds a display model from the non-Handle parts of a tool for placement at a
@@ -251,6 +271,15 @@ local function collectTools(character: Model?, backpack: Instance?): { ToolEntry
 	return tools
 end
 
+-- "Wrong size, Wrong ice" for the reasons OrderSpec returns.
+local function describeReasons(reasons: { string }): string
+	local lines = table.create(#reasons)
+	for i, reason in reasons do
+		lines[i] = REASON_TEXT[reason] or reason
+	end
+	return table.concat(lines, ", ")
+end
+
 ---> Private Methods
 
 function OrderService:_getPlayerOrder(userId: number, status: string): Order?
@@ -281,16 +310,6 @@ end
 
 function OrderService:_canClaimOrder(player: Player): boolean
 	return self:_isClockedIn(player) and self:_getPlayerOrder(player.UserId, "Being Prepared") == nil
-end
-
-function OrderService:_getPendingCount(): number
-	local count = 0
-	for _, order in self._orders do
-		if order.status == "Pending Preparation" then
-			count += 1
-		end
-	end
-	return count
 end
 
 -- Returns the oldest pending order, or nil if none exist.
@@ -363,7 +382,7 @@ end
 
 function OrderService:_updateStaffScreens()
 	local nextOrder = self:_getNextOrder()
-	local pendingCount = self:_getPendingCount()
+	local pendingCount = self:GetPendingCount()
 
 	for _, screen in self._staffScreens do
 		for _, frame in screen.Frame.Frame:GetChildren() do
@@ -464,12 +483,13 @@ function OrderService:_broadcastUpdate()
 	self:_updateStatusScreens()
 end
 
-function OrderService:_addOrder(customerId: number, orderItems: { any })
+function OrderService:_addOrder(customerId: number, orderItems: { any }, specs: { Spec })
 	self._currentOrderNum += 1
 	table.insert(self._orders, {
 		orderNum = string.format("%04i", self._currentOrderNum % 1000),
 		customer = customerId,
 		order = orderItems,
+		specs = specs,
 		numItems = #orderItems,
 		status = "Pending Preparation",
 		preparedBy = nil,
@@ -615,63 +635,10 @@ end
 
 -- ──────────────────────────────────────────────────────────────────────────
 
--- Presents sequential ActionPrompt dialogs so the staff member can choose
--- which tools from their inventory to include in the deposited order.
--- Resolves with the selected ToolEntry array, or nil if the player cancelled.
-function OrderService:_promptToolSelection(player: Player, toolList: { ToolEntry }, count: number)
-	return Promise.new(function(resolve)
-		local selected: { ToolEntry } = {}
-		local remaining = { table.unpack(toolList) }
-
-		local function selectNext()
-			if #selected >= count then
-				resolve(selected)
-				return
-			end
-
-			local buttons = {}
-			for _, entry in remaining do
-				table.insert(buttons, { Text = entry.Name })
-			end
-
-			self._dialogService
-				:CreateDialog(player, "ActionPrompt", {
-					Title = string.format("Select Item %d of %d", #selected + 1, count),
-					Text = "Choose an item from your inventory to deposit for this order.",
-					Buttons = buttons,
-					CloseText = "Cancel",
-				})
-				:andThen(function(choice: string?)
-					if not choice or choice == "Cancel" then
-						resolve(nil)
-						return
-					end
-					for i, entry in remaining do
-						if entry.Name == choice then
-							table.insert(selected, entry)
-							table.remove(remaining, i)
-							break
-						end
-					end
-					selectNext()
-				end)
-				:catch(function()
-					resolve(nil)
-				end)
-		end
-
-		selectNext()
-	end)
-end
-
 -- Handles both paths of a pick-up area interaction:
 --   • If the area belongs to the triggering player → they pick up their order.
 --   • Otherwise → the player is a staff member depositing a prepared order.
 function OrderService:_handlePickUp(player: Player, area: Model)
-	if self._areaDebounces[area] then
-		return
-	end
-
 	local ownerValue: IntValue = area.OrderOwner
 
 	if ownerValue.Value == player.UserId then
@@ -733,86 +700,106 @@ function OrderService:_handlePickUp(player: Player, area: Model)
 			return
 		end
 
-		local toolList = collectTools(player.Character, player.Backpack)
-
-		if #toolList < #playerOrder.order then
+		-- The tools are matched against the order's specs here, in one synchronous
+		-- block with the move below, so nothing can change them in between. A miss
+		-- tells the barista why and changes nothing.
+		local tools, grade, reasons = self:FindServeTools(player, playerOrder.specs)
+		if not tools then
 			self.Client.Announcement:Fire(
 				player,
 				"Cannot Deposit Order!",
-				string.format(
-					"The order requires %d item(s), but you only have %d. "
-						.. "Check your order notepad and return when ready.",
-					#playerOrder.order,
-					#toolList
-				),
+				describeReasons(reasons) .. ". Check your order notepad and return when ready.",
 				COLOR_ERROR
 			)
 			return
 		end
 
-		-- Lock this area against concurrent deposit attempts
-		self._areaDebounces[area] = true
 		ownerValue.Value = playerOrder.customer
 
-		-- Hide free pick-up nodes for this player while they pick tools
+		-- Hide free pick-up nodes for this player now that the order is down
 		for _, node in self._pickUpAreas do
 			if node.OrderOwner.Value == 0 then
 				self.Client.PickUpNodeVisibilityChanged:Fire(player, node, false)
 			end
 		end
 
-		self:_promptToolSelection(player, toolList, #playerOrder.order):andThen(function(selected: { ToolEntry }?)
-			self._areaDebounces[area] = nil
+		self.Client.NotepadUpdated:Fire(player, "ResetOrder")
 
-			if not selected then
-				-- Cancelled — release the area and restore node indicators
-				ownerValue.Value = 0
-				for _, node in self._pickUpAreas do
-					if node.OrderOwner.Value == 0 then
-						self.Client.PickUpNodeVisibilityChanged:Fire(player, node, true)
-					end
-				end
-				return
+		if self._statisticsService then
+			self._statisticsService:IncrementStat(player, "OrdersPrepared", 1)
+		end
+
+		playerOrder.status = "Ready for Pick Up"
+		playerOrder.statusColor = COLOR_READY
+		playerOrder.grade = grade
+		self:_updateStatusScreens()
+
+		local orderFolder = Instance.new("Folder")
+		orderFolder.Name = "Order_" .. playerOrder.customer
+		orderFolder.Parent = ServerStorage[ORDER_PICKUP_FOLDER]
+
+		for i, tool in tools do
+			if PICKUP_MODEL_OFFSETS[i] then
+				local displayModel = createModelFromTool(tool)
+				displayModel.Parent = area
+				displayModel:PivotTo(
+					area.CFrame * PICKUP_MODEL_OFFSETS[i] * CFrame.new(0, displayModel.PrimaryPart.Size.Y / 2, 0)
+				)
 			end
+			tool.Parent = orderFolder
+		end
 
-			self.Client.NotepadUpdated:Fire(player, "ResetOrder")
-
-			if self._statisticsService then
-				self._statisticsService:IncrementStat(player, "OrdersPrepared", 1)
-			end
-
-			playerOrder.status = "Ready for Pick Up"
-			playerOrder.statusColor = COLOR_READY
-			self:_updateStatusScreens()
-
-			local orderFolder = Instance.new("Folder")
-			orderFolder.Name = "Order_" .. playerOrder.customer
-			orderFolder.Parent = ServerStorage[ORDER_PICKUP_FOLDER]
-
-			for i, entry in selected do
-				if PICKUP_MODEL_OFFSETS[i] then
-					local displayModel = createModelFromTool(entry.Tool)
-					displayModel.Parent = area
-					displayModel:PivotTo(
-						area.CFrame
-							* PICKUP_MODEL_OFFSETS[i]
-							* CFrame.new(0, displayModel.PrimaryPart.Size.Y / 2, 0)
-					)
-				end
-				entry.Tool.Parent = orderFolder
-			end
-
-			local customer = Players:GetPlayerByUserId(playerOrder.customer)
-			if customer then
-				area.ProximityPrompt.ObjectText = customer.Name .. "'s Order"
-				area.ProximityPrompt.ActionText = "Pick Up Order"
-				self.Client.PickUpNodeVisibilityChanged:Fire(customer, area, true, true)
-			end
-		end)
+		local customer = Players:GetPlayerByUserId(playerOrder.customer)
+		if customer then
+			area.ProximityPrompt.ObjectText = customer.Name .. "'s Order"
+			area.ProximityPrompt.ActionText = "Pick Up Order"
+			self.Client.PickUpNodeVisibilityChanged:Fire(customer, area, true, true)
+		end
 	end
 end
 
 ---> Public Methods
+
+-- Number of orders waiting for a barista to claim.
+function OrderService:GetPendingCount(): number
+	local count = 0
+	for _, order in self._orders do
+		if order.status == "Pending Preparation" then
+			count += 1
+		end
+	end
+	return count
+end
+
+-- True while the player is preparing a player-placed order (claimed, not yet
+-- deposited).
+function OrderService:HasActiveOrder(player: Player): boolean
+	return self:_getPlayerOrder(player.UserId, "Being Prepared") ~= nil
+end
+
+-- Picks one of the player's tools (the held tool first, then the backpack) for each
+-- spec, graded by OrderSpec.PickTools from the tools' attributes. Returns the tools
+-- in spec order and the overall grade, or nil, "Wrong" and the reasons. It only
+-- reads: the caller moves or destroys the tools, in the same synchronous block.
+-- Never yields.
+function OrderService:FindServeTools(player: Player, specs: { Spec }): ({ Tool }?, Grade, { string })
+	local entries = collectTools(player.Character, player.Backpack)
+	local candidates = table.create(#entries)
+	for i, entry in entries do
+		candidates[i] = entry.Tool:GetAttributes()
+	end
+
+	local picks, grade, reasons = OrderSpec.PickTools(specs, candidates)
+	if not picks then
+		return nil, grade, reasons
+	end
+
+	local tools = table.create(#picks)
+	for i, candidateIndex in picks do
+		tools[i] = entries[candidateIndex].Tool
+	end
+	return tools, grade, reasons
+end
 
 -- Any player may place an order for themselves. `customerId` must be the
 -- caller's UserId; every argument is untrusted client input.
@@ -843,14 +830,17 @@ function OrderService.Client:CreateOrder(player: Player, customerId: any, orderI
 	end
 
 	-- Only the array part is read, and each item is rebuilt from the server's Menu.
+	-- The specs the deposit is graded against come from those rebuilt items.
 	local items = table.create(itemCount)
+	local specs = table.create(itemCount)
 	for i = 1, itemCount do
-		local item, reason = buildOrderItem(menu, orderItems[i])
-		if not item then
+		local item, spec, reason = buildOrderItem(menu, orderItems[i])
+		if not item or not spec then
 			warn(string.format("[OrderService] Rejected order from %s: %s", player.Name, tostring(reason)))
 			return { Success = false, Message = "Invalid order." }
 		end
 		items[i] = item
+		specs[i] = spec
 	end
 
 	if server:_hasOpenOrder(player.UserId) then
@@ -862,7 +852,7 @@ function OrderService.Client:CreateOrder(player: Player, customerId: any, orderI
 		server._orderDebounces[player.UserId] = nil
 	end)
 
-	server:_addOrder(player.UserId, items)
+	server:_addOrder(player.UserId, items, specs)
 
 	if server._statisticsService then
 		server._statisticsService:IncrementStat(player, "OrdersCreated", 1)
@@ -963,7 +953,6 @@ end
 
 function OrderService:KnitStart()
 	-- Resolve cross-service references after all services have initialised
-	self._dialogService = Knit.GetService("DialogService")
 	self._statisticsService = Knit.GetService("StatisticsService")
 	self._shiftService = Knit.GetService("ShiftService")
 
