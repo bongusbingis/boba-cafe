@@ -124,6 +124,7 @@ return function(props)
 	local requiredIndex, setRequiredIndex = React.useState(1)
 
 	local submitMessage, setSubmitMessage = React.useState("")
+	local submitFailed, setSubmitFailed = React.useState(false)
 
 	local activeItemData = if selectedCategory and selectedItemKey
 		then FoodTable[selectedCategory].Items[selectedItemKey]
@@ -200,6 +201,7 @@ return function(props)
 
 		local nextOrder = table.clone(orderItems)
 		table.insert(nextOrder, {
+			Category = selectedCategory,
 			Item = selectedItemKey,
 			DefaultInfo = activeItemData,
 			CustomInfo = customInfo,
@@ -215,30 +217,51 @@ return function(props)
 		setOrderItems(nextOrder)
 	end
 
+	local isSubmitting = React.useRef(false)
+
 	local function onSubmitOrder()
-		if #orderItems == 0 then
+		if isSubmitting.current or #orderItems == 0 then
 			return
 		end
 
-		local customerId = props.CustomerId or localPlayer.UserId
-		if RunService:IsRunning() then
-			local ok, err = pcall(function()
-				Knit.GetService("OrderService"):CreateOrder(customerId, orderItems)
+		if not RunService:IsRunning() then
+			setSubmitFailed(false)
+			setSubmitMessage("Preview mode: order not submitted.")
+			return
+		end
+
+		-- Players can only order for themselves. The server rebuilds each item from its
+		-- own Menu, so only the choice is sent, and it replies { Success, Message? }.
+		local request = table.create(#orderItems)
+		for i, orderItem in orderItems do
+			request[i] = { Category = orderItem.Category, Item = orderItem.Item, CustomInfo = orderItem.CustomInfo }
+		end
+
+		isSubmitting.current = true
+		task.spawn(function()
+			-- Knit client methods return a Promise; expect() yields and throws on rejection.
+			local ok, result = pcall(function()
+				return Knit.GetService("OrderService"):CreateOrder(localPlayer.UserId, request):expect()
 			end)
-			if ok then
-				setSubmitMessage("Order sent.")
+			isSubmitting.current = false
+			if not ok then
+				warn("[MobileOrder] failed to submit order", result)
+			end
+
+			local success = ok and typeof(result) == "table" and result.Success == true
+			local message = if ok and typeof(result) == "table" then result.Message else nil
+			setSubmitFailed(not success)
+			if success then
+				setSubmitMessage(message or "Order sent.")
 				setOrderItems({})
 				setSelectedTab("Menu")
 				if props.OnSubmitted then
 					props.OnSubmitted()
 				end
 			else
-				setSubmitMessage("Unable to submit order.")
-				warn("[MobileOrder] failed to submit order", err)
+				setSubmitMessage(message or "Unable to submit order.")
 			end
-		else
-			setSubmitMessage("Preview mode: order not submitted.")
-		end
+		end)
 	end
 
 	local function renderMenuTab()
@@ -1101,7 +1124,7 @@ return function(props)
 				Position = UDim2.fromScale(0.03, 0.81),
 				Size = UDim2.fromScale(0.94, 0.03),
 				Text = submitMessage,
-				TextColor3 = if string.find(submitMessage, "Unable") then Color3.fromRGB(190, 70, 70) else ACTIVE_GREEN,
+				TextColor3 = if submitFailed then Color3.fromRGB(190, 70, 70) else ACTIVE_GREEN,
 				TextScaled = true,
 				TextXAlignment = Enum.TextXAlignment.Left,
 			}) or nil,

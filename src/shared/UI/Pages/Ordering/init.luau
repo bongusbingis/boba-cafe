@@ -18,7 +18,6 @@ local CategoryPage = require(script.CategoryPage)
 local ItemPage = require(script.ItemPage)
 local RequiredSelectionPage = require(script.RequiredSelectionPage)
 local SizeOptionsPage = require(script.SizeOptionsPage)
-local PlayerSelectPage = require(script.PlayerSelectPage)
 
 ---> data
 local FoodService = require(Shared.Ordering.Menu)
@@ -33,7 +32,6 @@ local Styles = require(UI.Styles)
 ---> constants
 local DEFAULT_BAR_COLOR = Color3.fromRGB(224, 94, 88)
 local MAX_ORDER_ITEMS = 3
-local CAN_SELF_ORDER = true
 
 ---> private
 local c = React.createElement
@@ -83,7 +81,7 @@ return function(props: {
 	end
 
 	---> page routing
-	-- Pages: "CategorySelect" | "ItemSelect" | "RequiredSelection" | "SizeOptions" | "PlayerSelect"
+	-- Pages: "CategorySelect" | "ItemSelect" | "RequiredSelection" | "SizeOptions"
 	local page, setPage = React.useState("CategorySelect")
 
 	---> item-builder state
@@ -103,9 +101,6 @@ return function(props: {
 	local staffAvatarUrl, setStaffAvatarUrl = React.useState(
 		"rbxasset://textures/ui/GuiImagePlaceholder.png"
 	)
-
-	---> nearby players (populated when entering PlayerSelect)
-	local nearbyPlayers, setNearbyPlayers = React.useState({} :: { Player })
 
 	---> load local player info once on mount
 	React.useEffect(function()
@@ -130,28 +125,6 @@ return function(props: {
 		end)
 	end, {})
 
-	---> refresh nearby players when entering PlayerSelect
-	React.useEffect(function()
-		if page ~= "PlayerSelect" then return end
-
-		local localPlayer = Players.LocalPlayer
-		local localChar = localPlayer.Character
-		local localRoot = localChar and localChar:FindFirstChild("HumanoidRootPart")
-
-		local nearby = {}
-		for _, p in Players:GetPlayers() do
-			if p == localPlayer and not CAN_SELF_ORDER then continue end
-			local char = p.Character
-			if not char then continue end
-			local root = char:FindFirstChild("HumanoidRootPart")
-			if not root then continue end
-			if not localRoot or (localRoot.Position - root.Position).Magnitude < 15 then
-				table.insert(nearby, p)
-			end
-		end
-		setNearbyPlayers(nearby)
-	end, { page } :: { any })
-
 	---> computed TopBar props based on current page
 	local topBarTitle = "Order"
 	local topBarColor = DEFAULT_BAR_COLOR
@@ -166,15 +139,12 @@ return function(props: {
 		topBarTitle = reqSelQueue[reqSelIdx].name
 	elseif page == "SizeOptions" then
 		topBarTitle = "Add to Order"
-	elseif page == "PlayerSelect" then
-		topBarTitle = "Select Customer"
-		topBarColor = DEFAULT_BAR_COLOR
 	end
 
 	---> navigation handlers
 
 	local function goBack()
-		if page == "ItemSelect" or page == "PlayerSelect" then
+		if page == "ItemSelect" then
 			setPage("CategorySelect")
 		elseif page == "RequiredSelection" then
 			if reqSelIdx > 1 then
@@ -260,6 +230,7 @@ return function(props: {
 
 		local newOrder = table.clone(orderItems)
 		table.insert(newOrder, {
+			Category = selCategory,
 			Item = selItemKey,
 			DefaultInfo = item,
 			CustomInfo = customInfo,
@@ -279,14 +250,49 @@ return function(props: {
 		setOrderItems(newOrder)
 	end
 
-	local function onPlayerSelected(player: Player)
-		if RunService:IsRunning() then
-			Knit.GetService("OrderService"):CreateOrder(player.UserId, orderItems)
+	local isSubmitting = React.useRef(false)
+
+	-- Players can only order for themselves. The server replies { Success, Message? }; on failure the order is kept
+	-- so the player can adjust it and try again.
+	local function submitOrder()
+		if isSubmitting.current or #orderItems == 0 then return end
+
+		if not RunService:IsRunning() then
+			closeMenu()
+			return
 		end
-		setOrderItems({})
-		setSelCategory(nil)
-		setPage("CategorySelect")
-		closeMenu()
+
+		-- The server rebuilds each item from its own Menu, so only the choice is sent.
+		local request = table.create(#orderItems)
+		for i, orderItem in orderItems do
+			request[i] = { Category = orderItem.Category, Item = orderItem.Item, CustomInfo = orderItem.CustomInfo }
+		end
+
+		isSubmitting.current = true
+		task.spawn(function()
+			-- Knit client methods return a Promise; expect() yields and throws on rejection.
+			local ok, result = pcall(function()
+				return Knit.GetService("OrderService"):CreateOrder(Players.LocalPlayer.UserId, request):expect()
+			end)
+			isSubmitting.current = false
+			if not ok then
+				warn("[Ordering] CreateOrder failed:", result)
+			end
+
+			local success = ok and typeof(result) == "table" and result.Success == true
+			local message = if ok and typeof(result) == "table" then result.Message else nil
+			Knit.GetController("DialogController"):Notify({
+				Title = if success then "Order Placed" else "Order Failed",
+				Description = message or (if success then "Your order was sent." else "Unable to submit order."),
+			})
+
+			if success then
+				setOrderItems({})
+				setSelCategory(nil)
+				setPage("CategorySelect")
+				closeMenu()
+			end
+		end)
 	end
 
 	local cardSize = usePx()(125)
@@ -327,11 +333,6 @@ return function(props: {
 			OnCustomInfoChanged = setCustomInfo,
 			OnAddToOrder = onAddToOrder,
 			OnCancel = cancelItemConfig,
-		})
-		elseif page == "PlayerSelect"
-		then c(PlayerSelectPage, {
-			NearbyPlayers = nearbyPlayers,
-			OnPlayerSelected = onPlayerSelected,
 		})
 		else nil
 
@@ -533,9 +534,7 @@ return function(props: {
 						ResolveItemName = resolveItemName,
 						ResolveItemDescription = resolveItemDescription,
 						OnOrderItemRemoved = onOrderItemRemoved,
-						OnSubmit = function()
-							setPage("PlayerSelect")
-						end,
+						OnSubmit = submitOrder,
 					}),
 
 					Pages = c(Pane, {

@@ -277,9 +277,12 @@ local SyrupFlavor = {
 -- 	},
 -- }
 
+-- ServeItem is the tool "Item" attribute a served order is matched on (OrderSpec), for
+-- items whose kitchen tool is not named ItemName. Without it, ItemName is used.
 local featuredMatcha = {
 	Color = TOP_MENU_ITEM_COLOR,
 	ItemName = "Matcha Tea Boba",
+	ServeItem = "Boba",
 	RequiredSelection = {
 		["Tapioca Flavor"] = TapiocaFlavor,
 		["Syrup Flavor"] = {
@@ -309,6 +312,7 @@ FoodService["FoodTable"] = {
 		Items = {
 			["Custom Boba"] = {
 				ItemName = "Custom Boba",
+				ServeItem = "Boba",
 				View = buildCupView("Boba", false),
 				RequiredSelection = {
 					["Syrup Flavor"] = SyrupFlavor,
@@ -636,6 +640,7 @@ FoodService["FoodTable"] = {
 			},
 			["Orange Cream"] = {
 				ItemName = "Orange Cream Mochi",
+				ServeItem = "Orange Mochi",
 				View = {
 					Model = Models["Mochi"]:FindFirstChild("Orange Mochi"),
 				},
@@ -661,6 +666,7 @@ FoodService["FoodTable"] = {
 			},
 			["Cup"] = {
 				ItemName = "Cup",
+				ServeItem = "Clear Cup",
 				View = buildCupView("Medium Clear Cup"),
 				Select = {
 					["Size"] = SIZE_SMALL_MEDIUM_LARGE,
