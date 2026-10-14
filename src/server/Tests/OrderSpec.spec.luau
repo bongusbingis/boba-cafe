@@ -1,7 +1,8 @@
 -- selene: allow(undefined_variable)
 --[[
 	OrderSpec.spec.luau
-	TestEZ tests for OrderSpec: Match, PickTools, FromMenuItem and FromOrderItem.
+	TestEZ tests for OrderSpec: Match, PickTools, FromMenuItem, FromOrderItem, and
+	the recipe card functions Steps and StepState.
 
 	Testing strategy
 	────────────────
@@ -13,7 +14,9 @@
 
 	Cases 1-23 are the 23 cases of REVIVAL-001 M1.1 section 4 (case numbers are in
 	the test names). The "FromOrderItem" block and the cases marked "extra" cover
-	REVIVAL-001 M1.3b and edge rules not in that table.
+	REVIVAL-001 M1.3b and edge rules not in that table. The "Steps" and "StepState"
+	blocks cover REVIVAL-001 M1.5a (design 3.8). StepState is table driven: a list of
+	held-tool snapshots per item, each with the expected current row and problem.
 --]]
 
 return function()
@@ -61,6 +64,21 @@ return function()
 	-- Spec D: a mug drink.
 	local function specD()
 		return { Kind = "Drink", Item = "Caramel Hot Chocolate", Size = "Mug", Label = "Mug Caramel Hot Chocolate" }
+	end
+
+	-- Spec B2: Small Regular coffee with ice and sugar.
+	local function specB2()
+		return with(specB(), { Iced = true, Sugar = true, Label = "Small Regular" })
+	end
+
+	-- Spec E: Vanilla Ice Cream, a grab item from the Ice Cream Freezer.
+	local function specE()
+		return { Kind = "Grab", Item = "Vanilla Ice Cream", Label = "Vanilla Ice Cream" }
+	end
+
+	-- Spec F: a tea. Teas and water have no card chain yet (PENDING JACK: Q22).
+	local function specF()
+		return { Kind = "Drink", Item = "Green Tea", Size = "Small", Iced = false, Label = "Small Green Tea" }
 	end
 
 	-- The attributes a correctly made spec A tool carries.
@@ -491,6 +509,402 @@ return function()
 		it("a non-table order item fails", function()
 			local spec, reason = OrderSpec.FromOrderItem("Regular" :: any)
 			expectFailure(spec, reason, "Item")
+		end)
+	end)
+
+	-- ══════════════════════════════════════════════════════════════════════
+	-- Steps and StepState (M1.5a, design 3.8)
+	-- ══════════════════════════════════════════════════════════════════════
+
+	-- rows = { { Station, Choice?, Label } } in card order.
+	local function expectSteps(spec, rows: { { [string]: any } })
+		local steps = OrderSpec.Steps(spec)
+		expect(#steps).to.equal(#rows)
+		for index, row in rows do
+			expect(steps[index].Station).to.equal(row.Station)
+			expect(steps[index].Choice).to.equal(row.Choice)
+			expect(steps[index].Label).to.equal(row.Label)
+			expect(steps[index].Optional).to.equal(nil)
+		end
+	end
+
+	-- problem = nil, or { Step, Severity, Reason, Reasons? } (Reasons defaults to { Reason }).
+	local function expectState(spec, attrs, current: number, problem: { [string]: any }?)
+		local actualCurrent, actualProblem = OrderSpec.StepState(spec, attrs)
+		expect(actualCurrent).to.equal(current)
+		if problem == nil then
+			expect(actualProblem).to.equal(nil)
+			return
+		end
+		expect(actualProblem).to.be.ok()
+		expect(actualProblem.Step).to.equal(problem.Step)
+		expect(actualProblem.Severity).to.equal(problem.Severity)
+		expect(actualProblem.Reason).to.equal(problem.Reason)
+		expectList(actualProblem.Reasons, problem.Reasons or { problem.Reason })
+	end
+
+	-- Runs one test per case: { name, attrs, current, problem? }.
+	local function stateCases(label: string, makeSpec, cases: { { any } })
+		describe(label, function()
+			for _, case in cases do
+				it(case[1], function()
+					expectState(makeSpec(), case[2], case[3], case[4])
+				end)
+			end
+		end)
+	end
+
+	describe("Steps", function()
+		it("spec A (boba): Clear Cup, Milk, syrup, tapioca, no Blender (PENDING JACK: Q3)", function()
+			expectSteps(specA(), {
+				{ Station = "Clear Cup", Choice = "Medium", Label = "Medium Clear Cup" },
+				{ Station = "Milk", Label = "Milk" },
+				{ Station = "Classic Milk Tea Syrup", Label = "Classic Milk Tea Syrup" },
+				{ Station = "Normal Tapioca", Label = "Normal Tapioca" },
+			})
+		end)
+
+		it("spec B (coffee with no ice or sugar): Cup with the size, Coffee Machine with the coffee", function()
+			expectSteps(specB(), {
+				{ Station = "Cup", Choice = "Small", Label = "Small Cup" },
+				{ Station = "Coffee Machine", Choice = "Regular", Label = "Regular" },
+			})
+		end)
+
+		it("spec B2 (coffee with ice and sugar): adds Ice Machine then Sugar, ice first", function()
+			expectSteps(specB2(), {
+				{ Station = "Cup", Choice = "Small", Label = "Small Cup" },
+				{ Station = "Coffee Machine", Choice = "Regular", Label = "Regular" },
+				{ Station = "Ice Machine", Label = "Ice" },
+				{ Station = "Sugar", Label = "Sugar" },
+			})
+		end)
+
+		it("a coffee that wants only sugar skips the Ice Machine", function()
+			local steps = OrderSpec.Steps(with(specB(), { Sugar = true }))
+			expect(#steps).to.equal(3)
+			expect(steps[3].Station).to.equal("Sugar")
+		end)
+
+		it("spec C (a pastry): one Food Display step, picking the item", function()
+			expectSteps(specC(), { { Station = "Food Display", Choice = "Fudge Brownie", Label = "Fudge Brownie" } })
+		end)
+
+		it("spec E (ice cream): one Ice Cream Freezer step, picking the item", function()
+			expectSteps(
+				specE(),
+				{ { Station = "Ice Cream Freezer", Choice = "Vanilla Ice Cream", Label = "Vanilla Ice Cream" } }
+			)
+		end)
+
+		it("spec D (hot cocoa): Mug, Milk, then the flavour's powder station", function()
+			expectSteps(specD(), {
+				{ Station = "Mug", Label = "Mug" },
+				{ Station = "Milk", Label = "Steamed Milk" },
+				{ Station = "Caramel Hot Chocolate Powder", Label = "Caramel Hot Chocolate Powder" },
+			})
+		end)
+
+		it("plain Hot Chocolate uses the Hot Chocolate Powder station", function()
+			local steps = OrderSpec.Steps(with(specD(), { Item = "Hot Chocolate" }))
+			expect(steps[3].Station).to.equal("Hot Chocolate Powder")
+		end)
+
+		it("items with no chain have no steps: a tea, a smoothie, a bare Clear Cup, malformed specs", function()
+			expectSteps(specF(), {})
+			expectSteps({ Kind = "Drink", Item = "Kiwi Smoothie", Size = "Small", Label = "Small Kiwi Smoothie" }, {})
+			expectSteps({ Kind = "Drink", Item = "Clear Cup", Size = "Large", Label = "Large Cup" }, {})
+			expectSteps({ Kind = "Drink", Label = "No item" } :: any, {})
+			expectSteps(nil :: any, {})
+		end)
+
+		it("returns a fresh table on every call", function()
+			local first = OrderSpec.Steps(specA())
+			first[1].Station = "Changed"
+			table.remove(first, 2)
+			expectSteps(specA(), {
+				{ Station = "Clear Cup", Choice = "Medium", Label = "Medium Clear Cup" },
+				{ Station = "Milk", Label = "Milk" },
+				{ Station = "Classic Milk Tea Syrup", Label = "Classic Milk Tea Syrup" },
+				{ Station = "Normal Tapioca", Label = "Normal Tapioca" },
+			})
+		end)
+	end)
+
+	describe("StepState", function()
+		-- Spec A (boba): rows 1 Clear Cup, 2 Milk, 3 Syrup, 4 Tapioca; 5 = ready to serve.
+		stateCases("spec A: each step advances", specA, {
+			{ "holding nothing is row 1", nil, 1 },
+			{ "an empty attribute table is row 1", {}, 1 },
+			{ "a Clear Cup with no size yet is still row 1", { Item = "Clear Cup" }, 1 },
+			{ "a Medium Clear Cup is row 2", { Item = "Clear Cup", Size = "Medium" }, 2 },
+			{ "Milk is row 3", { Item = "Milk", Size = "Medium" }, 3 },
+			{
+				"Classic Milk Tea syrup is row 4",
+				{ Item = "Flavored Milk", Size = "Medium", Syrup = "Classic Milk Tea" },
+				4,
+			},
+			{ "Normal tapioca is row 5, ready to serve", attrsA(), 5 },
+			{ "a Lid and other extra attributes change nothing", with(attrsA(), { Lid = true, Blended = true }), 5 },
+		})
+
+		stateCases("spec A: mistakes", specA, {
+			{
+				"a wrong syrup at step 3 is Wrong the moment it goes in",
+				{ Item = "Flavored Milk", Size = "Medium", Syrup = "Taro" },
+				4,
+				{ Step = 3, Severity = "Wrong", Reason = "Syrup" },
+			},
+			{
+				"a wrong size is Close, shown on the cup row",
+				{ Item = "Clear Cup", Size = "Large" },
+				2,
+				{ Step = 1, Severity = "Close", Reason = "Size" },
+			},
+			{
+				"a wrong tapioca is Close, shown on the tapioca row",
+				with(attrsA(), { Tapioca = "Strawberry" }),
+				5,
+				{ Step = 4, Severity = "Close", Reason = "Tapioca" },
+			},
+			{
+				"a wrong size and tapioca together are Wrong, first reason Size",
+				with(attrsA(), { Size = "Large", Tapioca = "Strawberry" }),
+				5,
+				{ Step = 1, Severity = "Wrong", Reason = "Size", Reasons = { "Size", "Tapioca" } },
+			},
+			{
+				"a wrong syrup wins over a wrong size",
+				with(attrsA(), { Syrup = "Taro", Size = "Large" }),
+				5,
+				{ Step = 3, Severity = "Wrong", Reason = "Syrup" },
+			},
+			{
+				"a coffee in hand is a Wrong Item on row 1",
+				{ Item = "Regular", Size = "Medium" },
+				1,
+				{ Step = 1, Severity = "Wrong", Reason = "Item" },
+			},
+			{
+				"a Cup instead of a Clear Cup is a Wrong Item on row 1",
+				{ Item = "Cup", Size = "Medium" },
+				1,
+				{ Step = 1, Severity = "Wrong", Reason = "Item" },
+			},
+			{
+				"a pastry in hand is a Wrong Item on row 1",
+				{ Item = "Fudge Brownie" },
+				1,
+				{ Step = 1, Severity = "Wrong", Reason = "Item" },
+			},
+		})
+
+		-- Spec B (coffee): rows 1 Cup, 2 Coffee Machine; 3 = ready to serve.
+		stateCases("spec B: each step advances", specB, {
+			{ "holding nothing is row 1", nil, 1 },
+			{ "a Small Cup is row 2", { Item = "Cup", Size = "Small" }, 2 },
+			{ "a Small Regular is row 3, ready to serve", { Item = "Regular", Size = "Small" }, 3 },
+		})
+
+		stateCases("spec B: mistakes", specB, {
+			{
+				"a Medium Cup is Close on row 1",
+				{ Item = "Cup", Size = "Medium" },
+				2,
+				{ Step = 1, Severity = "Close", Reason = "Size" },
+			},
+			{
+				"the wrong coffee is a Wrong Item on the Coffee Machine row",
+				{ Item = "Decaf", Size = "Small" },
+				2,
+				{ Step = 2, Severity = "Wrong", Reason = "Item" },
+			},
+			{
+				"ice nobody asked for is Close, with no row to show it on",
+				{ Item = "Regular", Size = "Small", Iced = true },
+				3,
+				{ Step = nil, Severity = "Close", Reason = "Iced" },
+			},
+			{
+				"sugar nobody asked for is Close, with no row to show it on",
+				{ Item = "Regular", Size = "Small", Sugar = true },
+				3,
+				{ Step = nil, Severity = "Close", Reason = "Sugar" },
+			},
+			{
+				"unwanted ice and sugar together are Wrong",
+				{ Item = "Regular", Size = "Small", Iced = true, Sugar = true },
+				3,
+				{ Step = nil, Severity = "Wrong", Reason = "Iced", Reasons = { "Iced", "Sugar" } },
+			},
+			{
+				"a Clear Cup is a Wrong Item on the Coffee Machine row",
+				{ Item = "Clear Cup", Size = "Small" },
+				2,
+				{ Step = 2, Severity = "Wrong", Reason = "Item" },
+			},
+		})
+
+		-- Spec B2 (coffee with ice and sugar): rows 1 Cup, 2 Coffee, 3 Ice, 4 Sugar; 5 = ready.
+		stateCases("spec B2: ice then sugar", specB2, {
+			{ "a Small Regular still needs ice", { Item = "Regular", Size = "Small" }, 3 },
+			{ "iced is row 4", { Item = "Regular", Size = "Small", Iced = true }, 4 },
+			{
+				"iced and sugared is row 5, ready to serve",
+				{ Item = "Regular", Size = "Small", Iced = true, Sugar = true },
+				5,
+			},
+			{
+				"sugar before ice leaves ice current",
+				{ Item = "Regular", Size = "Small", Sugar = true },
+				3,
+			},
+			{ "sugar on a bare cup leaves the coffee current", { Item = "Cup", Size = "Small", Sugar = true }, 2 },
+		})
+
+		-- Spec C (a grab item): row 1 Food Display; 2 = ready to serve.
+		stateCases("spec C: a grab item", specC, {
+			{ "holding nothing is row 1", nil, 1 },
+			{ "the Fudge Brownie is row 2, ready to serve", { Item = "Fudge Brownie" }, 2 },
+			{ "a size attribute on a grab item is ignored", { Item = "Fudge Brownie", Size = "Large" }, 2 },
+			{
+				"another pastry is a Wrong Item on row 1",
+				{ Item = "Vanilla Macaron" },
+				1,
+				{ Step = 1, Severity = "Wrong", Reason = "Item" },
+			},
+			{
+				"a boba in hand is a Wrong Item on row 1",
+				attrsA(),
+				1,
+				{ Step = 1, Severity = "Wrong", Reason = "Item" },
+			},
+		})
+
+		-- Spec D (hot cocoa): rows 1 Mug, 2 Milk, 3 Powder; 4 = ready to serve.
+		stateCases("spec D: hot cocoa", specD, {
+			{ "holding nothing is row 1", nil, 1 },
+			{ "a Mug is row 2", { Item = "Mug", Size = "Mug" }, 2 },
+			{ "steamed milk is row 3", { Item = "Milk", Size = "Mug" }, 3 },
+			{ "Caramel Hot Chocolate is row 4, ready to serve", { Item = "Caramel Hot Chocolate", Size = "Mug" }, 4 },
+			{
+				"a cup is a Wrong Item on row 1",
+				{ Item = "Clear Cup", Size = "Small" },
+				1,
+				{ Step = 1, Severity = "Wrong", Reason = "Item" },
+			},
+		})
+
+		stateCases("spec F: a tea has no chain", specF, {
+			{ "holding nothing is row 1, no problem", nil, 1 },
+			{ "any held tool is row 1, no problem", { Item = "Green Tea", Size = "Large" }, 1 },
+		})
+
+		it("a non-table attribute value is treated as nothing held", function()
+			expectState(specA(), "Boba" :: any, 1, nil)
+		end)
+
+		it("a malformed spec is row 1 with no problem", function()
+			expectState(nil :: any, attrsA(), 1, nil)
+		end)
+
+		-- The card and the serve must agree (design 3.8): a finished tool's problem
+		-- Severity equals the grade Match gives it, and a clean tool has no problem.
+		describe("agreement with Match", function()
+			local function expectAgrees(spec, attrs)
+				local grade = OrderSpec.Match(spec, attrs)
+				local _, problem = OrderSpec.StepState(spec, attrs)
+				if grade == "Perfect" then
+					expect(problem).to.equal(nil)
+				else
+					expect(problem).to.be.ok()
+					expect(problem.Severity).to.equal(grade)
+				end
+			end
+
+			it("spec A finished tools", function()
+				expectAgrees(specA(), attrsA())
+				expectAgrees(specA(), with(attrsA(), { Size = "Large" }))
+				expectAgrees(specA(), with(attrsA(), { Tapioca = "Strawberry" }))
+				expectAgrees(specA(), with(attrsA(), { Syrup = "Taro" }))
+				expectAgrees(specA(), with(attrsA(), { Size = "Large", Tapioca = "Strawberry" }))
+				expectAgrees(specA(), { Item = "Fudge Brownie" })
+			end)
+
+			it("spec B finished tools", function()
+				local made = { Item = "Regular", Size = "Small" }
+				expectAgrees(specB(), made)
+				expectAgrees(specB(), with(made, { Size = "Large" }))
+				expectAgrees(specB(), with(made, { Iced = true }))
+				expectAgrees(specB(), with(made, { Iced = true, Sugar = true }))
+				expectAgrees(specB2(), with(made, { Iced = true, Sugar = true }))
+				expectAgrees(specB(), { Item = "Decaf", Size = "Small" })
+			end)
+
+			it("spec C and D finished tools", function()
+				expectAgrees(specC(), { Item = "Fudge Brownie" })
+				expectAgrees(specC(), { Item = "Vanilla Macaron" })
+				expectAgrees(specD(), { Item = "Caramel Hot Chocolate", Size = "Mug" })
+				expectAgrees(specD(), { Item = "Vanilla Hot Chocolate", Size = "Mug" })
+			end)
+		end)
+	end)
+
+	describe("Steps and StepState with the real Menu", function()
+		local function menuSpec(category: string, item: string, customInfo: { [string]: any }?)
+			assert(menuLoaded, "Shared.Ordering.Menu failed to load: " .. tostring(Menu))
+			local spec, reason = OrderSpec.FromOrderItem({ Category = category, Item = item, CustomInfo = customInfo })
+			assert(spec, "FromOrderItem failed on " .. tostring(reason))
+			return spec
+		end
+
+		it("slice item: Classic Milk Tea Boba has 4 steps", function()
+			local spec = menuSpec("Boba Teas", "Custom Boba", {
+				Size = "Medium",
+				["Syrup Flavor"] = "Classic Milk Tea",
+				["Tapioca Flavor"] = "Normal",
+			})
+			local steps = OrderSpec.Steps(spec)
+			expect(#steps).to.equal(4)
+			expect(steps[3].Station).to.equal("Classic Milk Tea Syrup")
+			expect(OrderSpec.StepState(spec, attrsA())).to.equal(5)
+		end)
+
+		it("slice item: Regular Coffee has 2 steps", function()
+			local spec = menuSpec("Coffees", "Regular", { Size = "Small" })
+			expect(#OrderSpec.Steps(spec)).to.equal(2)
+			expect(OrderSpec.StepState(spec, { Item = "Regular", Size = "Small" })).to.equal(3)
+		end)
+
+		it("slice item: Fudge Brownie has 1 step", function()
+			local spec = menuSpec("Pastries", "Fudge Brownie")
+			local steps = OrderSpec.Steps(spec)
+			expect(#steps).to.equal(1)
+			expect(steps[1].Station).to.equal("Food Display")
+			expect(OrderSpec.StepState(spec, { Item = "Fudge Brownie" })).to.equal(2)
+		end)
+
+		it("every Ice Creams item is picked at the Ice Cream Freezer", function()
+			assert(menuLoaded, "Shared.Ordering.Menu failed to load: " .. tostring(Menu))
+			local count = 0
+			for itemName in Menu.FoodTable["Ice Creams"].Items do
+				local steps = OrderSpec.Steps(menuSpec("Ice Creams", itemName))
+				expect(#steps).to.equal(1)
+				expect(steps[1].Station).to.equal("Ice Cream Freezer")
+				count += 1
+			end
+			expect(count > 0).to.equal(true)
+		end)
+
+		it("every Macarons, Mochis and Pastries item is picked at the Food Display", function()
+			assert(menuLoaded, "Shared.Ordering.Menu failed to load: " .. tostring(Menu))
+			for _, category in { "Macarons", "Mochis", "Pastries" } do
+				for itemName in Menu.FoodTable[category].Items do
+					local steps = OrderSpec.Steps(menuSpec(category, itemName))
+					expect(#steps).to.equal(1)
+					expect(steps[1].Station).to.equal("Food Display")
+				end
+			end
 		end)
 	end)
 

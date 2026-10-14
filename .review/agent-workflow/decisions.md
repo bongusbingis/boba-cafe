@@ -2,6 +2,17 @@
 
 Newest first. Each entry is `## <GOAL> / DEC-###: <title>` with Date, Source, and Decision. Prime is the only writer. Numbering continues; never reuse a number.
 
+## REVIVAL-001 / DEC-009: Overnight autonomous Prime run (2026-10-14 night)
+
+- **Date:** 2026-10-14.
+- **Source:** Jack: "You are piloting for the next ~8 hours… full permissions and authority as prime… do whatever required that is defensible to work without me here."
+- **Decision:** Prime runs M1 autonomously while Jack is away, bounded as follows.
+  - **Build only answer-robust work**, meaning work whose value survives any answer to Q1–Q26: M1.3c/d, M1.5a–d, the NPC lifecycle (M1.4d) behind the world contract, M1.4b config without pay values, measurement events.
+  - **Not built:** assignment and serve (Q1/Q2), payouts and pay values (Q5/Q6, economy gate), world authoring for spawns and NPC routes (Q7/Q8), and anything else marked `PENDING JACK`. For Q7–Q9, a read-only Rigger prepares candidate packets with captures so Jack can answer quickly.
+  - **Still Jack's:** DEC-008, publishing, pushing, saving the place, economy numbers, and destructive data changes. Local checkpoint commits on branch `uhweifh` are allowed (no push).
+  - **Cost:** sonnet for build lanes, opus only for one Sentry review. At most 3 lanes at once. One batched Gauge run at the end.
+  - **Context freshness:** Prime keeps `tasks/REVIVAL-001/night-log.md` current after every lane, and rewrites `kickoff-next-session.md` at the end, so a fresh session can resume from disk.
+
 ## REVIVAL-001 / DEC-008: No guessing on core design or existing content
 
 - **Date:** 2026-10-14.
