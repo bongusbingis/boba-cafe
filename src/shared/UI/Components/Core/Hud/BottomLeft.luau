@@ -25,6 +25,7 @@ local RankUtil = require(Shared.Utility.RankUtil)
 local SKIP_HATCH_PRODUCT_ID = 1143554452
 local HATCH_DURATION_SECONDS = 15 * 60
 local BUTTON_SIZE = UDim2.fromScale(1, 1)
+local CLOCKED_IN_ATTRIBUTE = "ClockedIn" -- owned by the server's ShiftService
 
 ---> styles
 local Styles = require(UI.Styles)
@@ -72,8 +73,29 @@ return function(props: {
 	local shiftTimerEnabled, setShiftTimerEnabled = React.useState(false)
 	local shiftTimerText, setShiftTimerText = React.useState("00:00")
 
-	local isStaff = rank > 3
+	-- Players start clocked in (ShiftService default), so assume that until the
+	-- attribute replicates.
+	local clockedIn, setClockedIn = React.useState(true)
+
 	local isAdmin = rank > 10
+
+	local function toggleClockedIn()
+		local wantClockedIn = not clockedIn
+		if not RunService:IsRunning() then
+			setClockedIn(wantClockedIn) -- story preview
+			return
+		end
+
+		-- The server sets the attribute; the listener below updates the button.
+		task.spawn(function()
+			local ok, err = pcall(function()
+				Knit.GetService("ShiftService"):SetClockedIn(wantClockedIn)
+			end)
+			if not ok then
+				warn("[BottomLeft] Clock in/out request failed:", err)
+			end
+		end)
+	end
 
 	React.useEffect(function()
 		if not capsuleHatching or capsuleHatching == false then
@@ -133,6 +155,19 @@ return function(props: {
 	end, { rank })
 
 	if RunService:IsRunning() then
+		React.useEffect(function()
+			local player = Players.LocalPlayer
+			local function syncClockedIn()
+				setClockedIn(player:GetAttribute(CLOCKED_IN_ATTRIBUTE) ~= false)
+			end
+			syncClockedIn()
+
+			local connection = player:GetAttributeChangedSignal(CLOCKED_IN_ATTRIBUTE):Connect(syncClockedIn)
+			return function()
+				connection:Disconnect()
+			end
+		end, {})
+
 		React.useEffect(function()
 			setRank(RankUtil:GetRankAsync(Players.LocalPlayer))
 			Knit.GetController("DataController"):GetDataAsync():andThen(function(playerData)
@@ -231,10 +266,14 @@ return function(props: {
 				SortOrder = Enum.SortOrder.LayoutOrder,
 			},
 		}, {
-			CapsuleButton = capsuleHatching and c(Pane, {
+			CapsuleButton = capsuleHatching and capsuleHatching ~= false and c(Pane, {
 				ClassName = "ImageButton",
 				AspectRatio = 1,
 				OnClick = function()
+					-- DEC-006: Skip Hatch is only purchasable while a pet is hatching.
+					if not capsuleHatching or capsuleHatching == false then
+						return
+					end
 					if extractTimeLeft(hatchClockText) <= 30 then
 						return
 					end
@@ -287,7 +326,15 @@ return function(props: {
 					LayoutOrder = 0,
 				}),
 
-				Recipes = isStaff and c(NormalButton, {
+				Shift = c(NormalButton, {
+					Size = BUTTON_SIZE,
+					Color = if clockedIn then Styles.GOLD_MID else Styles.GREEN_MID,
+					Text = if clockedIn then "Clock Out" else "Clock In",
+					OnClick = toggleClockedIn,
+					LayoutOrder = 1,
+				}),
+
+				Recipes = c(NormalButton, {
 					Icon = "",
 					Size = BUTTON_SIZE,
 					Color = Styles.ROSE_DEEP,
@@ -295,10 +342,10 @@ return function(props: {
 					OnClick = function()
 						props.SetCurrentPage(UI.Pages.Recipes)
 					end,
-					LayoutOrder = 1,
+					LayoutOrder = 2,
 				}),
 
-				Points = isStaff and c(NormalButton, {
+				Points = c(NormalButton, {
 					PlusButton = true,
 					Icon = "rbxassetid://13391365805",
 					Size = BUTTON_SIZE,
@@ -307,7 +354,7 @@ return function(props: {
 					OnClick = function()
 						props.SetCurrentPage(UI.Pages.Shop, "Currency")
 					end,
-					LayoutOrder = 2,
+					LayoutOrder = 3,
 				}),
 
 				Bucks = c(NormalButton, {
@@ -319,7 +366,7 @@ return function(props: {
 					OnClick = function()
 						props.SetCurrentPage(UI.Pages.Shop, "Currency")
 					end,
-					LayoutOrder = 3,
+					LayoutOrder = 4,
 				}),
 			}),
 		}),

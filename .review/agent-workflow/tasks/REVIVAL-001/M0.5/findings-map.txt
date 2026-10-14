@@ -1,0 +1,19 @@
+REVIVAL-001-M0.5 (Mason): status of each Sentry finding from M0.4/review.md
+#1  P0  fixed     AppDialogs/ActionPrompt play UI sounds lazily (SFX.UI, else UISounds; skipped if missing). DataController no longer looks up audio at require time; it applies the SettingsConfig callbacks, which set Volume only on a SoundGroup and warn once otherwise.
+#2  P1  fixed     Ordering and MobileOrder: CreateOrder(...):expect() inside pcall on a spawned thread, plus an isSubmitting guard in both.
+#3  P1  fixed     OrderService.buildOrderItem rebuilds each item from Menu.FoodTable[Category].Items[Item] and whitelists CustomInfo; Menu is pcall-required on first order. Kept inside OrderService because OrderSpec (design.md section 2) is M1 scope.
+#4  P1  fixed     Spill.luau resolves services at call time with Knit.GetService; the OnStart locals are gone.
+#5  P1  fixed     SpillController._Trip: a Recovered flag stops the delayed disable from running after re-enable, and the wait for the animation is capped at 5 s.
+#6  P2  fixed     The wait for the cleaning animation to load is capped at 3 s. On timeout it stops the track, destroys the tools and errors, so _RecoverFromFailedCleaning runs.
+#7  P2  deferred  Ghost spill after the cleaner's character goes away. Not in the brief.
+#8  P2  deferred  A failed placement still counts as a clean. Not in the brief.
+#9  P2  fixed     The spec snapshots every field beforeEach replaces (service and Client, via rawget) and restores them in afterAll.
+#10 P2  deferred  Gauge lane (receipt runtime evidence).
+#11 P2  unchanged Skip Hatch charges with no hatching pet. Economy decision for Jack.
+#12 P3  deferred  Outside the write scope (ProcessReceipt).
+#13 P3  deferred  RecipeConstructors still has a bounded 5 s WaitForChild("SharedStorage"). Only the helper swap was in scope.
+#14 P3  deferred  KitchenService Liquid/Rim direct index. Only the helper swap was in scope.
+#15 P3  deferred  Menu.luau / InventoryServer are outside the write scope. OrderService now requires Menu lazily.
+#16 P3  fixed     MobileOrder in-flight guard.
+#17 P3  partial   One shared/Utility/WorldPath (find, waitFor) replaces the copies in TopBar, RecipeConstructors, KitchenService, KitchenController, OrderController, SpillService and SpillController. Still open: the remote helper in ProcessReceipt/PromoCodes (out of scope) and trimming the spec.
+#18 P3  deferred  Quill (docs).

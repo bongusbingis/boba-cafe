@@ -12,7 +12,19 @@ local Knit = require(Packages.Knit)
 
 local KitchenTypes = require(ReplicatedStorage.Shared.Kitchen.KitchenTypes)
 local KitchenConfig = require(ReplicatedStorage.Shared.Configuration.KitchenConfig)
-local KitchenSounds = SoundService:WaitForChild("SFX").Kitchen
+
+-- SoundService.SFX.Kitchen is authored in the place. It is looked up on use so a
+-- missing folder only silences kitchen sounds instead of blocking server start.
+local warnedMissingSounds = false
+local function getKitchenSounds(): Instance?
+	local sfx = SoundService:FindFirstChild("SFX")
+	local kitchenSounds = sfx and sfx:FindFirstChild("Kitchen")
+	if not kitchenSounds and not warnedMissingSounds then
+		warnedMissingSounds = true
+		warn("[InteractionRunner] SoundService.SFX.Kitchen not found; kitchen sounds are disabled.")
+	end
+	return kitchenSounds
+end
 
 ---> Types
 
@@ -166,12 +178,18 @@ function InteractionRunner:Run(player: Player, recipeData: RecipeData, model: Mo
 	self._debounces[player] = true
 
 	task.spawn(function()
-		local result = self:_runSequence(player, model, recipeData.Actions)
+		-- An erroring action must not leave the player's debounce stuck forever.
+		local ok, result = pcall(self._runSequence, self, player, model, recipeData.Actions)
+		if not ok then
+			warn(string.format("[InteractionRunner] Interaction errored for %s: %s", player.Name, tostring(result)))
+			result = { Success = false, Error = "Interaction error" }
+		end
 
 		if not result.Success then
 			self._onFailure(player, result.Error :: string)
 		elseif recipeData.Sound then
-			local soundTemplate = KitchenSounds:FindFirstChild(recipeData.Sound)
+			local kitchenSounds = getKitchenSounds()
+			local soundTemplate = kitchenSounds and kitchenSounds:FindFirstChild(recipeData.Sound)
 			local primaryPart = model.PrimaryPart
 			if soundTemplate and primaryPart then
 				local sound = soundTemplate:Clone()

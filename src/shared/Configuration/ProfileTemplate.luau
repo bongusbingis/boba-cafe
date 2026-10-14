@@ -67,6 +67,9 @@ export type ProfileTemplate = {
     Nickname: string,
     -- Codes the player has already redeemed; keyed by normalised code string for O(1) lookups.
     RedeemedCodes: { [string]: boolean },
+	-- Developer product receipts already granted; keyed by `ReceiptInfo.PurchaseId`, value is the grant time (os.time()).
+	-- Bounded by ProcessReceipt (oldest entries are pruned) so the profile cannot grow without limit.
+	ProcessedReceipts: { [string]: number },
     Settings: PlayerSettings,
 }
 
@@ -103,6 +106,7 @@ return {
     HatchingPet = false,
     Nickname = "",
     RedeemedCodes = {},
+	ProcessedReceipts = {},
     Settings = {
         HeadlessHead = false,
         FasterWalkSpeed = false,

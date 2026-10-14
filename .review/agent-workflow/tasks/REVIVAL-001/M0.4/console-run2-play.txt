@@ -1,0 +1,25 @@
+# run2 scenarios 2-4 console (same Play session as boot, tests disabled). Known asset-permission and sound lines omitted (see console-run2-boot.txt).
+# Lines below are in output order; lines starting with "# " are my annotations.
+# (harness noise) Text is not a valid member of ImageButton ... / attempt to index nil with 'LoadCharacter'  -- my own execute_luau probe errors, not game errors.
+# --- Boba attempt A: Clear Cup(Small) -> Milk -> Taro Syrup -> Normal Tapioca (REFUSED) ---
+Small Clear Cup Clear Cup            <- ToolNameValidityCheck debug print(toolName, term) at ToolNameValidityCheck.luau:21
+Small Clear Cup + Milk Cup %+ Milk   <- syrup prerequisite
+Milk + Taro Syrup  Milk              <- tapioca term "# Milk" (leading space) -> no match
+Milk + Taro Syrup Tea                <- tapioca term "#Tea" -> no match => step refused
+# --- Boba attempt B: Clear Cup(Medium) -> Milk -> Classic Milk Tea Syrup -> Normal Tapioca (accepted; name mangled) ---
+Medium Clear Cup Clear Cup
+Medium Clear Cup + Milk Cup %+ Milk
+Milk + Classic Milk Tea Syrup  Milk
+Part Cup/Camera/Handle/BobaBalls/TouchThing/Liquid/CoffeeLid/Straw/Bottom/Slice is not parented to the Workspace or a WorldModel. GetConnectedParts will not include any other parts.   (engine warning, repeats per tool step; 3 bursts)
+Medium Cup Cup
+# --- CreateOrder negative cases (server warn lines, no Lua errors) ---
+[OrderService] Rejected order from bongusbingis: item has no Category/Item
+[OrderService] Rejected order from bongusbingis: unknown menu item
+[OrderService] Rejected order from bongusbingis: unknown menu item
+[OrderService] Rejected order from bongusbingis: invalid Size
+[OrderService] Rejected order from bongusbingis: unexpected CustomInfo key
+[OrderService] Rejected order from bongusbingis: CustomInfo is not a table
+[OrderService] Rejected order from bongusbingis: invalid Iced
+[OrderService] Rejected order from bongusbingis: item has no Category/Item
+Part Handle/CoffeeCup/Liquid/CoffeeHolder/CoffeeLid is not parented to the Workspace or a WorldModel. GetConnectedParts will not include any other parts.   (x2, during deposit/pickup tool moves)
+# No red errors (Lua error / stack trace from game scripts) anywhere in the session.

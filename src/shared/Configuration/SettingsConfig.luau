@@ -25,36 +25,17 @@ export type Category = {
 
 local MIN_STAFF_RANK = 7
 
-local rankNamesById = {
-    [8] = "Barista",
-    [10] = "Kitchen Leader",
-}
-
-local function makeClaimClientCallback(passId: number): () -> ()
-    return function()
-        task.spawn(function()
-            local ReplicatedStorage = game:GetService("ReplicatedStorage")
-            local ClaimRank = ReplicatedStorage:WaitForChild("Networking"):WaitForChild("ClaimRank")
-            local ok, result = pcall(function()
-                return ClaimRank:InvokeServer(passId)
-            end)
-            if not ok or not result then
-                warn("[RankClaiming] Remote invocation failed for passId", passId)
-            end
-        end)
-    end
-end
-
-local function makeClaimRankSetting(rankId: number, passId: number): Setting
-    local rankName: string = rankNamesById[rankId] or ("Rank " .. rankId)
-    return {
-        Key = "ClaimRank_" .. rankId,
-        Label = "Claim " .. rankName,
-        ButtonLabel = "CLAIM",
-        Type = "Action",
-        GamepassId = passId,
-        ClientCallback = makeClaimClientCallback(passId),
-    }
+-- Audio groups are authored in the place and may be missing or plain Folders (only a
+-- SoundGroup has a Volume). In that case the toggle is skipped with a single warning.
+local warnedAudioGroups: { [string]: boolean } = {}
+local function setGroupVolume(name: string, isEnabled: boolean)
+	local group = SoundService:FindFirstChild(name)
+	if group and group:IsA("SoundGroup") then
+		group.Volume = if isEnabled then 0.5 else 0
+	elseif not warnedAudioGroups[name] then
+		warnedAudioGroups[name] = true
+		warn(`[Settings] SoundService.{name} is missing or not a SoundGroup; its volume toggle is skipped.`)
+	end
 end
 
 local config: { Category } = {
@@ -63,18 +44,16 @@ local config: { Category } = {
 		Settings = {
 			--{ Key = "HeadlessHead",    Label = "Headless Head",      Default = false, GamepassId = 6202153 },
 			--{ Key = "FasterWalkSpeed", Label = "Faster Walk Speed",  Default = false, GamepassId = 12385742 },
-            makeClaimRankSetting(8, 6202153), ---> Barista
-            makeClaimRankSetting(10, 15243046), ---> Kitchen Leader
         },
 	},
 	{
 		Category = "Game Audio",
 		Settings = {
 			{ Key = "MusicEnabled", Label = "Music", Default = true, ClientCallback = function(isEnabled)
-				SoundService.Music.Volume = isEnabled and 0.5 or 0
+				setGroupVolume("Music", isEnabled)
 			end},
             { Key = "SFXEnabled", Label = "SFX", Default = true, ClientCallback = function(isEnabled)
-				SoundService.SFX.Volume = isEnabled and 0.5 or 0
+				setGroupVolume("SFX", isEnabled)
 			end},
 		},
 	},

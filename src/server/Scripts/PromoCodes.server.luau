@@ -3,13 +3,33 @@ local DataStoreService  = game:GetService("DataStoreService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players           = game:GetService("Players")
 
+---> networking
+-- The Networking folder is not guaranteed to exist in the place, so find or create it (and the remote) in code.
+local function getOrCreateRemoteFunction(name: string): RemoteFunction
+	local networking = ReplicatedStorage:FindFirstChild("Networking")
+	if not networking then
+		networking = Instance.new("Folder")
+		networking.Name = "Networking"
+		networking.Parent = ReplicatedStorage
+	end
+
+	local remote = networking:FindFirstChild(name)
+	if not remote then
+		remote = Instance.new("RemoteFunction")
+		remote.Name = name
+		remote.Parent = networking
+	elseif not remote:IsA("RemoteFunction") then
+		warn(`[PromoCodes] Networking.{name} is a {remote.ClassName}, expected a RemoteFunction`)
+	end
+	return remote :: RemoteFunction
+end
+
+local RedeemCode = getOrCreateRemoteFunction("RedeemCode")
+
 ---> dependencies
 local Packages = ReplicatedStorage:WaitForChild("Packages")
 local Shared   = ReplicatedStorage:WaitForChild("Shared")
 local Knit     = require(Packages.Knit)
-
----> networking
-local RedeemCode = ReplicatedStorage:WaitForChild("Networking"):WaitForChild("RedeemCode")
 
 ---> server-only config (never replicated to clients)
 local PromoCodesConfig = require(script.Parent.Parent.Configuration.PromoCodes)
@@ -149,7 +169,7 @@ Knit.OnStart():andThen(function()
         local message = "Code redeemed! You received: " .. summary .. "."
 
         -- Also push a server-side notification in case the UI is closed
-        DialogService:Notify(player, { Text = message })
+        DialogService:Notify(player, { Title = "Code Redeemed", Description = message })
 
         return { Success = true, Message = message }
     end

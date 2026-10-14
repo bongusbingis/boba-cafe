@@ -11,12 +11,12 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Packages = ReplicatedStorage:WaitForChild("Packages")
-local SharedStorage = ReplicatedStorage:WaitForChild("SharedStorage")
 
 ---> Dependencies
 
 local Knit = require(Packages.Knit)
 local GoodSignal = require(Packages.GoodSignal)
+local WorldPath = require(ReplicatedStorage:WaitForChild("Shared").Utility.WorldPath)
 
 ---> Controller
 
@@ -25,7 +25,6 @@ local OrderController = Knit.CreateController({
 })
 
 local LocalPlayer = Players.LocalPlayer
-local PickupBeam = SharedStorage.Effects.PickupBeam
 
 local PlayerBeams = {}
 local Highlights = {}
@@ -38,6 +37,23 @@ OrderController.OrderChanged = GoodSignal.new()
 OrderController.ReadyNodeChanged = GoodSignal.new()
 OrderController.AnnouncementReceived = GoodSignal.new()
 OrderController.QueueChanged = GoodSignal.new() -- fires(position: number?)
+
+---> Private
+
+-- ReplicatedStorage.SharedStorage.Effects.PickupBeam is authored in the place. It
+-- is looked up on use; when missing, the pick-up beam is skipped (warned once).
+local warnedMissingBeam = false
+local function getPickupBeam(): Beam?
+	local beam = WorldPath.find(ReplicatedStorage, { "SharedStorage", "Effects", "PickupBeam" })
+	if beam and beam:IsA("Beam") then
+		return beam
+	end
+	if not warnedMissingBeam then
+		warnedMissingBeam = true
+		warn("[OrderController] SharedStorage.Effects.PickupBeam not found; pick-up beam disabled.")
+	end
+	return nil
+end
 
 ---> Lifecycle
 function OrderController:KnitStart()
@@ -67,14 +83,17 @@ function OrderController:KnitStart()
 				end
 			end
 		end
-		if isReady then
-			local beam = PickupBeam:Clone()
+		local character = LocalPlayer.Character
+		local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+		local pickupBeam = isReady and rootPart and getPickupBeam()
+		if pickupBeam then
+			local beam = pickupBeam:Clone()
 			table.insert(PlayerBeams, beam)
-			beam.Parent = LocalPlayer.Character.HumanoidRootPart
+			beam.Parent = rootPart
 
 			local a0 = Instance.new("Attachment")
 			local a1 = Instance.new("Attachment")
-			a0.Parent = LocalPlayer.Character.HumanoidRootPart
+			a0.Parent = rootPart
 			a1.Parent = node
 
 			beam.Attachment0 = a0

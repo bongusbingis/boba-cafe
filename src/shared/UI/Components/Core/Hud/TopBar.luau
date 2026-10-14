@@ -8,7 +8,6 @@
 
 --!nonstrict
 
-local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Packages = ReplicatedStorage:WaitForChild("Packages")
@@ -17,7 +16,7 @@ local UI = Shared:WaitForChild("UI")
 
 ---> dependencies
 local React = require(Packages.React)
-local RankUtil = require(Shared.Utility.RankUtil)
+local WorldPath = require(Shared.Utility.WorldPath)
 
 ---> styles
 local Styles = require(UI.Styles)
@@ -27,11 +26,21 @@ local Pages = UI.Pages
 local Pane = require(UI.Components.Pane)
 local HudTabButton = require(UI.Components.Buttons.HudTabButton)
 
----> world
-local OrderingSystem = workspace:WaitForChild("Ordering System")
+---> constants
+-- workspace["Ordering System"].Computers is authored in the place. It is resolved
+-- after the HUD mounts with a bounded wait so a missing folder never blocks the HUD.
+local ORDERING_SYSTEM_TIMEOUT_SECONDS = 30
 
 ---> private
 local c = React.createElement
+
+local function waitForComputers(): Instance?
+	local computers = WorldPath.waitFor(workspace, { "Ordering System", "Computers" }, ORDERING_SYSTEM_TIMEOUT_SECONDS)
+	if not computers then
+		warn('[TopBar] workspace["Ordering System"].Computers not found; register prompts disabled.')
+	end
+	return computers
+end
 
 return function(props: {
 	CurrentPage: ModuleScript,
@@ -43,12 +52,20 @@ return function(props: {
 		end
 	end
 
-	---> init register prompts
+	---> init register prompts (every player may order)
 
 	if RunService:IsRunning() then
 		React.useEffect(function()
-			if RankUtil:CanUseOrderingSystem(Players.LocalPlayer) then
-				for _, computer: MeshPart in OrderingSystem.Computers:GetChildren() do
+			local prompts: { ProximityPrompt } = {}
+			local cancelled = false
+
+			task.spawn(function()
+				local computers = waitForComputers()
+				if not computers or cancelled then
+					return
+				end
+
+				for _, computer in computers:GetChildren() do
 					local prompt = Instance.new("ProximityPrompt")
 					prompt.HoldDuration = 0
 					prompt.UIOffset = Vector2.new(0, 25)
@@ -59,6 +76,14 @@ return function(props: {
 					prompt.Triggered:Connect(function()
 						props.SetCurrentPage(Pages.Ordering)
 					end)
+					table.insert(prompts, prompt)
+				end
+			end)
+
+			return function()
+				cancelled = true
+				for _, prompt in prompts do
+					prompt:Destroy()
 				end
 			end
 		end, {})

@@ -17,7 +17,6 @@ local Packages = ReplicatedStorage:WaitForChild("Packages")
 
 local Knit = require(Packages.Knit)
 local Promise = require(Packages.Promise)
-local RankUtil = require(ReplicatedStorage.Shared.Utility.RankUtil)
 
 ---> Types
 
@@ -36,10 +35,17 @@ type ToolEntry = {
 	Tool: Tool,
 }
 
+export type CreateOrderResult = {
+	Success: boolean,
+	Message: string?,
+}
+
 ---> Constants
 
-local ORDERING_SYSTEM = workspace["Ordering System"]
+local ORDERING_SYSTEM_NAME = "Ordering System"
+local ORDERING_SYSTEM_TIMEOUT_SECONDS = 10
 local ORDER_PICKUP_FOLDER = "OrderPickUp"
+local MODEL_STORAGE_NAME = "ModelStorage"
 
 local ORDER_DEBOUNCE_SECONDS = 5
 local ORDER_MAX_ITEMS = 4
@@ -91,15 +97,98 @@ local OrderService = Knit.CreateService({
 	_dialogService = nil :: any,
 	_statisticsService = nil :: any,
 	_questService = nil :: any,
+	_shiftService = nil :: any,
 })
 
 ---> Private Helpers
+
+-- ReplicatedStorage.ModelStorage holds pick-up display models. It is not authored
+-- in the place, so create it on first use.
+local function getModelStorage(): Instance
+	local storage = ReplicatedStorage:FindFirstChild(MODEL_STORAGE_NAME)
+	if not storage then
+		storage = Instance.new("Folder")
+		storage.Name = MODEL_STORAGE_NAME
+		storage.Parent = ReplicatedStorage
+	end
+	return storage
+end
+
+-- Shared.Ordering.Menu is required on first order: it reads the authored
+-- SelectorModels, and a problem there should stop ordering only, not KnitStart.
+local foodTable: { [string]: any }? = nil
+local menuFailed = false
+local function getFoodTable(): { [string]: any }?
+	if not foodTable and not menuFailed then
+		local ok, menu = pcall(require, ReplicatedStorage:WaitForChild("Shared").Ordering.Menu)
+		if ok and typeof(menu) == "table" and typeof(menu.FoodTable) == "table" then
+			foodTable = menu.FoodTable
+		else
+			menuFailed = true
+			warn("[OrderService] Shared.Ordering.Menu failed to load; ordering is disabled:", menu)
+		end
+	end
+	return foodTable
+end
+
+-- Rebuilds one client order item ({ Category, Item, CustomInfo }) from the server's
+-- Menu. DefaultInfo is always the Menu definition. CustomInfo may hold only the
+-- choices that item offers: each Select value is one of its listed strings, each
+-- RequiredSelection value is one of its keys (both required), and each Option is
+-- a boolean (missing = the Menu default). Returns the item to store, or nil and a
+-- reason.
+local function buildOrderItem(menu: { [string]: any }, request: any): ({ [string]: any }?, string?)
+	if typeof(request) ~= "table" or typeof(request.Category) ~= "string" or typeof(request.Item) ~= "string" then
+		return nil, "item has no Category/Item"
+	end
+	local category = menu[request.Category]
+	local def = category and category.Items[request.Item]
+	if not def then
+		return nil, "unknown menu item"
+	end
+	local customInfo = request.CustomInfo or {}
+	if typeof(customInfo) ~= "table" then
+		return nil, "CustomInfo is not a table"
+	end
+
+	local clean = {}
+	for key, choices in def.Select or {} do
+		local value = customInfo[key]
+		if typeof(value) ~= "string" or not table.find(choices, value) then
+			return nil, "invalid " .. key
+		end
+		clean[key] = value
+	end
+	for key, choices in def.RequiredSelection or {} do
+		local value = customInfo[key]
+		if typeof(value) ~= "string" or choices[value] == nil then
+			return nil, "invalid " .. key
+		end
+		clean[key] = value
+	end
+	for key, default in def.Options or {} do
+		local value = customInfo[key]
+		if value == nil then
+			value = default
+		elseif typeof(value) ~= "boolean" then
+			return nil, "invalid " .. key
+		end
+		clean[key] = value
+	end
+	for key in customInfo do
+		if clean[key] == nil then
+			return nil, "unexpected CustomInfo key"
+		end
+	end
+
+	return { Category = request.Category, Item = request.Item, DefaultInfo = def, CustomInfo = clean }, nil
+end
 
 -- Builds a display model from the non-Handle parts of a tool for placement at a
 -- pick-up area. The model is auto-expired after 5 minutes via Debris.
 local function createModelFromTool(tool: Tool): Model
 	local model = Instance.new("Model")
-	model.Parent = ReplicatedStorage.ModelStorage
+	model.Parent = getModelStorage()
 	Debris:AddItem(model, 300)
 
 	for _, part in tool:GetChildren() do
@@ -173,9 +262,25 @@ function OrderService:_getPlayerOrder(userId: number, status: string): Order?
 	return nil
 end
 
+-- Baristas are players who are clocked in (ShiftService). Before KnitStart
+-- resolves ShiftService, nobody counts as clocked in.
+function OrderService:_isClockedIn(player: Player): boolean
+	local shiftService = self._shiftService
+	return shiftService ~= nil and shiftService:IsClockedIn(player) == true
+end
+
+-- Returns true while the customer has an order that has not been picked up.
+function OrderService:_hasOpenOrder(customerId: number): boolean
+	for _, order in self._orders do
+		if order.customer == customerId then
+			return true
+		end
+	end
+	return false
+end
+
 function OrderService:_canClaimOrder(player: Player): boolean
-	return RankUtil:CanEnterKitchen(player)
-		and self:_getPlayerOrder(player.UserId, "Being Prepared") == nil
+	return self:_isClockedIn(player) and self:_getPlayerOrder(player.UserId, "Being Prepared") == nil
 end
 
 function OrderService:_getPendingCount(): number
@@ -422,7 +527,7 @@ end
 
 -- Appends a barista to the end of the waiting queue and notifies them.
 function OrderService:_joinQueue(player: Player)
-	if not RankUtil:CanEnterKitchen(player) then
+	if not self:_isClockedIn(player) then
 		return
 	end
 	if self:_getPlayerOrder(player.UserId, "Being Prepared") then
@@ -463,7 +568,7 @@ function OrderService:_tryDispatchFromQueue()
 		local staffId = table.remove(self._queue, 1)
 		local staff = Players:GetPlayerByUserId(staffId)
 
-		if staff and self:_getPlayerOrder(staffId, "Being Prepared") == nil then
+		if staff and self:_isClockedIn(staff) and self:_getPlayerOrder(staffId, "Being Prepared") == nil then
 			-- Assign the order
 			nextOrder.status = "Being Prepared"
 			nextOrder.preparedBy = staffId
@@ -490,7 +595,7 @@ end
 --   • Pending orders exist AND queue is empty → claim directly (no wait).
 --   • No pending orders OR queue already has waiters → join queue.
 function OrderService:_handleClaimOrQueue(player: Player)
-	if not RankUtil:CanEnterKitchen(player) then
+	if not self:_isClockedIn(player) then
 		return
 	end
 	if self:_getPlayerOrder(player.UserId, "Being Prepared") then
@@ -583,8 +688,10 @@ function OrderService:_handlePickUp(player: Player, area: Model)
 
 			for _, item in tools do
 				if self._questService then
-					local currentItem: string = (item:FindFirstChild("CurrentItem") and item.CurrentItem.Value) or ""
-					if currentItem == "[Syrup] Boba" then
+					local currentItem: string = (item:FindFirstChild("CurrentItem") and item.CurrentItem.Value)
+						or item.Name
+					-- Boba tools are named "[Flavor] Boba" (see Recipes Tapioca step).
+					if string.find(currentItem, " Boba", 1, true) then
 						if self._statisticsService then
 							self._statisticsService:IncrementStat(player, "BobasOrdered", 1)
 						end
@@ -707,32 +814,61 @@ end
 
 ---> Public Methods
 
--- Called by a staff member (rank ≥ CanUseOrderingSystem) to submit a customer's order.
--- `customerId` is the UserId of the customer being served.
-function OrderService.Client:CreateOrder(player: Player, customerId: number, orderItems: { any })
-	if not customerId or not orderItems then
-		return
+-- Any player may place an order for themselves. `customerId` must be the
+-- caller's UserId; every argument is untrusted client input.
+function OrderService.Client:CreateOrder(player: Player, customerId: any, orderItems: any): CreateOrderResult
+	local server = self.Server
+
+	if typeof(customerId) ~= "number" or typeof(orderItems) ~= "table" then
+		return { Success = false, Message = "Invalid order." }
 	end
-	if self.Server._orderDebounces[player.UserId] then
-		return
+	if customerId ~= player.UserId then
+		return { Success = false, Message = "You can only place orders for yourself." }
 	end
-	if not RankUtil:CanUseOrderingSystem(player) then
-		return
-	end
-	if #orderItems < ORDER_MIN_ITEMS or #orderItems > ORDER_MAX_ITEMS then
-		return
+	if server._orderDebounces[player.UserId] then
+		return { Success = false, Message = "Please wait before placing another order." }
 	end
 
-	self.Server._orderDebounces[player.UserId] = true
-	self.Server:_addOrder(customerId, orderItems)
-
-	if self.Server._statisticsService then
-		self.Server._statisticsService:IncrementStat(player, "OrdersCreated", 1)
+	local itemCount = #orderItems
+	if itemCount < ORDER_MIN_ITEMS or itemCount > ORDER_MAX_ITEMS then
+		return {
+			Success = false,
+			Message = string.format("Orders need %d to %d items.", ORDER_MIN_ITEMS, ORDER_MAX_ITEMS),
+		}
 	end
 
+	local menu = getFoodTable()
+	if not menu then
+		return { Success = false, Message = "Ordering is unavailable right now." }
+	end
+
+	-- Only the array part is read, and each item is rebuilt from the server's Menu.
+	local items = table.create(itemCount)
+	for i = 1, itemCount do
+		local item, reason = buildOrderItem(menu, orderItems[i])
+		if not item then
+			warn(string.format("[OrderService] Rejected order from %s: %s", player.Name, tostring(reason)))
+			return { Success = false, Message = "Invalid order." }
+		end
+		items[i] = item
+	end
+
+	if server:_hasOpenOrder(player.UserId) then
+		return { Success = false, Message = "You already have an order in progress." }
+	end
+
+	server._orderDebounces[player.UserId] = true
 	task.delay(ORDER_DEBOUNCE_SECONDS, function()
-		self.Server._orderDebounces[player.UserId] = nil
+		server._orderDebounces[player.UserId] = nil
 	end)
+
+	server:_addOrder(player.UserId, items)
+
+	if server._statisticsService then
+		server._statisticsService:IncrementStat(player, "OrdersCreated", 1)
+	end
+
+	return { Success = true, Message = "Order placed." }
 end
 
 -- Removes the calling player from the barista queue.
@@ -742,6 +878,78 @@ end
 
 ---> Lifecycle
 
+-- Indexes the authored "Ordering System" folder and attaches prompts. Each part
+-- (status screens, staff screens, pick-up areas) is optional: a missing one is
+-- warned about and only that feature is disabled.
+function OrderService:_setupOrderingSystem(orderingSystem: Instance)
+	-- Index status screens (customer-facing order boards)
+	local statusScreens = orderingSystem:FindFirstChild("Status Screens")
+	if statusScreens then
+		for _, desc in statusScreens:GetDescendants() do
+			if desc:IsA("SurfaceGui") and desc.Name == "Screen" then
+				table.insert(self._statusScreens, desc)
+			end
+		end
+	else
+		warn('[OrderService] "Ordering System.Status Screens" missing; order status boards disabled.')
+	end
+
+	-- Index staff screens and attach order-claim ProximityPrompts
+	local staffScreens = orderingSystem:FindFirstChild("Staff Screens")
+	if staffScreens then
+		for _, desc in staffScreens:GetDescendants() do
+			if desc:IsA("SurfaceGui") and desc.Name == "Screen" then
+				table.insert(self._staffScreens, desc)
+
+				local screenModel = desc.Parent.Parent
+				createPrimaryPart(screenModel)
+
+				local prompt = Instance.new("ProximityPrompt")
+				prompt.HoldDuration = 0
+				prompt.UIOffset = Vector2.new(0, -100)
+				prompt.ObjectText = "Pending Orders Screen"
+				prompt.ActionText = "Claim Order"
+				prompt.RequiresLineOfSight = false
+				prompt.Enabled = true
+				prompt.Parent = screenModel
+
+				prompt.Triggered:Connect(function(player: Player)
+					self:_handleClaimOrQueue(player)
+				end)
+			end
+		end
+	else
+		warn('[OrderService] "Ordering System.Staff Screens" missing; claiming orders disabled.')
+	end
+
+	-- Index pick-up areas and attach deposit/pickup ProximityPrompts
+	local pickUp = orderingSystem:FindFirstChild("Pick Up")
+	if pickUp then
+		for _, node in pickUp:GetChildren() do
+			table.insert(self._pickUpAreas, node)
+
+			local ownerValue = Instance.new("IntValue")
+			ownerValue.Name = "OrderOwner"
+			ownerValue.Parent = node
+
+			local prompt = Instance.new("ProximityPrompt")
+			prompt.HoldDuration = 0
+			prompt.UIOffset = Vector2.new(0, 25)
+			prompt.ObjectText = "Pick Up Area"
+			prompt.ActionText = "Deposit Order"
+			prompt.RequiresLineOfSight = false
+			prompt.Enabled = false
+			prompt.Parent = node
+
+			prompt.Triggered:Connect(function(player: Player)
+				self:_handlePickUp(player, node)
+			end)
+		end
+	else
+		warn('[OrderService] "Ordering System.Pick Up" missing; order pick-up disabled.')
+	end
+end
+
 function OrderService:KnitInit()
 	-- Ensure the server-side order pickup storage folder exists
 	if not ServerStorage:FindFirstChild(ORDER_PICKUP_FOLDER) then
@@ -750,70 +958,41 @@ function OrderService:KnitInit()
 		folder.Parent = ServerStorage
 	end
 
-	-- Index status screens (customer-facing order boards)
-	for _, desc in ORDERING_SYSTEM["Status Screens"]:GetDescendants() do
-		if desc:IsA("SurfaceGui") and desc.Name == "Screen" then
-			table.insert(self._statusScreens, desc)
-		end
-	end
-
-	-- Index staff screens and attach order-claim ProximityPrompts
-	for _, desc in ORDERING_SYSTEM["Staff Screens"]:GetDescendants() do
-		if desc:IsA("SurfaceGui") and desc.Name == "Screen" then
-			table.insert(self._staffScreens, desc)
-
-			local screenModel = desc.Parent.Parent
-			createPrimaryPart(screenModel)
-
-			local prompt = Instance.new("ProximityPrompt")
-			prompt.HoldDuration = 0
-			prompt.UIOffset = Vector2.new(0, -100)
-			prompt.ObjectText = "Pending Orders Screen"
-			prompt.ActionText = "Claim Order"
-			prompt.RequiresLineOfSight = false
-			prompt.Enabled = true
-			prompt.Parent = screenModel
-
-			prompt.Triggered:Connect(function(player: Player)
-				self:_handleClaimOrQueue(player)
-			end)
-		end
-	end
-
-	-- Index pick-up areas and attach deposit/pickup ProximityPrompts
-	for _, node in ORDERING_SYSTEM["Pick Up"]:GetChildren() do
-		table.insert(self._pickUpAreas, node)
-
-		local ownerValue = Instance.new("IntValue")
-		ownerValue.Name = "OrderOwner"
-		ownerValue.Parent = node
-
-		local prompt = Instance.new("ProximityPrompt")
-		prompt.HoldDuration = 0
-		prompt.UIOffset = Vector2.new(0, 25)
-		prompt.ObjectText = "Pick Up Area"
-		prompt.ActionText = "Deposit Order"
-		prompt.RequiresLineOfSight = false
-		prompt.Enabled = false
-		prompt.Parent = node
-
-		prompt.Triggered:Connect(function(player: Player)
-			self:_handlePickUp(player, node)
-		end)
-	end
+	getModelStorage()
 end
 
 function OrderService:KnitStart()
 	-- Resolve cross-service references after all services have initialised
 	self._dialogService = Knit.GetService("DialogService")
-
-
 	self._statisticsService = Knit.GetService("StatisticsService")
+	self._shiftService = Knit.GetService("ShiftService")
 
-	local questOk, questService = pcall(Knit.GetService, Knit, "QuestService")
+	local questOk, questService = pcall(Knit.GetService, "QuestService")
 	if questOk then
 		self._questService = questService
 	end
+
+	-- Clocking out leaves the barista queue. An order already being prepared
+	-- stays with the player so they can still finish and deposit it.
+	self._shiftService.ClockedInChanged:Connect(function(player: Player, clockedIn: boolean)
+		if not clockedIn then
+			self:_leaveQueue(player)
+		end
+	end)
+
+	-- The world is resolved last because it may yield.
+	local orderingSystem = workspace:WaitForChild(ORDERING_SYSTEM_NAME, ORDERING_SYSTEM_TIMEOUT_SECONDS)
+	if not orderingSystem then
+		warn(
+			string.format(
+				'[OrderService] workspace["%s"] not found after %ds; ordering screens and pick-up are disabled.',
+				ORDERING_SYSTEM_NAME,
+				ORDERING_SYSTEM_TIMEOUT_SECONDS
+			)
+		)
+		return
+	end
+	self:_setupOrderingSystem(orderingSystem)
 end
 
 function OrderService:PlayerRemoving(player: Player)

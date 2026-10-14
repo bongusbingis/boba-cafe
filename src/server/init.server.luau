@@ -5,7 +5,7 @@ local Packages = ReplicatedStorage:WaitForChild("Packages")
 
 -- Set to true to automatically grant every item to yourself when testing in
 -- Studio. Has no effect on live servers regardless of this value.
-local STUDIO_GRANT_ALL_ITEMS = true
+local STUDIO_GRANT_ALL_ITEMS = false
 
 local Knit = require(Packages.Knit)
 local Services = Knit.AddServicesDeep(script.Modules)
@@ -35,15 +35,6 @@ Knit.Start()
 					end,
 				})
 			end
-		end
-
-		if not RunService:IsStudio() then
-			table.insert(playerAddedProcesses, function(player)
-				local rankUtil = require(ReplicatedStorage.Shared.Utility.RankUtil)
-				if rankUtil:GetRankAsync(player) < 4 then
-					player:Kick("This server is restricted to staff members only.")
-				end
-			end)
 		end
 
 		if RunService:IsStudio() and STUDIO_GRANT_ALL_ITEMS then

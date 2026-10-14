@@ -1,0 +1,82 @@
+# REVIVAL-001-M0.4 Scenario 2 — clean boot (TESTS_ENABLED=false)
+# Studio 0bec4a01-246f-4fcf-b1b5-d37cfaf45e80, place 89999123284040, Play (1 player: bongusbingis / 176353970)
+# Raw console via get_console_output ~12 s after Play start (server + client interleaved).
+
+The experience doesn't have access permission to use asset id 13651538692. Click to share access
+The experience doesn't have access permission to use asset id 13655528152. Click to share access
+The experience doesn't have access permission to use asset id 13655987384. Click to share access
+The experience doesn't have access permission to use asset id 13655988810. Click to share access
+The experience doesn't have access permission to use asset id 13651540778. Click to share access
+The experience doesn't have access permission to use asset id 13651538692. Click to share access
+The experience doesn't have access permission to use asset id 13655987384. Click to share access
+[Server] Knit started successfully.
+Failed to load sound rbxassetid://13655528152: User is not authorized to access Asset.
+Failed to load sound rbxassetid://13655988810: User is not authorized to access Asset.
+Failed to load sound rbxassetid://13651540778: User is not authorized to access Asset.
+Failed to load sound rbxassetid://13655987384: User is not authorized to access Asset.
+Failed to load sound rbxassetid://13651538692: User is not authorized to access Asset.
+[BadgeService] - Not running BadgeService in Studio.
+The experience doesn't have access permission to use asset id 13651538692. Click to share access
+The experience doesn't have access permission to use asset id 13655528152. Click to share access
+The experience doesn't have access permission to use asset id 13655987384. Click to share access
+The experience doesn't have access permission to use asset id 13655988810. Click to share access
+The experience doesn't have access permission to use asset id 13651540778. Click to share access
+The experience doesn't have access permission to use asset id 13651538692. Click to share access
+The experience doesn't have access permission to use asset id 13655528152. Click to share access
+The experience doesn't have access permission to use asset id 13651540778. Click to share access
+The experience doesn't have access permission to use asset id 13655988810. Click to share access
+The experience doesn't have access permission to use asset id 13655987384. Click to share access
+[profilestore]: Roblox API services available - data will be saved
+The experience doesn't have access permission to use asset id 13651538692. Click to share access
+The experience doesn't have access permission to use asset id 13655528152. Click to share access
+The experience doesn't have access permission to use asset id 13655987384. Click to share access
+The experience doesn't have access permission to use asset id 13655988810. Click to share access
+The experience doesn't have access permission to use asset id 13651540778. Click to share access
+UI is not a valid member of Folder "SoundService.SFX"
+Stack Begin
+Script 'Players.bongusbingis.PlayerScripts.Client.Modules.AppDialogs', Line 31
+Stack End
+Requested module experienced an error while loading
+Stack Begin
+Script 'ReplicatedStorage.Packages._Index.sleitnick_knit@1.7.0.knit.KnitClient', Line 227 - function AddControllersDeep
+Script 'Players.bongusbingis.PlayerScripts.Client', Line 7
+Stack End
+Failed to load sound rbxassetid://13651538692: User is not authorized to access Asset.
+Failed to load sound rbxassetid://13655987384: User is not authorized to access Asset.
+Failed to load sound rbxassetid://13655528152: User is not authorized to access Asset.
+Failed to load sound rbxassetid://13655988810: User is not authorized to access Asset.
+Failed to load sound rbxassetid://13651540778: User is not authorized to access Asset.
+The experience doesn't have access permission to use asset id 13651538692. Click to share access
+The experience doesn't have access permission to use asset id 13655528152. Click to share access
+The experience doesn't have access permission to use asset id 13651540778. Click to share access
+The experience doesn't have access permission to use asset id 13655988810. Click to share access
+The experience doesn't have access permission to use asset id 13655987384. Click to share access
+DataService [STUDIO] Profile loaded for player 176353970
+[SpillService] Spills disabled; missing authored content: ReplicatedStorage.SharedStorage.Spills.Spills.Boba, ReplicatedStorage.SharedStorage.Spills.Tools.Mop, ReplicatedStorage.SharedStorage.Spills.Tools.MopBucket, ReplicatedStorage.SharedStorage.Spills.Sparkles
+
+# NOTE: "[Client] Knit started successfully." never printed.
+
+# ---- Server probes (execute_luau, Server datamodel) ----
+Kitchen children=3 (Givers, Syrups, TrashCans)
+Givers (Folder): children=65 withPrompt=58 prompts=58 without=[Fruits Freezer(Model), Fruits Freezer(Model), Restocking(Model), Salted Hot Chocolate Powder(Model), Peppermint Hot Chocolate Powder(Model), Restocking(Model), Oolong Tea Powder(Model)]
+Syrups (Folder): children=20 withPrompt=19 prompts=19 without=[SyrupsArea(Part)]
+TrashCans (Folder): children=6 withPrompt=6 prompts=6 without=[]
+Total ProximityPrompts under workspace.Assets.Kitchen = 83
+Spawned syrups (19): Brown Sugar Syrup, Chocolate Syrup, Taro Syrup, Guava Syrup, Classic Milk Tea Syrup, Passion Fruit Syrup, Matcha Syrup, Strawberry Banana Syrup, Dragon Fruit Syrup, Cherry Syrup, Thai Milk Tea Syrup, Watermelon Syrup, Mango Syrup, Raspberry Syrup, Strawberry Syrup, Chocolate Banana Syrup, Lychee Syrup, Green Tea Syrup, Coconut Syrup
+Recipes.Items=50, with a matching model=49, missing model: Sink
+Networking: InventoryEvent:RemoteEvent, GetPurchases:RemoteFunction, RedeemCode:RemoteFunction
+ModelStorage=ModelStorage (present)
+bongusbingis ClockedIn=true Team=Baristas
+Teams: Baristas,Customers
+
+# ---- Client probes (execute_luau, Client datamodel) ----
+PlayerGui children: Freecam (ScreenGui), UIArchive (Folder, 1741 descendants). No HUD ScreenGui.
+SoundService.SFX children: Kitchen{Blop, Blender, Powder, SyrupPour, Pop}, Music{MusicSound, DiscoMusic}, SFX{LightFlicker_01, LightFlicker_02, Ambient_Indoors, LightsOff_01} — no "UI" folder; no SoundService.Music.
+Screen capture M04_Boot_1: character in world, no HUD rendered.
+
+# ---- Partial, pre-stop probe (Scenario 3, raw Knit remote from Client; NOT the controller path) ----
+before: ClockedIn=true Team=Baristas
+ShiftService RF SetClockedIn(false) -> true / Clocked out.
+after: ClockedIn=false Team=Customers
+immediate SetClockedIn(true) -> false / Please wait before switching again.
+SetClockedIn('yes') -> false / Invalid request.

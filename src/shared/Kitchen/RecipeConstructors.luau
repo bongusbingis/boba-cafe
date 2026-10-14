@@ -1,20 +1,77 @@
 ---> Services
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local WorldPath = require(ReplicatedStorage:WaitForChild("Shared").Utility.WorldPath)
+
+---> Constants
+
+local ASSET_TIMEOUT_SECONDS = 5
 
 ---> Assets
+-- Tools and animations are authored in the place (world contract):
+--   ReplicatedStorage.SharedStorage.Tools.Kitchen.*
+--   ReplicatedStorage.SharedStorage.Animations.Kitchen.*
+-- They are looked up without erroring. A missing tool skips the recipe or branch
+-- that needs it; a missing animation drops only the animation step.
 
-local SharedStorage = ReplicatedStorage:WaitForChild("SharedStorage")
+local SharedStorage = ReplicatedStorage:WaitForChild("SharedStorage", ASSET_TIMEOUT_SECONDS)
 local SelectorModels = ReplicatedStorage:FindFirstChild("SelectorModels")
 
-local Tools = SharedStorage.Tools.Kitchen
-local Animations = SharedStorage.Animations.Kitchen
+local Tools = WorldPath.find(SharedStorage, { "Tools", "Kitchen" })
+local Animations = WorldPath.find(SharedStorage, { "Animations", "Kitchen" })
+
+if not Tools then
+	warn("[Recipes] ReplicatedStorage.SharedStorage.Tools.Kitchen not found; recipes that give tools are skipped.")
+end
+if not Animations then
+	warn("[Recipes] ReplicatedStorage.SharedStorage.Animations.Kitchen not found; kitchen animations are skipped.")
+end
 
 ---> Module
 
 local RecipeConstructors = {}
 
 local coffeeNames = {}
+local warnedAnimations: { [string]: boolean } = {}
+
+-- Returns SharedStorage.Tools.Kitchen[...path], or nil (with a warning) when missing.
+function RecipeConstructors.getTool(path: { string }): Instance?
+	if not Tools then
+		return nil -- already warned once for the whole folder
+	end
+	local tool = WorldPath.find(Tools, path)
+	if not tool then
+		warn(string.format("[Recipes] Tool Tools.Kitchen.%s not found; skipping it.", table.concat(path, ".")))
+	end
+	return tool
+end
+
+-- Returns the tools that exist for a list of { Category, Name } paths.
+function RecipeConstructors.getTools(paths: { { string } }): { Instance }
+	local tools = {}
+	for _, path in paths do
+		local tool = RecipeConstructors.getTool(path)
+		if tool then
+			table.insert(tools, tool)
+		end
+	end
+	return tools
+end
+
+-- Returns the action steps that grab `tool`, with the grab animation first when
+-- it exists.
+local function grabActions(tool: Instance): { { any } }
+	local actions = {}
+	local animation = Animations and Animations:FindFirstChild("GrabAnimation_01")
+	if animation then
+		table.insert(actions, { "AnimateRaw", animation, true })
+	elseif Animations and not warnedAnimations.GrabAnimation_01 then
+		warnedAnimations.GrabAnimation_01 = true
+		warn("[Recipes] Animation Animations.Kitchen.GrabAnimation_01 not found; grabbing plays no animation.")
+	end
+	table.insert(actions, { "GiveTool", tool })
+	return actions
+end
 
 function RecipeConstructors.makeCoffeeVariant(name: string, color: Color3): { { any } }
 	table.insert(coffeeNames, "=" .. name)
@@ -51,7 +108,22 @@ function RecipeConstructors.makeHotChocolateVariant(flavor: string, color: Color
 	}
 end
 
+-- Returns nil when none of the cup sizes have a tool.
 function RecipeConstructors.makeCupGiver(name: "Clear Cup" | "Cup")
+	local buttons = {}
+	local branches = {}
+	for _, size in { "Small", "Medium", "Large" } do
+		local tool = RecipeConstructors.getTool({ "Cups", size .. " " .. name })
+		if tool then
+			table.insert(buttons, { Text = size })
+			branches[size] = grabActions(tool)
+		end
+	end
+
+	if #buttons == 0 then
+		return nil
+	end
+
 	return {
 		HoldDuration = 0.5,
 		Actions = {
@@ -60,28 +132,20 @@ function RecipeConstructors.makeCupGiver(name: "Clear Cup" | "Cup")
 				{
 					Title = name,
 					Text = "Choose a size:",
-					Buttons = { { Text = "Small" }, { Text = "Medium" }, { Text = "Large" } },
+					Buttons = buttons,
 				},
-				{
-					["Small"] = {
-						{ "AnimateRaw", Animations.GrabAnimation_01, true },
-						{ "GiveTool", Tools.Cups["Small " .. name] },
-					},
-					["Medium"] = {
-						{ "AnimateRaw", Animations.GrabAnimation_01, true },
-						{ "GiveTool", Tools.Cups["Medium " .. name] },
-					},
-					["Large"] = {
-						{ "AnimateRaw", Animations.GrabAnimation_01, true },
-						{ "GiveTool", Tools.Cups["Large " .. name] },
-					},
-				},
+				branches,
 			},
 		},
 	}
 end
 
+-- Returns nil when `tools` is empty (every tool was missing).
 function RecipeConstructors.makeGrabSelector(title: string, text: string, tools: { Instance })
+	if #tools == 0 then
+		return nil
+	end
+
 	local function resolveSelectorModel(name: string): Instance?
 		if not SelectorModels then
 			return nil
@@ -130,10 +194,7 @@ function RecipeConstructors.makeGrabSelector(title: string, text: string, tools:
 			ModelName = tool.Name,
 			Model = resolvePreviewModel(tool),
 		})
-		selectionActions[tool.Name] = {
-			{ "AnimateRaw", Animations.GrabAnimation_01, true },
-			{ "GiveTool", tool },
-		}
+		selectionActions[tool.Name] = grabActions(tool)
 	end
 	return {
 		HoldDuration = 1,

@@ -1,0 +1,345 @@
+--- a/docs/SYSTEMS.md
++++ b/docs/SYSTEMS.md
+@@ -4,7 +4,7 @@
+ 
+ All systems serve the four highest product priorities: **monetization, engagement, retention, and CCU**. Default to continued play even when presentation or a feature is degraded or broken. Showing a failure screen or deliberately blocking a player from joining or playing requires Jack's explicit approval, including for critical errors. Preserve purchase, ownership, server-authority, and saved-data correctness while isolating failures. See `CONVENTIONS.md` and `AI_AGENT_WORKFLOW.md` for design and review requirements.
+ 
+-Statements here describe the code as read on 2026-10-12 and were not exercised in Studio. Verify before relying on them for a release decision, and update this file in the same change that alters a system.
++Statements here describe the working tree on branch `uhweifh` as read on 2026-10-14 (HEAD `92f6144` plus the uncommitted M0 changes). Studio runs (REVIVAL-001 M0.4 run 2, one player) exercised boot, the clock-in gate on kitchen stations, and a `CreateOrder` / claim / deposit / pick-up round trip; each of those is marked below. Everything else was read from source and not run, and no multiplayer path has been run. Verify before relying on them for a release decision, and update this file in the same change that alters a system.
+ 
+ ### Startup & Lifecycle
+ **Purpose:** Boots Knit on server and client and fans player join/leave out to every service and controller.
+@@ -13,8 +13,9 @@
+ - `AddServicesDeep` / `AddControllersDeep` `require` every ModuleScript under `Modules/`, helpers included (`Spill`, `PromptBuilder`, `Actions/*`, `Pets/*`, `PlayerSetup`). A module that calls `CreateService` / `CreateController` is registered automatically; helpers are only required, so they must be safe to require at startup. The client loop indexes every result for `PlayerAdded` / `PlayerRemoving` without a type check, so a helper under `client/Modules/` must return a table. The server loop skips non-tables.
+ - `PlayerAdded(player)` runs for players already present and for later joins; `PlayerRemoving(player)` runs in a `pcall` per service so one failure cannot stop the rest. `DataService` is last so profile data stays readable during teardown.
+ - `STUDIO_GRANT_ALL_ITEMS` grants every Capsule and Particle item in Studio only and is a development shortcut.
+-- On live servers, `init.server.luau` currently kicks any player whose group rank is below 4 ("restricted to staff members only"). This is an existing join block that predates this documentation; it is not approved precedent. Do not extend it, and confirm with Jack before relying on or removing it.
+-**Depends on:** Knit, RankUtil.
++- There is no join gating. The group-rank join kick that used to live in `init.server.luau` was a debug lock and was removed with Jack's approval (DEC-004). Group rank is not read at join and does not gate gameplay (DEC-002); do not add a join check.
++- Content authored in the place is resolved at `KnitStart` or at use time with bounded waits (`shared/Utility/WorldPath.luau`: `find` never yields and returns nil; `waitFor` spends one shared deadline across the whole path), not at require time, because every module under `Modules/` is required at startup. A missing authored folder disables only the feature that needs it, with a `warn` naming the path. Known exceptions at require time: `RecipeConstructors` makes the bounded 5 s wait described under Kitchen; `Inventory` still does an unbounded `WaitForChild` for `ReplicatedStorage.Networking.InventoryEvent` at require time, and `Ordering/Menu.luau` does an unbounded `WaitForChild("SelectorModels")` (OrderService requires Menu lazily, on first order).
++**Depends on:** Knit.
+ **Consumers:** Every service and controller.
+ 
+ ### Player Data
+@@ -29,6 +30,8 @@
+ - `ProfileTemplate` is both the default data and the type. New fields are reconciled into existing profiles; renames and removals need a migration. Changing `PROFILE_STORE_NAME` abandons all saved data and needs Jack's approval.
+ - A failed or lost profile session kicks the player with a retry message (data-integrity protection). `PlayerRemoving` adds the session's playtime to `Statistics.TimePlayed` and ends the session.
+ - `PlayerSetup` functions run once per join in their own thread and must not block profile availability: first-join nickname prompt (3 s delay, 15 characters, text-filtered, unchangeable afterwards), cosmetics and pet replication setup, and the one-time group pet grant (`FreeItemsRedeemed` guards repeats).
++- `DataService:SaveAsync(player, isSaved?)` forces a save and resolves `true` only once a DataStore write that satisfies `isSaved` finishes (15 s timeout, never rejects). `ProcessReceipt` uses it before answering `PurchaseGranted`.
++- `ProcessedReceipts` (`PurchaseId` to grant time, bounded to the newest 200) is the idempotency record for developer-product receipts. Do not rename or clear it.
+ - `Playtime.MostRecentJoin` / `FirstJoin` are written directly on `proxy.Data` and are saved but not replicated.
+ **Depends on:** ProfileStore, ReplicaService, DialogService, CosmeticsService, PetService.
+ **Consumers:** Nearly every server service; `DataController` on the client.
+@@ -42,10 +45,10 @@
+ - Balances change only through `CurrencyService:Modify(player, "BobaBucks" | "Points", amount)`; amount must be non-zero and the currency must exist in `ProfileTemplate.Currency`.
+ - BobaBucks changes also increment `BobaBucksEarned` or `BobaBucksSpent`.
+ - `IncrementStat` ignores names not present in `ProfileTemplate.Statistics`; add the counter to the template first.
+-- `Modify` does not currently prevent a negative balance; callers that spend must check the balance first.
++- `Modify` does not prevent a negative balance and does not yield for the caller (it queues on the profile). Anything that spends must use `CurrencyService:TrySpendAsync(player, currency, amount)`, which yields until data loads, then checks the balance and deducts in one non-yielding step, and returns `(true)` or `(false, reason)` (`InvalidCurrency`, `InvalidAmount`, `NoData`, `InsufficientFunds`). Amounts must be positive whole numbers. Nothing in `src/` calls `TrySpendAsync` yet; covered by `Tests/CurrencyService.spec.luau` (not run in Studio by this task).
+ - `SpillsCleaned`, `TreasureChestsFound`, and `CelebritiesMet` exist in the template and the Statistics page, but nothing in `src/` increments them yet. `ItemsOrdered`, `BobasOrdered`, `OrdersCreated`, `OrdersPrepared`, and the BobaBucks totals are wired.
+ **Depends on:** DataService.
+-**Consumers:** SpillService (Points), shop and promo-code rewards, Statistics UI.
++**Consumers:** SpillService (Points), shop and promo-code rewards, Statistics UI. Future spend paths (`TrySpendAsync`).
+ 
+ ### Inventory
+ **Purpose:** Typed, replicated item storage for Capsules, Pets, Nametags, and Particles.
+@@ -74,7 +77,7 @@
+ - Elapsed time for the current session is added to stored `TimeAccumulated` on removal; completion can happen on the next login or server check.
+ - The client's `TryCompleteReadyHatch` is a hint only; the server recomputes elapsed time.
+ - Capsule tiers, odds, and the hatch duration are product data (Jack approval to change).
+-- The skip-hatch developer product (see Purchases) sets progress to `PET_HATCH_DURATION - 5`, so the normal completion check finishes it.
++- The skip-hatch developer product (see Purchases) sets progress to `PET_HATCH_DURATION - 5`, so the normal completion check finishes it. It is valid only while a hatch is pending (DEC-006); the HUD hatch button (`Core/Hud/BottomLeft.luau`) only prompts the purchase while one is, and the server enforces it again.
+ **Depends on:** DataService, Inventory, DialogService, `InventoryItemDefinitions`.
+ **Consumers:** Inventory UI, Shop UI, ProcessReceipt.
+ 
+@@ -105,7 +108,7 @@
+ **Consumers:** Overhead nametags, other players' views.
+ 
+ ### Ordering
+-**Purpose:** Runs the customer order lifecycle: staff create orders, baristas claim and prepare them, customers collect them.
++**Purpose:** Runs the customer order lifecycle: any player orders for themselves, clocked-in baristas claim and prepare orders, customers collect them.
+ **Owner modules:**
+ - `server/Modules/OrderService.luau`
+ - `shared/Ordering/Menu.luau`
+@@ -114,13 +117,17 @@
+ - `server/Tests/OrderService.spec.luau`
+ **Key invariants:**
+ - Orders are in-memory only (not saved) and carry `status` of `Pending Preparation`, `Being Prepared`, or `Ready for Pick Up`. `orderNum` is a rolling four-digit number.
+-- `CreateOrder` requires `RankUtil:CanUseOrderingSystem` (rank 7), a per-staff debounce, and 1 to 4 items. 
+-- Claiming requires `CanEnterKitchen` (rank 8) and no order already being prepared. Baristas who find no pending order join a FIFO queue; a new order is dispatched to the first queued barista still online. Queue positions are pushed with `QueueUpdated`.
++- `Client:CreateOrder(customerId, orderItems)` is open to every player (no rank or clock-in check). `customerId` must equal the caller's UserId, there is a 5 s per-player debounce, a player may have only one open order, and an order has 1 to 4 items. Only the array part of `orderItems` is read. Every argument is untrusted.
++- The client sends each item as `{ Category, Item, CustomInfo }` only. The server rebuilds it in `buildOrderItem` against `Shared.Ordering.Menu.FoodTable`: `Category` and `Item` must exist; `DefaultInfo` is always the server's Menu definition (never client data); `CustomInfo` must be a table whose keys are exactly the choices the item offers (each `Select` value is one of the listed strings, each `RequiredSelection` value is one of its keys, each `Options` value is a boolean, with the Menu default when absent). Unknown keys, wrong types, and missing required selections reject the whole order (`Invalid order.`, plus a server `warn`). A new item field that the client may choose needs a matching check there.
++- The Menu module is required on the first order inside a `pcall`; if it fails, ordering replies `Ordering is unavailable right now.` and nothing else is affected.
++- The `Ordering` and `MobileOrder` pages call it as `pcall(function() return OrderService:CreateOrder(userId, request):expect() end)` inside `task.spawn`, with an `isSubmitting` in-flight guard so a Promise that never settles cannot leave the UI stuck on a double-submit, and show the server's `Message`. New callers copy this shape.
++- Claiming and the barista queue require the player to be clocked in (`ShiftService:IsClockedIn`, see Shifts) and not already preparing an order. Baristas who find no pending order join a FIFO queue; a new order is dispatched to the first queued barista still online and clocked in. Clocking out removes a player from the queue; an order already being prepared stays with them. Queue positions are pushed with `QueueUpdated`. Before `KnitStart` resolves `ShiftService`, nobody counts as clocked in.
+ - If the customer leaves, their order is removed. If the preparing barista leaves, the order returns to `Pending Preparation`. Pick-up areas owned by departed customers are cleared.
+ - Staff deposit prepared items as tools into a pick-up area (one depositor at a time per area); the customer collects them from there. Item and boba counts feed `ItemsOrdered`, `BobasOrdered`, and `OrdersPrepared`.
+-- The service depends on authored instances: `workspace["Ordering System"]` (screens, pick-up nodes with `OrderOwner` and `ProximityPrompt`) and `ServerStorage.OrderPickUp`.
+-**Depends on:** RankUtil, StatisticsService, DialogService, Promise, authored Ordering System.
+-**Consumers:** Ordering and mobile ordering UI, staff screens, Statistics.
++- The service depends on authored instances: `workspace["Ordering System"]` (`Status Screens`, `Staff Screens`, `Pick Up` nodes with `OrderOwner` and `ProximityPrompt`), waited for at most 10 s in `KnitStart` (after `ShiftService` is resolved and the clock-out hook is connected). If it is missing, a `warn` is logged and ordering screens and pick-up are disabled; each sub-folder is also optional and disables only its own feature. `ServerStorage.OrderPickUp` and `ReplicatedStorage.ModelStorage` are created in code when absent. `TopBar` resolves `Ordering System.Computers` (30 s wait, after the HUD mounts) to attach register prompts, which are available to every player.
++- Studio evidence (M0.4 run 2, one player): rejection of malformed orders, a valid order, the one-open-order rule, claim, deposit, and customer pick-up all worked. Two baristas claiming, the queue, and one player collecting another's order are unverified.
++**Depends on:** ShiftService, StatisticsService, DialogService, Promise, authored Ordering System. `QuestService` is used if it exists.
++**Consumers:** Ordering and mobile ordering UI, staff screens, Statistics, `OrderController` (pick-up beam; `SharedStorage.Effects.PickupBeam` is looked up on use and skipped with one `warn` when missing).
+ 
+ ### Kitchen
+ **Purpose:** Turns kitchen props into proximity-prompt interactions that run recipe action sequences.
+@@ -130,12 +137,14 @@
+ - `shared/Configuration/KitchenConfig.luau`
+ - `client/Modules/KitchenController.luau`
+ **Key invariants:**
+-- Every key in `Recipes.Items` is matched by name to models under `workspace.Assets.Kitchen`; each match gets a prompt. Syrup dispensers are cloned from `ReplicatedStorage.SelectorModels.Kitchen.SyrupDispenser` along `Kitchen.Syrups` parts.
+-- The prompt handler re-checks on the server: `CanEnterKitchen`, a primary part, a character, and `MAX_INTERACTION_DISTANCE`.
++- Every key in `Recipes.Items` is matched by name to models under `workspace.Assets.Kitchen`; each match gets a prompt. Syrup dispensers are cloned from `ReplicatedStorage.SelectorModels.Kitchen.SyrupDispenser` along `Kitchen.Syrups` parts. `workspace.Assets.Kitchen` is waited for at most 10 s in `KnitStart`; if it is missing the kitchen is disabled with a `warn`, and a missing `Syrups` folder or dispenser template disables only the dispensers. `RecipeConstructors` (required by `Recipes` at startup) waits at most 5 s for `ReplicatedStorage.SharedStorage` and then looks up `Tools.Kitchen` and `Animations.Kitchen` with `WorldPath.find`; a missing tool skips the recipe or branch that needs it, and a missing animation drops only that step, each with a `warn`.
++- The prompt handler re-checks on the server: the player is clocked in (`ShiftService`; a clocked-out player's prompt fires and is silently ignored, with no toast), a primary part, a character, and `MAX_INTERACTION_DISTANCE`. Rank is not consulted.
++- `KitchenController` applies the Instant Brew hold-time perk after a 30 s bounded wait for the kitchen; a missing kitchen disables only that perk.
++- Studio evidence (M0.4 run 2): boot, the clock-in gate (clocked out: no dialog or tool; clocked in: the Cup size dialog opens), regular coffee, and Fudge Brownie worked. Boba recipes were not working at that run; the fix is tracked separately and is not described here.
+ - `InteractionRunner` debounces per player and runs the recipe's `Actions` in order; each action is a function module in `Actions/` looked up by name. An action that is not a function is skipped with a warning; failures report to the client via `InteractionFailed`.
+ - A new action is a new module in `Actions/` with the `ActionFn` signature from `KitchenTypes`, not a branch in the runner.
+ - Recipe, drink, syrup, and menu names are shared with Ordering; keep `Recipes` and `Menu` consistent.
+-**Depends on:** RankUtil, authored Kitchen models and SFX.
++**Depends on:** ShiftService, WorldPath, authored Kitchen models, tools, and SFX.
+ **Consumers:** Ordering, Recipes UI, `SetItemEnabled` callers.
+ 
+ ### Spills & Cleanliness
+@@ -145,29 +154,43 @@
+ - `shared/Configuration/Spills.luau`
+ - `client/Modules/SpillController.lua`
+ **Key invariants:**
+-- Spill regions come from `workspace.Assets.Spills`; counts are capped by `MaxTotal` and `MaxSpawned`, with overflow queued.
++- Spill regions come from `workspace.Assets.Spills.Areas`, with templates from `ReplicatedStorage.SharedStorage.Spills`; counts are capped by `MaxTotal` and `MaxSpawned`, with overflow queued, and a new spill is attempted every `SpawnInterval` seconds (30, tuning value). All of that content shares one 10 s budget in `KnitStart` (`WorldPath.waitFor` with a common deadline); if any path is missing, spills are disabled with one `warn` listing the missing paths, and the service also disables itself after repeated spawn failures. `SpillController` does the same on the client for its folders and storage. Studio run M0.4 run 2 showed `Spills disabled (4 authored paths missing)` in the current place, so spills are not exercised there.
++- Only clocked-in players can clean (`Spill.luau` checks `ShiftService` in the prompt handler).
+ - Cleaning awards `PointIncrement` Points through `CurrencyService:Modify` and raises the global `CleanlinessReplica` (`Percent`, replicated to all) by 1 to 2.
+ - Trip zones use `Zone`; tripping fires the `Trip` signal to that player only.
+ - Each spill owns a Janitor; `Clean` and `Destroy` must release the player's locked movement and animation.
+-**Known gap (read from code, not run):** At 100% the service sets `CurrencyService.GlobalMulti` and reads `Config.BoostMultiplier` / `Config.BoostDuration`, none of which exist in `CurrencyService` or `Spills.luau`. Reaching 100% will raise an error in that path until the multiplier is implemented or removed. Do not "fix" this by inventing reward values; reward multipliers are Jack-approved economy data.
+-**Depends on:** CurrencyService, Zone, Janitor, ReplicaService, authored Spills assets.
++- Cleanliness saturates at 100. The earlier `GlobalMulti` / `BoostMultiplier` path is gone; the reward for reaching 100% (a Cafe Rating boost) is not implemented. Do not invent reward values; they are Jack-approved economy data.
++**Depends on:** CurrencyService, ShiftService, Zone, Janitor, ReplicaService, WorldPath, authored Spills assets.
+ **Consumers:** HUD cleanliness meter.
+ 
+-### Ranks, Teams & Gamepasses
+-**Purpose:** Maps Roblox group rank and gamepass ownership to what a player may do.
++### Shifts & Teams
++**Purpose:** Decides who works as a barista. A clocked-in player is a barista (kitchen stations, claiming and queueing for orders, cleaning spills); a clocked-out player is a customer. Replaces group-rank gating of gameplay (DEC-002: ranks are titles, moderation, and event hosting only).
+ **Owner modules:**
+-- `shared/Utility/RankUtil.luau`, `shared/Utility/GamepassUtil.luau`
+-- `shared/Configuration/GamepassConfig.luau`, `Gamepasses.luau`, `TeamsConfig.luau`
+-- `server/Scripts/Teams.server.luau`, `server/Scripts/RankClaiming.server.luau`
+-- `server/Modules/RankingService.luau` (empty stub)
+-**Key invariants:**
+-- `RankUtil` caches group rank (and role) per player, pre-fetches on join, de-duplicates concurrent fetches, expires entries, and falls back to rank 1 (Customer) when the lookup fails. In Studio it returns a simulated rank. All server authorization uses its checks: `CanUseOrderingSystem` (7), `CanEnterKitchen` (8), `IsMR` (11), `IsHR` (16), `IsSHR` (19).
++- `server/Modules/ShiftService.luau`
++- `server/Scripts/Teams.server.luau`, `shared/Configuration/TeamsConfig.luau`
++- `shared/UI/Components/Core/Hud/BottomLeft.luau` (Clock In / Clock Out button)
++- `server/Tests/ShiftService.spec.luau`
++**Key invariants:**
++- The state is the `ClockedIn` attribute on the `Player`, set only by the server. Every player starts clocked in (`DEFAULT_CLOCKED_IN`) unless the attribute is already set. `IsClockedIn(player)` is true only when the attribute is exactly `true`.
++- Anyone may clock in or out at any time. `Client:SetClockedIn(boolean)` type-checks its argument, has a 2 s per-player cooldown cleared in `PlayerRemoving`, and replies `{ Success, Message }`. The server-side `SetClockedIn(player, value)` skips the cooldown and fires the `ClockedInChanged(player, clockedIn)` GoodSignal only on a change.
++- Consumers read it server-side only: `KitchenService` (station prompts), `OrderService` (claim, queue, dispatch; it also leaves the queue on clock-out), and `Spill.luau` (cleaning). Each resolves `ShiftService` in `KnitStart` or at call time; none cache the answer. The client HUD (`BottomLeft`) mirrors the attribute and calls `ShiftService:SetClockedIn`; the HUD is presentation, and the server re-checks.
++- `Teams.server.luau` creates `Baristas` (clocked in, `AutoAssignable`) and `Customers` from `TeamsConfig` and moves each player when `ClockedIn` changes. It no longer reads rank.
++- Studio evidence (M0.4 run 2, one player): the HUD button toggles the attribute and team, and the kitchen gate follows it. Per-player state with two players is unverified.
++**Depends on:** Knit, GoodSignal.
++**Consumers:** KitchenService, OrderService, SpillService, Teams, HUD.
++
++### Ranks & Gamepasses
++**Purpose:** Group rank is informational; gamepass ownership gates perks.
++**Owner modules:**
++- `shared/Utility/RankUtil.luau`, `shared/Utility/GamepassUtil.luau`
++- `shared/Configuration/GamepassConfig.luau`, `Gamepasses.luau`
++**Key invariants:**
++- `RankUtil` caches group rank (and role) per player, pre-fetches on join, de-duplicates concurrent fetches, expires entries, and falls back to rank 1 (Customer) when the lookup fails. In Studio it returns a simulated rank. Its checks (`CanUseOrderingSystem` 7, `CanEnterKitchen` 8, `IsMR` 11, `IsHR` 16, `IsSHR` 19) remain as helpers but must not gate ordering, the kitchen, claiming, or any other gameplay (DEC-002).
++- Remaining rank reads are not gameplay gates: the `FirstStaff` badge (`BadgeService`), `MinRank` on a setting (`SettingsService`, server-enforced; `SyrupHighlighting` and `ShiftTimerEnabled` use it), the admin-only shift timer in the HUD, and display of role and rank in the Ordering page and HUD (presentation).
++- `RankClaiming.server.luau`, the `ClaimRank` remote, `RankingService`, and the "Claim Barista / Kitchen Leader" settings were removed; rank-granting passes no longer exist. DEC-002 says legacy passes will be remapped to perks; that remapping is not implemented in this code.
+ - `GamepassUtil` caches `UserOwnsGamePassAsync` results the same way; always resolve passes through it or `GamepassConfig`.
+-- `Teams.server.luau` creates teams from `TeamsConfig` and assigns each player the highest team whose rank they meet.
+-- `ClaimRank` accepts only a numeric pass ID, is rate-limited per player, looks the pass up in `GamepassConfig`, and verifies ownership server-side before answering.
+-**Known gap (read from code):** `ClaimRank` currently verifies and reports success but contains a `TODO` instead of granting the rank, and `RankingService` is an empty function. Rank-granting passes do not yet change rank.
+ **Depends on:** Roblox Groups and Marketplace, Promise.
+-**Consumers:** OrderService, KitchenService, SettingsService, Teams, Settings UI, Shop passes.
++**Consumers:** BadgeService, SettingsService, Ordering and HUD display, KitchenController (Instant Brew).
+ 
+ ### Purchases
+ **Purpose:** Fulfils Robux purchases and presents the shop.
+@@ -175,14 +198,16 @@
+ - `server/Scripts/ProcessReceipt.server.luau`
+ - `shared/Configuration/Gamepasses.luau`, `GamepassConfig.luau`
+ - `shared/UI/Pages/Shop/*`, `shared/UI/Pages/Menu/Purchases.luau`
+-- `ReplicatedStorage.Networking.GetPurchases` (authored remote)
++- `ReplicatedStorage.Networking.GetPurchases` (RemoteFunction created by this script when absent)
+ **Key invariants:**
+-- `ProcessReceipt` maps `ProductId` to `{ name, callback, includePlayerData }`. An offline player, a callback that errors, or a callback that does not return `true` yields `NotProcessedYet` so Roblox retries. On success the purchase is appended to the player's history in `ProductPurchaseDatastore_0001` and the receipt returns `PurchaseGranted`.
+-- Callbacks must be safe to run again: the history write happens after the grant and is not consulted before it, so a retry after a failed history write re-runs the callback. Prefer deduplicating on `receiptInfo.PurchaseId` in any new product action.
+-- `GetPurchases` returns the player's purchase history with a per-player cooldown; clients cannot write it.
++- `MarketplaceService.ProcessReceipt` is assigned before anything that can yield and answers `NotProcessedYet` until Knit has started. `ProductActionMap` maps `ProductId` to `{ name, callback }`; the callback receives the player's profile data and must return `true` only once the grant has been applied. A callback that errors or returns anything else grants nothing and yields `NotProcessedYet`.
++- Idempotent on `PurchaseId`: the id is recorded in the profile's `ProcessedReceipts` (newest 200 kept) right after the grant, and a receipt whose id is already recorded is never granted again. Concurrent calls for one id are rejected by an in-flight guard. `PurchaseGranted` is returned only after `DataService:SaveAsync` confirms the record reached the DataStore; if the save is not confirmed the answer is `NotProcessedYet` and the retry takes the "already granted" path. If the id cannot be recorded after a grant, it answers `PurchaseGranted` rather than risk a double grant.
++- An offline player or profile data that does not load within 30 s yields `NotProcessedYet`. A `ProductId` with no entry in `ProductActionMap` logs a warning and yields `NotProcessedYet`, so payment is never consumed for something undelivered. Today only the skip-hatch product is mapped.
++- Skip Hatch (DEC-006): with no hatch pending the action grants nothing, stores no credit, and the receipt stays unconsumed (`NotProcessedYet`, not recorded). The HUD also refuses to prompt it without a pending hatch.
++- `ProductPurchaseDatastore_0001` history is informational only and written after the decision; it never decides whether a purchase was granted. `GetPurchases` returns it with a per-player cooldown; clients cannot write it.
+ - Product IDs, prices, gamepass IDs, and the shop catalog are Jack-approved economy data. A new product also needs the matching product on Roblox and an entry in `ProductActionMap`.
+ - UI only prompts and reflects ownership; it never decides entitlement.
+-**Known gap (read from code):** A `ProductId` with no entry in `ProductActionMap` logs a warning and returns `PurchaseGranted`, which consumes the purchase without delivering anything. Today only the skip-hatch product is mapped. Adding products without actions would silently take payment.
++- The receipt logic is read from source and has no runtime evidence yet (M0.4 did not exercise it); treat it as unverified until a Studio purchase test is recorded.
+ **Depends on:** MarketplaceService, DataService, CapsuleService (skip hatch).
+ **Consumers:** Shop, Passes, hatch skipping.
+ 
+@@ -194,6 +219,7 @@
+ - `shared/UI/Pages/Menu/PromoCodes.luau`
+ **Key invariants:**
+ - Codes are normalized (uppercase, no whitespace) and checked only on the server, so clients cannot enumerate them. The config file must stay out of `src/shared/`.
++- The `RedeemCode` RemoteFunction under `ReplicatedStorage.Networking` is created by the script when absent (the `Networking` folder too), not authored in the place.
+ - Per-player redemption is recorded in `RedeemedCodes`; optional global `MaxClaims` is enforced with an atomic `UpdateAsync` counter in `PromoCodeClaimCounts_0001`; `ExpiresAt` is a UTC timestamp.
+ - Redemption is rate-limited per player and replies `{ Success, Message }`.
+ - Reward values and code lists are Jack-approved economy data.
+@@ -208,7 +234,7 @@
+ - Awards, ownership checks, and badge info are cached per player and cleared on leave; failures warn and never block play.
+ - Join-time awards are skipped in Studio.
+ - The special "met the owner/co-owner/developer" badges use hard-coded user ID lists in this file; changing those lists is a staffing decision for Jack.
+-**Depends on:** BadgeService (Roblox), RankUtil.
++**Depends on:** BadgeService (Roblox), RankUtil (only for the `FirstStaff` badge).
+ **Consumers:** Join flow, Slipped (client-awardable).
+ 
+ ### Settings
+@@ -218,7 +244,8 @@
+ - `shared/Configuration/SettingsConfig.luau`
+ - `shared/UI/Pages/Menu/Settings.luau`
+ **Key invariants:**
+-- Only boolean values for known toggle keys are accepted; action-type entries have no stored state. Settings with `MinRank` are enforced on the server, and `GamepassId` settings are only shown to owners (presentation).
++- Only boolean values for known toggle keys are accepted; action-type entries have no stored state. Settings with `MinRank` are enforced on the server, and `GamepassId` settings are only shown to owners (presentation). The claim-rank action settings were removed.
++- The Music and SFX toggles set the volume of `SoundService.Music` / `SoundService.SFX` only if they exist and are `SoundGroup`s; otherwise the toggle is skipped with one `warn` per name. M0.4 run 2 logged that warning in the current place.
+ - Settings are saved under `Settings` in the profile and must exist in `ProfileTemplate.Settings`.
+ **Depends on:** DataService, RankUtil.
+ **Consumers:** Settings UI, audio and character-behavior controllers that read the values.
+@@ -232,9 +259,9 @@
+ **Key invariants:**
+ - `CreateDialog(player, dialogType, props, timeout?)` returns a Promise; `dialogType` must name a component in `Components/Dialogs/` or the call rejects. Pending dialogs are tracked by GUID and dropped on `PlayerRemoving`.
+ - Answers come back as `{ id, value }` and must be treated as untrusted input: type-check and range-check before use.
+-- `Notify` shows a toast and never blocks.
++- `Notify` shows a toast and never blocks. Its props are `{ Title, Description }`. Dialog sounds are looked up with `WorldPath.find` (`SoundService.SFX.UI`, then `UISounds`) and skipped when absent.
+ **Depends on:** HttpService, Promise, React UI.
+-**Consumers:** PlayerSetup, OrderService, RankClaiming, KitchenService, CapsuleService.
++**Consumers:** PlayerSetup, OrderService, KitchenService, CapsuleService, PromoCodes.
+ 
+ ### UI Shell
+ **Purpose:** Hosts the React app and its pages, HUD, and shared components.
+@@ -245,6 +272,7 @@
+ - `shared/UI/Pages/` (`Inventory`, `Menu`, `MobileOrder`, `Ordering`, `Recipes`, `Shop`)
+ - `shared/UI/Hooks/`, `shared/UI/Utility/`, `shared/UI/Stories/`
+ **Key invariants:**
++- HUD pieces that depend on authored content (`TopBar` register prompts) resolve it after mounting with a bounded wait and never at require time, so a missing folder cannot block the HUD.
+ - One `ScreenGui` (`ResetOnSpawn = false`) is created by `AppEntry` and the React root is rendered inside a protected call; a render failure warns and must not stop the rest of the client.
+ - `App` shows one page at a time through `Page`, closing the previous page before opening the next.
+ - UI reads replicated data and calls services; it does not write saved data or decide authorization.
+--- a/docs/ARCHITECTURE.md
++++ b/docs/ARCHITECTURE.md
+@@ -1,7 +1,7 @@
+ # Architecture
+ 
+ ## 1. Overview
+-boba-cafe is a Roblox multiplayer cafe roleplay game: customers order drinks and food, staff (ranked through a Roblox group) claim orders, prepare them in the kitchen, and clean spills, and everyone collects cosmetics (pets, nametags, particles) from capsules and the shop. It uses Rojo for file sync, Wally for packages, Knit for server/client structure, React for UI, and ProfileStore for player data.
++boba-cafe is a Roblox multiplayer cafe roleplay game: customers order drinks and food, baristas (players who are clocked in) claim orders, prepare them in the kitchen, and clean spills, and everyone collects cosmetics (pets, nametags, particles) from capsules and the shop. It uses Rojo for file sync, Wally for packages, Knit for server/client structure, React for UI, and ProfileStore for player data.
+ 
+ ## 2. Single-Place Model
+ The game is one Roblox place. The authored world (kitchen, ordering counters, spill areas, models, sounds) is saved in the place file; this repository holds only the scripts and the Rojo tree that syncs into it.
+@@ -9,10 +9,10 @@
+ | Piece | Where | Notes |
+ | --- | --- | --- |
+ | Scripts | This repository, mapped by `default.project.json` | Server, client, and shared Luau. |
+-| Authored world and assets | The Roblox place file (not in the repository) | `workspace.Assets` (Kitchen, Spills), `workspace["Ordering System"]`, `ReplicatedStorage.SelectorModels`, `ReplicatedStorage.Networking` (remotes), `SoundService.SFX` / `Music`. |
++| Authored world and assets | The Roblox place file (not in the repository) | `workspace.Assets` (Kitchen, Spills), `workspace["Ordering System"]`, `ReplicatedStorage.SelectorModels`, `ReplicatedStorage.SharedStorage` (tools, animations, spill templates, effects), the `InventoryEvent` remote in `ReplicatedStorage.Networking`, `SoundService.SFX` / `Music`. |
+ | Packages | `Packages/`, `ServerPackages/` (generated by Wally, gitignored) | |
+ 
+-Scripts assume those instances exist and index them directly (for example `workspace.Assets.Kitchen`). A missing authored instance is an error in the place, not something to paper over in code; document any new dependency on authored content in the owning system in `SYSTEMS.md`.
++Authored content may be missing or renamed (the place is edited separately from this repository), so scripts resolve it defensively: at `KnitStart` or at use time, never at require time, through `src/shared/Utility/WorldPath.luau` (`find` returns nil without yielding; `waitFor` waits for a path against one shared deadline) or a bounded `WaitForChild`. A missing folder logs a `warn` naming the path and disables only the feature that needs it (kitchen, spills, ordering screens, pick-up beam); it must not stop Knit, the HUD, or other systems. Do not hide a wrong path by inventing content in code. Document each dependency on authored content, with its exact instance path, in the owning system in `SYSTEMS.md`. Remotes for `RedeemCode` and `GetPurchases` are the exception: their scripts create the `Networking` folder and the RemoteFunction when absent.
+ 
+ ## 3. Source Layout
+ * **`src/shared/`** — Code used by both sides, mapped to `ReplicatedStorage.Shared`:
+@@ -22,11 +22,11 @@
+   * `Ordering/` — Menu definitions.
+   * `Pets/` — Pet display helpers shared by server and client.
+   * `UI/` — React app, `Styles.luau`, `Components/`, `Pages/`, `Hooks/`, `Utility/`, `Stories/`.
+-  * `Utility/` — `RankUtil`, `GamepassUtil`, `Animator`, `ItemFader`.
++  * `Utility/` — `RankUtil`, `GamepassUtil`, `WorldPath`, `Animator`, `ItemFader`.
+ * **`src/server/`** — `ServerScriptService.Server`:
+   * `init.server.luau` — Starts Knit, dispatches `PlayerAdded` / `PlayerRemoving` to services.
+   * `Modules/` — Knit services (each file or folder with `init.luau`).
+-  * `Scripts/` — Standalone server scripts (`ProcessReceipt`, `PromoCodes`, `RankClaiming`, `Teams`).
++  * `Scripts/` — Standalone server scripts (`ProcessReceipt`, `PromoCodes`, `Teams`).
+   * `Configuration/` — Server-only data (`PromoCodes`).
+   * `Tests/` — TestEZ specs and the Studio-only runner.
+ * **`src/client/`** — `StarterPlayerScripts.Client`:
+@@ -49,10 +49,10 @@
+ ## 5. Server/Client Boundary
+ Knit is the transport for services and controllers.
+ 
+-* **Server:** Authoritative for player data, currency, inventory, orders, kitchen actions, spills, purchases, ranks, and badges.
++* **Server:** Authoritative for player data, currency, inventory, orders, shift (clock-in) state, kitchen actions, spills, purchases, and badges. Group rank is informational and does not gate gameplay.
+ * **Client:** Owns input, camera, presentation, and UI rendering. It asks the server to act and renders replicated state.
+ * **Knit services:** A service's `Client` table is its public API (methods and `Knit.CreateSignal()` signals). Clients reach it with `Knit.GetService("Name")`.
+-* **Raw remotes:** Some features use RemoteEvents/RemoteFunctions in `ReplicatedStorage.Networking` (`InventoryEvent`, `ClaimRank`, `RedeemCode`, `GetPurchases`). These instances are authored in the place; their server handlers live in `Scripts/` and `Inventory/`.
++* **Raw remotes:** Some features use RemoteEvents/RemoteFunctions in `ReplicatedStorage.Networking` (`InventoryEvent`, `RedeemCode`, `GetPurchases`). `InventoryEvent` is authored in the place; `RedeemCode` and `GetPurchases` are created in code by `Scripts/PromoCodes.server.luau` and `Scripts/ProcessReceipt.server.luau` (find or create the folder and the RemoteFunction). Their server handlers live in `Scripts/` and `Inventory/`. `ClaimRank` no longer exists.
+ * **Replication:** `ReplicaService` (server) and `ReplicaController` (client) replicate the player profile and the global cleanliness value. `ByteNet` is available for packet-based networking.
+ * **Startup:** Both `init` scripts call `Knit.AddServicesDeep` / `AddControllersDeep` on `Modules`, then `Knit.Start()`. On start, the server calls each service's `PlayerAdded` for current and future players; on removal it runs every `PlayerRemoving` first and `DataService` last. The client does the equivalent for controllers after `ReplicaController.RequestData()`.
+ 
+@@ -61,8 +61,9 @@
+ * **Player data:** `DataService` loads a profile with ProfileStore (`PROFILE_STORE_NAME`, template from `Configuration/ProfileTemplate.luau`), wraps it in a Replica owned by that player, and runs the `PlayerSetup` functions (nickname prompt, cosmetics, pets, group reward). Other services call `DataService:GetDataAsync(player)` and write through `:SetValue(path, value)`.
+ * **Client data:** `DataController` receives the Replica through `ReplicaController` and exposes it with `GetDataAsync()`. UI reads from it and never mutates server state.
+ * **Inventory:** Items live under `Inventory.Items.<Type>` in the profile. The inventory module builds typed item objects over that data; the server inserts, equips, stacks, and removes, and the client mirrors changes through `InventoryEvent`.
+-* **Orders:** Staff UI submits orders with `OrderService.Client:CreateOrder`; staff screens and pick-up prompts drive claiming and collection. The service owns the order list, barista queue, status transitions, and the pick-up models, and pushes updates through its `Client` signals.
+-* **Purchases:** `MarketplaceService.ProcessReceipt` and gamepass checks run on the server; UI only prompts purchases and reflects results.
++* **Shift:** `ShiftService` owns a `ClockedIn` attribute on each player (server-set, default clocked in). `KitchenService`, `OrderService`, and `Spill` consult `ShiftService:IsClockedIn` on the server; `Teams.server.luau` and the HUD read the attribute.
++* **Orders:** The Ordering and MobileOrder pages send `OrderService.Client:CreateOrder(userId, { { Category, Item, CustomInfo }, ... })` for the calling player only; the server rebuilds each item from `Shared.Ordering.Menu` and rejects unknown or invalid choices. Staff screens and pick-up prompts drive claiming (clocked-in players) and collection. The service owns the order list, barista queue, status transitions, and the pick-up models, and pushes updates through its `Client` signals.
++* **Purchases:** `MarketplaceService.ProcessReceipt` and gamepass checks run on the server; UI only prompts purchases and reflects results. Receipts are durable: the `PurchaseId` is recorded in the profile (`ProcessedReceipts`) and saved with `DataService:SaveAsync` before `PurchaseGranted`; anything unmapped, unapplied, or unconfirmed answers `NotProcessedYet`.
+ * **Dialogs:** Server code asks a player a question through `DialogService`; `AppDialogs` (client) renders a component from `Shared.UI.Components.Dialogs` and returns the answer.
+ * **UI:** React components read from controllers and data bindings and dispatch Knit calls.
+ 
+--- a/docs/CONVENTIONS.md
++++ b/docs/CONVENTIONS.md
+@@ -12,7 +12,8 @@
+ **Reduce, don't expand.** The codebase needs refinement and simplification. When touching existing code, look for opportunities to simplify. Don't add complexity without justification. Do not mass-reformat or mass-convert files you are not otherwise changing.
+ 
+ ## 2. Luau & Knit Patterns
+-- **Services and controllers**: Server features are Knit services (`Knit.CreateService { Name = ..., Client = { ... } }`) under `src/server/Modules/`; client features are Knit controllers (`Knit.CreateController`) under `src/client/Modules/`. `Knit.AddServicesDeep` / `AddControllersDeep` `require` every ModuleScript under those folders (helpers included), so a new service or controller needs no registry edit, and every helper placed there is loaded at startup and must be safe to require early. A helper under `src/client/Modules/` must return a table because `init.client.luau` indexes each result. A service that needs another resolves it with `Knit.GetService("Name")` at call time, not at require time.
++- **Services and controllers**: Server features are Knit services (`Knit.CreateService { Name = ..., Client = { ... } }`) under `src/server/Modules/`; client features are Knit controllers (`Knit.CreateController`) under `src/client/Modules/`. `Knit.AddServicesDeep` / `AddControllersDeep` `require` every ModuleScript under those folders (helpers included), so a new service or controller needs no registry edit, and every helper placed there is loaded at startup and must be safe to require early. A helper under `src/client/Modules/` must return a table because `init.client.luau` indexes each result. A service that needs another resolves it with `Knit.GetService("Name")` at call time or in `KnitStart`, not at require time.
++- **World content**: Instances authored in the place (`workspace.Assets`, `Ordering System`, `SharedStorage`, `SelectorModels`, `SoundService` groups) are resolved in `KnitStart` or at use time, never at require time, with `src/shared/Utility/WorldPath.luau` (`find`: nil if missing, no yield; `waitFor`: one shared deadline for the whole path) or a bounded `WaitForChild`. Never an unbounded wait or a direct index chain on content you do not own. When a path is missing, `warn` once with the system name and the exact path, and disable only that feature. Name the exact paths in `SYSTEMS.md` when you add a dependency.
+ - **Lifecycle**: Use `KnitInit` for setup that does not touch other services and `KnitStart` for anything that does. `src/server/init.server.luau` and `src/client/init.client.luau` call an optional `PlayerAdded(player)` / `PlayerRemoving(player)` method on every service/controller; use those instead of connecting to `Players` yourself. `DataService` is always torn down last on the server so other services can still read profile data in `PlayerRemoving`.
+ - **Client-exposed API**: Everything a client can call lives in the service's `Client` table. Treat every argument as untrusted (see Section 6).
+ - **Async**: Anything that yields or returns a Promise is named `*Async` (`GetDataAsync`, `GetRankAsync`). Promises come from `Packages.Promise`; always end a chain with `:catch(warn)` or handle the rejection. Use `task.spawn` / `task.delay` / `task.defer`, never the legacy `spawn` / `wait` / `delay`.
+@@ -20,7 +21,7 @@
+ - **Type annotations**: Start new files with `--!strict` and `export type` the shapes other modules use. Existing files that are `--!nonstrict` or unannotated stay as they are unless you are already rewriting them.
+ - **Naming**: `PascalCase` for files, modules, services, controllers, and types; `camelCase` for local variables and local functions; `SCREAMING_SNAKE_CASE` for module-level constants; leading underscore for private service methods (`_handlePickUp`).
+ - **Formatting**: StyLua defaults (tabs) for new and edited code. Do not reformat untouched code to satisfy it.
+-- **Error handling**: Functions that can fail return `(boolean, string?)` for `(success, reason)` rather than throwing, and remote handlers that reply return `{ Success: boolean, Message: string }` as `ClaimRank` and `RedeemCode` do. Validate, `warn` once with the system name, and return early.
++- **Error handling**: Functions that can fail return `(boolean, string?)` for `(success, reason)` rather than throwing, and remote handlers that reply return `{ Success: boolean, Message: string }` as `RedeemCode`, `CreateOrder`, and `ShiftService.Client:SetClockedIn` do. Validate, `warn` once with the system name, and return early.
+ - **Signals and cleanup**: In-process signals use `Packages.GoodSignal`; connection and instance lifetimes use `Packages.Janitor`. Do not add another signal library or hand-rolled listener lists. Every `Connect` made for a player must be cleaned up in `PlayerRemoving`.
+ 
+ ## 3. Player Data
+@@ -43,13 +44,14 @@
+ - **File naming**: Tests are named `*.spec.luau`.
+ - **Location**: Server specs live in `src/server/Tests/`, next to `RunTests.server.luau`.
+ - **Execution**: Studio only. `RunTests.server.luau` returns immediately unless `TESTS_ENABLED` is `true`; flip it locally, run a Play session, read the Output, and set it back to `false` before finishing. There is no headless runner.
+-- **Scope**: Prefer testing pure logic and service decisions (queueing, validation, rank checks) with fakes over testing Roblox instances. Anything that needs the authored place (kitchen models, ordering screens) is verified in Studio and recorded as evidence.
++- **Scope**: Prefer testing pure logic and service decisions (queueing, validation, clock-in checks, spending) with fakes over testing Roblox instances. Anything that needs the authored place (kitchen models, ordering screens) is verified in Studio and recorded as evidence.
+ 
+ ## 6. Security & Server Authority
+ - **Never trust the client**: Check `typeof` of every remote argument, range-check numbers, verify the player's rank (`RankUtil`) and ownership (inventory, gamepass) on the server, and ignore requests that fail with a quiet early return or a `{ Success = false }` reply.
+-- **Rate-limit state-changing remotes**: Use a per-`UserId` debounce table cleared in `PlayerRemoving` (see `RankClaiming`, `PromoCodes`, `OrderService`).
+-- **Purchases**: `ProcessReceipt` must be idempotent, grant only after the effect is applied, and return `NotProcessedYet` when the player or data is unavailable.
+-- **Rank**: Staff-only actions check `RankUtil` (`CanUseOrderingSystem`, `CanEnterKitchen`, `IsMR`, `IsHR`, `IsSHR`) on the server. Client-side hiding is presentation only.
++- **Rate-limit state-changing remotes**: Use a per-`UserId` debounce table cleared in `PlayerRemoving` (see `ShiftService`, `PromoCodes`, `OrderService`).
++- **Purchases**: `ProcessReceipt` is idempotent on `PurchaseId` (recorded in `ProcessedReceipts`), grants only after the effect is applied (a product action returns `true` only then), confirms the save before `PurchaseGranted`, and returns `NotProcessedYet` when the player or data is unavailable, the product is unmapped, or the action cannot apply (Skip Hatch with no hatch pending, DEC-006). Never answer `PurchaseGranted` for something that was not delivered. Spend through `CurrencyService:TrySpendAsync`, not `Modify`.
++- **Client-built data**: When a client sends a request that becomes server state (orders), send only the choice and rebuild the object on the server from server-owned definitions. Validate every key and type, and reject unknown keys. Client callers wrap the Knit call in `pcall(... :expect())` with an in-flight guard so a failure or slow reply cannot lock the UI.
++- **Shift, not rank**: Barista actions (kitchen stations, claiming and queueing for orders, cleaning spills) check `ShiftService:IsClockedIn` on the server. Group rank (`RankUtil`) does not gate gameplay and must not be used to block joining or playing (DEC-002, DEC-004). Remaining uses are display, badges, and `MinRank` settings. Client-side hiding is presentation only.
+ 
+ ## 7. Configuration
+ - **Shared tuning**: `src/shared/Configuration/` holds constants and definitions (`KitchenConfig`, `Spills`, `CapsuleConfig`, `Gamepasses`, `InventoryItemDefinitions/`) as plain Luau tables with no logic beyond building the table.
+@@ -82,7 +84,8 @@
+ - **DON'T** create task-specific docs in `docs/`. Put task evidence and docs in `.review/agent-workflow/tasks/<ID>/`; finished tasks move to `.review/agent-workflow/archive/<ID>/` (see "Artifact layout" in `AI_AGENT_WORKFLOW.md`).
+ - **DON'T** touch profile data except through `DataService`, `CurrencyService`, and the inventory API.
+ - **DON'T** add packages without updating `wally.toml`, and don't hand-edit `wally.lock`, `Packages/`, or `ServerPackages/`.
+-- **DON'T** bypass server authority for currency, inventory, ranks, orders, or purchases.
++- **DON'T** bypass server authority for currency, inventory, shift state, orders, or purchases.
++- **DON'T** gate gameplay on group rank or add a join check; use `ShiftService` for barista actions.
+ - **DON'T** require server-only modules from shared or client code.
+ - **DON'T** make optional systems (audio, pets, cosmetics, notifications) able to stop a player from joining or ordering.
+ - **DON'T** leave `TESTS_ENABLED = true` or any new Studio-only shortcut (like `STUDIO_GRANT_ALL_ITEMS` in `src/server/init.server.luau`) switched on in a finished change.

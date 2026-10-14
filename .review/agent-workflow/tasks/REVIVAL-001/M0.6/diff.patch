@@ -1,0 +1,69 @@
+--- a/src/server/Scripts/ProcessReceipt.server.luau
++++ b/src/server/Scripts/ProcessReceipt.server.luau
+@@ -56,7 +56,8 @@
+ 
+ --- [number]: {string, (Player, ReceiptInfo, playerData) -> boolean}
+ --- Maps productId to array consisting of (productName, callback function). The callback receives the player's
+---- profile data and must return true only once the grant has been applied to it.
++--- profile data and must return true only once the grant has been applied to it. Returning false (optionally with a
++--- reason) grants nothing: the receipt is answered NotProcessedYet and is not recorded as processed.
+ 
+ type PendingHatch = {
+ 	CapsuleName: string, -- definition name of the capsule that was used
+@@ -67,13 +68,16 @@
+ 	[SKIP_HATCH_PRODUCT_ID] = {
+ 		"Skip Hatch",
+ 		function(_, _, playerData)
++			-- DEC-006: Skip Hatch only has value while a pet is hatching. With no hatch pending nothing is granted and
++			-- no skip credit is stored; the receipt stays unconsumed (NotProcessedYet, not recorded) so Roblox keeps it.
+ 			local hatchingPet = playerData.HatchingPet
+-			if hatchingPet and hatchingPet ~= false then
+-				playerData:SetValue({ "HatchingPet" }, {
+-					CapsuleName = hatchingPet.CapsuleName,
+-					TimeAccumulated = HATCH_DURATION_SECONDS - 5,
+-				})
++			if not hatchingPet or hatchingPet == false then
++				return false, "no hatch pending"
+ 			end
++			playerData:SetValue({ "HatchingPet" }, {
++				CapsuleName = hatchingPet.CapsuleName,
++				TimeAccumulated = HATCH_DURATION_SECONDS - 5,
++			})
+ 			return true
+ 		end,
+ 	},
+@@ -188,14 +192,14 @@
+ 		return finish(saveThenDecide())
+ 	end
+ 
+-	local success, res = pcall(f, player, receiptInfo, playerData)
++	local success, res, reason = pcall(f, player, receiptInfo, playerData)
+ 	if not success then
+ 		warn("Error processing purchase for product " .. receiptInfo.ProductId .. ": " .. tostring(res))
+ 		return finish(Enum.ProductPurchaseDecision.NotProcessedYet)
+ 	end
+ 
+ 	if res ~= true then
+-		warn("Purchase action for product", receiptInfo.ProductId, "did not return true, got:", res)
++		warn("Purchase action for product", receiptInfo.ProductId, "was not granted:", res, reason)
+ 		return finish(Enum.ProductPurchaseDecision.NotProcessedYet)
+ 	end
+ 
+--- a/src/shared/UI/Components/Core/Hud/BottomLeft.luau
++++ b/src/shared/UI/Components/Core/Hud/BottomLeft.luau
+@@ -266,10 +266,14 @@
+ 				SortOrder = Enum.SortOrder.LayoutOrder,
+ 			},
+ 		}, {
+-			CapsuleButton = capsuleHatching and c(Pane, {
++			CapsuleButton = capsuleHatching and capsuleHatching ~= false and c(Pane, {
+ 				ClassName = "ImageButton",
+ 				AspectRatio = 1,
+ 				OnClick = function()
++					-- DEC-006: Skip Hatch is only purchasable while a pet is hatching.
++					if not capsuleHatching or capsuleHatching == false then
++						return
++					end
+ 					if extractTimeLeft(hatchClockText) <= 30 then
+ 						return
+ 					end

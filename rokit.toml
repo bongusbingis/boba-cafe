@@ -1,0 +1,5 @@
+# Tools used by scripts/gate.sh. Rojo is intentionally NOT pinned here; it
+# resolves from the global Rokit manifest (~/.rokit/rokit.toml).
+[tools]
+selene = "Kampfkarren/selene@0.31.0"
+stylua = "JohnnyMorganz/stylua@2.5.2"

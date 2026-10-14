@@ -9,6 +9,7 @@ local UI = Shared:WaitForChild("UI")
 
 local Dialogs = UI.Components.Dialogs
 local Styles = require(UI.Styles)
+local WorldPath = require(Shared.Utility.WorldPath)
 local SmallNotification = require(UI.Components.Core.Hud.SmallNotification)
 
 ---> dependencies
@@ -28,7 +29,16 @@ DialogController.Prototype = {}
 local c = React.createElement
 local joinDicts = require(UI.Utility.joinDicts)
 local dialogEvent = GoodSignal.new()
-local uiSfx = SoundService:WaitForChild("SFX").UI
+
+-- UI sounds are authored in the place (SoundService.SFX.UI, else SoundService.UISounds).
+-- They are looked up on use, and a missing sound is skipped.
+local function playUiSound(name: string)
+	local sound = WorldPath.find(SoundService, { "SFX", "UI", name })
+		or WorldPath.find(SoundService, { "UISounds", name })
+	if sound and sound:IsA("Sound") then
+		sound:Play()
+	end
+end
 
 ---> constants
 local HINT_INTERVAL = 15
@@ -138,12 +148,12 @@ function DialogController.Prototype.Destroy(self: DialogObject, resolveTo: any)
 end
 
 function DialogController.Prototype.Fire(self: DialogObject)
-	uiSfx.Pop1:Play()
+	playUiSound("Pop1")
 	return Promise.new(function(resolve, _)
 		self.onResolution = resolve
 		dialogEvent:Fire(self)
 	end):finally(function()
-		uiSfx.Pop2:Play()
+		playUiSound("Pop2")
 	end)
 end
 

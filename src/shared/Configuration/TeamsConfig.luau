@@ -1,27 +1,21 @@
+--[[
+    Module: TeamsConfig
+    Description: Teams created by Teams.server.luau. A player's team follows the
+                 server-owned `ClockedIn` attribute (see ShiftService): clocked-in
+                 players are Baristas, everyone else is a Customer.
+--]]
+
 return {
-    {
-		Name = "💼 Executives",
-        Color = BrickColor.new("Black"),
-        Rank = 20
-    },
-    {
-		Name = "🔨 Developers",
-		Color = BrickColor.new("Tr. Red"),
-		Rank = 19
-	},
 	{
-		Name = "👔 Management",
-		Color = BrickColor.new("Pink"),
-		Rank = 10
-	},
-	{
-		Name = "Staff",
+		Name = "Baristas",
 		Color = BrickColor.new("Light purple"),
-		Rank = 4
-    },
-    {
+		ClockedIn = true,
+		AutoAssignable = true, -- matches ShiftService's default (clocked in on join)
+	},
+	{
 		Name = "Customers",
-        Color = BrickColor.new("Grey"),
-        AutoAssignable = true
-    }
+		Color = BrickColor.new("Grey"),
+		ClockedIn = false,
+		AutoAssignable = false,
+	},
 }

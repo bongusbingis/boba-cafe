@@ -1,0 +1,160 @@
+diff --git a/private/tmp/claude-501/-Users-jackcrowell-Desktop-boba-cafe/m07-pre/src/shared/Kitchen/Recipes.luau b/src/shared/Kitchen/Recipes.luau
+index 50dac6c..4f1d063 100644
+--- a/private/tmp/claude-501/-Users-jackcrowell-Desktop-boba-cafe/m07-pre/src/shared/Kitchen/Recipes.luau
++++ b/src/shared/Kitchen/Recipes.luau
+@@ -326,7 +326,9 @@ for name: string, color: Color3 in Recipes.Tapioca do
+ 		Sound = "Pop",
+ 		HoldDuration = 2,
+ 		Actions = {
+-			{ "ToolNameValidityCheck", { "# Milk|#Tea" } },
++			-- Accepts "Milk + [Flavor] Syrup" (straight from the syrup step) and the
++			-- blended "[Flavor] Milk". Cup names ("... + Milk") are rejected.
++			{ "ToolNameValidityCheck", { "#^Milk %+ .+ Syrup|#^[^%+]+ Milk" } },
+ 			{
+ 				"SetToolHoldingProperty",
+ 				"Tapioca",
+@@ -342,8 +344,13 @@ for name: string, color: Color3 in Recipes.Tapioca do
+ 			{
+ 				"RenameToolHolding",
+ 				function(old: string)
+-					-- [Flavor] Milk ---> [Flavor] Boba
+-					return old:gsub("Milk", "Boba")
++					-- "Milk + [Flavor] Syrup" or "[Flavor] Milk" ---> "[Flavor] Boba"
++					-- Anything after the flavor (e.g. " + Sugar") is kept.
++					local flavor, rest = old:match("^Milk %+ (.+) Syrup(.*)$")
++					if not flavor then
++						flavor, rest = old:match("^([^%+]+) Milk(.*)$")
++					end
++					return flavor and (flavor .. " Boba" .. rest) or old
+ 				end,
+ 			},
+ 		},
+diff --git a/private/tmp/claude-501/-Users-jackcrowell-Desktop-boba-cafe/m07-pre/src/server/Modules/OrderService.luau b/src/server/Modules/OrderService.luau
+index 3604a3e..d80d6d3 100644
+--- a/private/tmp/claude-501/-Users-jackcrowell-Desktop-boba-cafe/m07-pre/src/server/Modules/OrderService.luau
++++ b/src/server/Modules/OrderService.luau
+@@ -688,8 +688,10 @@ function OrderService:_handlePickUp(player: Player, area: Model)
+ 
+ 			for _, item in tools do
+ 				if self._questService then
+-					local currentItem: string = (item:FindFirstChild("CurrentItem") and item.CurrentItem.Value) or ""
+-					if currentItem == "[Syrup] Boba" then
++					local currentItem: string = (item:FindFirstChild("CurrentItem") and item.CurrentItem.Value)
++						or item.Name
++					-- Boba tools are named "[Flavor] Boba" (see Recipes Tapioca step).
++					if string.find(currentItem, " Boba", 1, true) then
+ 						if self._statisticsService then
+ 							self._statisticsService:IncrementStat(player, "BobasOrdered", 1)
+ 						end
+diff --git a/private/tmp/claude-501/-Users-jackcrowell-Desktop-boba-cafe/m07-pre/src/server/Modules/KitchenService/Actions/ToolNameValidityCheck.luau b/src/server/Modules/KitchenService/Actions/ToolNameValidityCheck.luau
+index ea93540..48a8686 100644
+--- a/private/tmp/claude-501/-Users-jackcrowell-Desktop-boba-cafe/m07-pre/src/server/Modules/KitchenService/Actions/ToolNameValidityCheck.luau
++++ b/src/server/Modules/KitchenService/Actions/ToolNameValidityCheck.luau
+@@ -17,7 +17,6 @@ local function matchesTerm(toolName: string, term: string): boolean
+     if term:sub(1, 1) == "!" then
+         return not toolName:match(term:sub(2))
+     elseif term:sub(1, 1) == "#" then
+-        print(toolName, term:sub(2))
+         return toolName:match(term:sub(2)) ~= nil
+     elseif term:sub(1, 1) == "=" then
+         return toolName == term:sub(2)
+diff --git a/src/server/Tests/BobaRecipe.spec.luau b/src/server/Tests/BobaRecipe.spec.luau
+new file mode 100644
+index 0000000..172ee14
+--- /dev/null
++++ b/src/server/Tests/BobaRecipe.spec.luau
+@@ -0,0 +1,94 @@
++-- selene: allow(undefined_variable)
++--[[
++	BobaRecipe.spec.luau
++	TestEZ tests for the boba name chain: Cup -> Milk -> Syrup -> (Blender) -> Tapioca.
++
++	Testing strategy
++	────────────────
++	The real Recipes data and the real ToolNameValidityCheck / RenameToolHolding
++	actions are used. The player is a plain table holding one fake Tool (a table with
++	a Name), so no Studio instances are needed. Only the two name-related actions run;
++	property and sound actions are skipped.
++--]]
++
++return function()
++	local ServerScriptService = game:GetService("ServerScriptService")
++	local ReplicatedStorage = game:GetService("ReplicatedStorage")
++
++	local Recipes = require(ReplicatedStorage.Shared.Kitchen.Recipes)
++	local Actions = ServerScriptService.Server.Modules.KitchenService.Actions
++	local ToolNameValidityCheck = require(Actions.ToolNameValidityCheck)
++	local RenameToolHolding = require(Actions.RenameToolHolding)
++
++	local function makePlayer(toolName: string)
++		local tool = { Name = toolName }
++		local character = {}
++		function character:FindFirstChildWhichIsA(_className: string)
++			return tool
++		end
++		return { Character = character }, tool
++	end
++
++	-- Runs a recipe's name actions. Returns false when the validity check refuses.
++	local function apply(recipeName: string, player: any): boolean
++		local recipe = Recipes.Items[recipeName]
++		for _, action in recipe.Actions do
++			if action[1] == "ToolNameValidityCheck" then
++				if not ToolNameValidityCheck(player, nil :: any, action[2]) then
++					return false
++				end
++			elseif action[1] == "RenameToolHolding" then
++				RenameToolHolding(player, nil :: any, action[2])
++			end
++		end
++		return true
++	end
++
++	local function makeBoba(syrup: string, tapioca: string, blend: boolean): (boolean, string)
++		local player, tool = makePlayer("Small Clear Cup + Milk")
++		assert(apply(syrup .. " Syrup", player), "syrup step refused")
++		if blend then
++			assert(apply("Blender", player), "blender step refused")
++		end
++		local ok = apply(tapioca .. " Tapioca", player)
++		return ok, tool.Name
++	end
++
++	describe("Recipes.Syrups", function()
++		it("should produce '[Syrup] Boba' for every syrup, with and without the blender", function()
++			for syrup in Recipes.Syrups do
++				for _, blend in { false, true } do
++					local ok, name = makeBoba(syrup, "Normal", blend)
++					expect(ok).to.equal(true)
++					expect(name).to.equal(syrup .. " Boba")
++				end
++			end
++		end)
++
++		it("should accept every tapioca flavor", function()
++			for tapioca in Recipes.Tapioca do
++				local ok, name = makeBoba("Taro", tapioca, false)
++				expect(ok).to.equal(true)
++				expect(name).to.equal("Taro Boba")
++			end
++		end)
++	end)
++
++	describe("Tapioca step", function()
++		it("should refuse a cup that has milk but no syrup", function()
++			local player = makePlayer("Small Clear Cup + Milk")
++			expect(apply("Normal Tapioca", player)).to.equal(false)
++		end)
++
++		it("should refuse a mug of steamed milk", function()
++			local player = makePlayer("Mug + Steamed Milk")
++			expect(apply("Normal Tapioca", player)).to.equal(false)
++		end)
++
++		it("should keep a sugar suffix", function()
++			local player, tool = makePlayer("Milk + Taro Syrup + Sugar")
++			expect(apply("Normal Tapioca", player)).to.equal(true)
++			expect(tool.Name).to.equal("Taro Boba + Sugar")
++		end)
++	end)
++end

@@ -17,7 +17,6 @@ local function matchesTerm(toolName: string, term: string): boolean
     if term:sub(1, 1) == "!" then
         return not toolName:match(term:sub(2))
     elseif term:sub(1, 1) == "#" then
-        print(toolName, term:sub(2))
         return toolName:match(term:sub(2)) ~= nil
     elseif term:sub(1, 1) == "=" then
         return toolName == term:sub(2)

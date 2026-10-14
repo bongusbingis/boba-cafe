@@ -18,6 +18,7 @@ local Promise = require(Packages.Promise)
 local PlayerSetup = require(script.PlayerSetup)
 
 ---> constants
+local SAVE_TIMEOUT_SECONDS = 15
 local IS_MOCK_STORE_ENABLED = false
 local PROFILE_STORE_NAME = "PlayerStore_0006"
 local REPLICA_CLASS_TOKEN = ReplicaService.NewClassToken("PlayerProfile")
@@ -130,6 +131,51 @@ function DataService:GetDataAsync(player: Player)
 		end
 		resolve(playerData)
 	end)
+end
+
+--[=[
+	Forces the player's profile to save and waits for the DataStore write to finish.
+	Resolves true once a save that satisfies `isSaved` completes, false if there is no active profile or the save is
+	not confirmed within SAVE_TIMEOUT_SECONDS. Never rejects. The in-memory data is untouched either way.
+	@param player Player
+	@param isSaved ((lastSavedData: {}) -> boolean)? -- Checked against Profile.LastSavedData so that a save that
+		started before the change being persisted cannot be mistaken for the one that includes it. Defaults to any save.
+	@return Promise<boolean>
+]=]
+function DataService:SaveAsync(player: Player, isSaved: ((lastSavedData: {}) -> boolean)?)
+	local profile = ProfileObjects[player.UserId]
+	if not profile or not profile:IsActive() then
+		return Promise.resolve(false)
+	end
+
+	local function isConfirmed(lastSavedData: {}): boolean
+		return isSaved == nil or isSaved(lastSavedData)
+	end
+
+	-- Already persisted (e.g. an autosave ran since the change): nothing to wait for.
+	if isSaved ~= nil and isConfirmed(profile.LastSavedData) then
+		return Promise.resolve(true)
+	end
+
+	local connection
+	return Promise.new(function(resolve)
+		-- Listen before calling Save() so the completion signal cannot be missed.
+		connection = profile.OnAfterSave:Connect(function(lastSavedData)
+			if isConfirmed(lastSavedData) then
+				resolve(true)
+			end
+		end)
+		profile:Save()
+	end)
+		:timeout(SAVE_TIMEOUT_SECONDS)
+		:catch(function()
+			return false
+		end)
+		:finally(function()
+			if connection then
+				connection:Disconnect()
+			end
+		end)
 end
 
 function DataService:PlayerAdded(player: Player)

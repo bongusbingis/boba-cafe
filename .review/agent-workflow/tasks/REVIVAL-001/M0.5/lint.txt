@@ -1,0 +1,53 @@
+# Lint per touched file, three lines each: HEAD 92f6144 / working tree before M0.5 / after M0.5
+# SpillController.lua is CRLF in HEAD and the tree, so stylua flags every line; the count fell vs the pre-M0.5 tree (571 -> 559).
+== src/client/Modules/AppDialogs.luau | stylua diff lines: 14 | selene:    1 0 errors;   1 0 parse errors;   1 3 warnings;   1 warning[unused_variable]: HINT_INTERVAL is assigned a value, but never used;   1 warning[unused_variable]: HINT_NATIVE is assigned a value, but never used;   1 warning[unused_variable]: Styles is assigned a value, but never used;
+== src/client/Modules/AppDialogs.luau | stylua diff lines: 14 | selene:    1 0 errors;   1 0 parse errors;   1 3 warnings;   1 warning[unused_variable]: HINT_INTERVAL is assigned a value, but never used;   1 warning[unused_variable]: HINT_NATIVE is assigned a value, but never used;   1 warning[unused_variable]: Styles is assigned a value, but never used;
+== src/client/Modules/AppDialogs.luau | stylua diff lines: 14 | selene:    1 0 errors;   1 0 parse errors;   1 3 warnings;   1 warning[unused_variable]: HINT_INTERVAL is assigned a value, but never used;   1 warning[unused_variable]: HINT_NATIVE is assigned a value, but never used;   1 warning[unused_variable]: Styles is assigned a value, but never used;
+== src/client/Modules/DataController.luau | stylua diff lines: 0 | selene:    1 0 errors;   1 0 parse errors;   1 0 warnings;
+== src/client/Modules/DataController.luau | stylua diff lines: 0 | selene:    1 0 errors;   1 0 parse errors;   1 0 warnings;
+== src/client/Modules/DataController.luau | stylua diff lines: 0 | selene:    1 0 errors;   1 0 parse errors;   1 0 warnings;
+== src/client/Modules/SpillController.lua | stylua diff lines: 385 | selene:    1 0 errors;   1 0 parse errors;   1 0 warnings;
+== src/client/Modules/SpillController.lua | stylua diff lines: 571 | selene:    1 0 errors;   1 0 parse errors;   1 0 warnings;
+== src/client/Modules/SpillController.lua | stylua diff lines: 559 | selene:    1 0 errors;   1 0 parse errors;   1 0 warnings;
+== src/client/Modules/OrderController.luau | stylua diff lines: 0 | selene:    1 0 errors;   1 0 parse errors;   1 1 warnings;   1 warning[unused_variable]: Highlights is assigned a value, but never used;
+== src/client/Modules/OrderController.luau | stylua diff lines: 0 | selene:    1 0 errors;   1 0 parse errors;   1 1 warnings;   1 warning[unused_variable]: Highlights is assigned a value, but never used;
+== src/client/Modules/OrderController.luau | stylua diff lines: 0 | selene:    1 0 errors;   1 0 parse errors;   1 1 warnings;   1 warning[unused_variable]: Highlights is assigned a value, but never used;
+== src/client/Modules/KitchenController.luau | stylua diff lines: 0 | selene:    1 0 errors;   1 0 parse errors;   1 0 warnings;
+== src/client/Modules/KitchenController.luau | stylua diff lines: 0 | selene:    1 0 errors;   1 0 parse errors;   1 0 warnings;
+== src/client/Modules/KitchenController.luau | stylua diff lines: 0 | selene:    1 0 errors;   1 0 parse errors;   1 0 warnings;
+== src/shared/UI/Components/Dialogs/ActionPrompt.luau | stylua diff lines: 61 | selene:    1 0 errors;   1 0 parse errors;   1 0 warnings;
+== src/shared/UI/Components/Dialogs/ActionPrompt.luau | stylua diff lines: 61 | selene:    1 0 errors;   1 0 parse errors;   1 0 warnings;
+== src/shared/UI/Components/Dialogs/ActionPrompt.luau | stylua diff lines: 61 | selene:    1 0 errors;   1 0 parse errors;   1 0 warnings;
+== src/shared/Configuration/SettingsConfig.luau | stylua diff lines: 80 | selene:    1 0 errors;   1 0 parse errors;   1 0 warnings;
+== src/shared/Configuration/SettingsConfig.luau | stylua diff lines: 30 | selene:    1 0 errors;   1 0 parse errors;   1 0 warnings;
+== src/shared/Configuration/SettingsConfig.luau | stylua diff lines: 30 | selene:    1 0 errors;   1 0 parse errors;   1 0 warnings;
+== src/shared/UI/Pages/Ordering/init.luau | stylua diff lines: 36 | selene:    1 0 errors;   1 0 parse errors;   1 0 warnings;
+== src/shared/UI/Pages/Ordering/init.luau | stylua diff lines: 21 | selene:    1 0 errors;   1 0 parse errors;   1 0 warnings;
+== src/shared/UI/Pages/Ordering/init.luau | stylua diff lines: 21 | selene:    1 0 errors;   1 0 parse errors;   1 0 warnings;
+== src/shared/UI/Pages/MobileOrder/init.luau | stylua diff lines: 4 | selene:    1 0 errors;   1 0 parse errors;   1 0 warnings;
+== src/shared/UI/Pages/MobileOrder/init.luau | stylua diff lines: 4 | selene:    1 0 errors;   1 0 parse errors;   1 0 warnings;
+== src/shared/UI/Pages/MobileOrder/init.luau | stylua diff lines: 4 | selene:    1 0 errors;   1 0 parse errors;   1 0 warnings;
+== src/shared/UI/Components/Core/Hud/TopBar.luau | stylua diff lines: 0 | selene:    1 0 errors;   1 0 parse errors;   1 0 warnings;
+== src/shared/UI/Components/Core/Hud/TopBar.luau | stylua diff lines: 0 | selene:    1 0 errors;   1 0 parse errors;   1 0 warnings;
+== src/shared/UI/Components/Core/Hud/TopBar.luau | stylua diff lines: 0 | selene:    1 0 errors;   1 0 parse errors;   1 0 warnings;
+== src/shared/Kitchen/RecipeConstructors.luau | stylua diff lines: 0 | selene:    1 0 errors;   1 0 parse errors;   1 0 warnings;
+== src/shared/Kitchen/RecipeConstructors.luau | stylua diff lines: 0 | selene:    1 0 errors;   1 0 parse errors;   1 0 warnings;
+== src/shared/Kitchen/RecipeConstructors.luau | stylua diff lines: 0 | selene:    1 0 errors;   1 0 parse errors;   1 0 warnings;
+== src/server/Modules/KitchenService/init.luau | stylua diff lines: 154 | selene:    1 0 errors;   1 0 parse errors;   1 0 warnings;
+== src/server/Modules/KitchenService/init.luau | stylua diff lines: 0 | selene:    1 0 errors;   1 0 parse errors;   1 0 warnings;
+== src/server/Modules/KitchenService/init.luau | stylua diff lines: 0 | selene:    1 0 errors;   1 0 parse errors;   1 0 warnings;
+== src/server/Modules/OrderService.luau | stylua diff lines: 11 | selene:    1 0 errors;   1 0 parse errors;   1 0 warnings;
+== src/server/Modules/OrderService.luau | stylua diff lines: 7 | selene:    1 0 errors;   1 0 parse errors;   1 0 warnings;
+== src/server/Modules/OrderService.luau | stylua diff lines: 7 | selene:    1 0 errors;   1 0 parse errors;   1 0 warnings;
+== src/server/Modules/SpillService/init.luau | stylua diff lines: 2 | selene:    1 0 errors;   1 0 parse errors;   1 0 warnings;
+== src/server/Modules/SpillService/init.luau | stylua diff lines: 0 | selene:    1 0 errors;   1 0 parse errors;   1 0 warnings;
+== src/server/Modules/SpillService/init.luau | stylua diff lines: 0 | selene:    1 0 errors;   1 0 parse errors;   1 0 warnings;
+== src/server/Modules/SpillService/Spill.luau | stylua diff lines: 19 | selene:    1 0 errors;   1 0 parse errors;   1 2 warnings;   1 warning[multiple_statements]: only one statement per line is allowed;   1 warning[shadowing]: shadowing variable `ItemFader`;
+== src/server/Modules/SpillService/Spill.luau | stylua diff lines: 0 | selene:    1 0 errors;   1 0 parse errors;   1 0 warnings;
+== src/server/Modules/SpillService/Spill.luau | stylua diff lines: 0 | selene:    1 0 errors;   1 0 parse errors;   1 0 warnings;
+== src/server/Tests/OrderService.spec.luau | stylua diff lines: 55 | selene:    1 0 parse errors;   1 12 warnings;   1 201 errors;   1 error[undefined_variable]: `afterEach` is not defined;   1 error[undefined_variable]: `beforeEach` is not defined;  14 error[undefined_variable]: `describe` is not defined; 104 error[undefined_variable]: `expect` is not defined;  81 error[undefined_variable]: `it` is not defined;  11 warning[multiple_statements]: only one statement per line is allowed;   1 warning[unused_variable]: COLOR_READY is assigned a value, but never used;
+== src/server/Tests/OrderService.spec.luau | stylua diff lines: 0 | selene:    1 0 errors;   1 0 parse errors;   1 1 warnings;   1 warning[unused_variable]: COLOR_READY is assigned a value, but never used;
+== src/server/Tests/OrderService.spec.luau | stylua diff lines: 0 | selene:    1 0 errors;   1 0 parse errors;   1 1 warnings;   1 warning[unused_variable]: COLOR_READY is assigned a value, but never used;
+== src/shared/Utility/WorldPath.luau (absent)
+== src/shared/Utility/WorldPath.luau (absent)
+== src/shared/Utility/WorldPath.luau | stylua diff lines: 0 | selene:    1 0 errors;   1 0 parse errors;   1 0 warnings;

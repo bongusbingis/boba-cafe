@@ -13,10 +13,21 @@ local Banner = require(UI.Components.Buttons.Banner)
 local Page = require(UI.Components.Core.Page)
 local Pane = require(UI.Components.Pane)
 local PromptButton = require(UI.Components.Buttons.PromptButton)
+local WorldPath = require(Shared.Utility.WorldPath)
 
 local c = React.createElement
 
 local BUTTON_HEIGHT = 50
+
+-- UI sounds are authored in the place (SoundService.SFX.UI, else SoundService.UISounds).
+-- A missing sound is skipped.
+local function playUiSound(name: string)
+	local sound = WorldPath.find(SoundService, { "SFX", "UI", name })
+		or WorldPath.find(SoundService, { "UISounds", name })
+	if sound and sound:IsA("Sound") then
+		sound:Play()
+	end
+end
 
 type ButtonDef = {
 	Text: string,
@@ -53,11 +64,11 @@ return function(props: {
 		if closeFnRef.current then
 			closeFnRef.current()
 		end
-		SoundService.SFX.UI.Pop2:Play()
+		playUiSound("Pop2")
 		props.OnResolution(text)
 	end
 
-	SoundService.SFX.UI.Pop1:Play()
+	playUiSound("Pop1")
 
 	local buttonElements = {}
 	for i, buttonDef in ipairs(props.Buttons) do

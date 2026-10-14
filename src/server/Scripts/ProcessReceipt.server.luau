@@ -5,90 +5,226 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 
 ---> networking
-local GetPurchases = ReplicatedStorage:WaitForChild("Networking"):WaitForChild("GetPurchases")
+-- The Networking folder is not guaranteed to exist in the place, so find or create it (and the remote) in code.
+-- This has no yields, so it is safe to run before ProcessReceipt is assigned.
+local function getOrCreateRemoteFunction(name: string): RemoteFunction
+	local networking = ReplicatedStorage:FindFirstChild("Networking")
+	if not networking then
+		networking = Instance.new("Folder")
+		networking.Name = "Networking"
+		networking.Parent = ReplicatedStorage
+	end
+
+	local remote = networking:FindFirstChild(name)
+	if not remote then
+		remote = Instance.new("RemoteFunction")
+		remote.Name = name
+		remote.Parent = networking
+	elseif not remote:IsA("RemoteFunction") then
+		warn(`[ProcessReceipt] Networking.{name} is a {remote.ClassName}, expected a RemoteFunction`)
+	end
+	return remote :: RemoteFunction
+end
+
+local GetPurchases = getOrCreateRemoteFunction("GetPurchases")
+
+---> constants
+local SKIP_HATCH_PRODUCT_ID = 1143554452
+local DATA_TIMEOUT_SECONDS = 30
+local MAX_PROCESSED_RECEIPTS = 200
+
+---> receipt callback
+-- MarketplaceService.ProcessReceipt must be assigned before anything that can yield (the dependency waits below),
+-- otherwise receipts that arrive early are never answered. Until the real handler is ready, ask Roblox to retry.
+local processReceipt: (({ [string]: any }) -> Enum.ProductPurchaseDecision)? = nil
+
+MarketplaceService.ProcessReceipt = function(receiptInfo)
+	if not processReceipt then
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+	return processReceipt(receiptInfo)
+end
 
 ---> dependencies
 local Packages = ReplicatedStorage:WaitForChild("Packages")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Knit = require(Packages.Knit)
 
----> constants
-local HATCH_DURATION_SECONDS = require(Shared.Configuration.CapsuleConfig).PET_HATCH_DURATION
-local SKIP_HATCH_PRODUCT_ID = 1143554452
-
 ---> lifecycle
+local HATCH_DURATION_SECONDS = require(Shared.Configuration.CapsuleConfig).PET_HATCH_DURATION
 local ProductPurchaseDatastore = DataStoreService:GetDataStore("ProductPurchaseDatastore_0001")
 
---- [number]: {string, (Player, ReceiptInfo) -> boolean, boolean?}
---- Maps productId to array consisting of (productName, callback function, includePlayerData)
+--- [number]: {string, (Player, ReceiptInfo, playerData) -> boolean}
+--- Maps productId to array consisting of (productName, callback function). The callback receives the player's
+--- profile data and must return true only once the grant has been applied to it. Returning false (optionally with a
+--- reason) grants nothing: the receipt is answered NotProcessedYet and is not recorded as processed.
 
 type PendingHatch = {
-    CapsuleName: string,   -- definition name of the capsule that was used
-    TimeAccumulated: number, -- active-play seconds accumulated so far
+	CapsuleName: string, -- definition name of the capsule that was used
+	TimeAccumulated: number, -- active-play seconds accumulated so far
 }
 
 local ProductActionMap = {
-    [SKIP_HATCH_PRODUCT_ID] = {"Skip Hatch", function(_, _, playerData)
-        local hatchingPet = playerData.HatchingPet
-        if hatchingPet and hatchingPet ~= false then
-            playerData:SetValue({ "HatchingPet" }, {
-                CapsuleName = hatchingPet.CapsuleName,
-                TimeAccumulated = HATCH_DURATION_SECONDS - 5,
-            })
-        end
-        return true
-    end, true},
+	[SKIP_HATCH_PRODUCT_ID] = {
+		"Skip Hatch",
+		function(_, _, playerData)
+			-- DEC-006: Skip Hatch only has value while a pet is hatching. With no hatch pending nothing is granted and
+			-- no skip credit is stored; the receipt stays unconsumed (NotProcessedYet, not recorded) so Roblox keeps it.
+			local hatchingPet = playerData.HatchingPet
+			if not hatchingPet or hatchingPet == false then
+				return false, "no hatch pending"
+			end
+			playerData:SetValue({ "HatchingPet" }, {
+				CapsuleName = hatchingPet.CapsuleName,
+				TimeAccumulated = HATCH_DURATION_SECONDS - 5,
+			})
+			return true
+		end,
+	},
 }
 
-MarketplaceService.ProcessReceipt = function(receiptInfo)
-    local player = Players:GetPlayerByUserId(receiptInfo.PlayerId)
-    if not player then
-        return Enum.ProductPurchaseDecision.NotProcessedYet
-    end
+-- PurchaseIds currently being handled; guards against a re-entrant call for the same receipt while one yields.
+local inFlight: { [string]: boolean } = {}
 
-    local action = ProductActionMap[receiptInfo.ProductId]
-    if action then
-        local name = action[1]
-        local f = action[2]
-        local includePlayerData = action[3]
-        local playerData = nil
+--- Records `purchaseId` in the profile and prunes the oldest entries beyond MAX_PROCESSED_RECEIPTS.
+--- Does not yield, so the grant and the record are applied back to back with the check in processReceipt.
+local function recordReceipt(playerData, purchaseId: string)
+	if typeof(playerData.ProcessedReceipts) ~= "table" then
+		playerData:SetValue({ "ProcessedReceipts" }, {})
+	end
+	playerData:SetValue({ "ProcessedReceipts", purchaseId }, os.time())
 
-        if includePlayerData then
-            local dataService = Knit.GetService("DataService")
-            local _, _playerData = dataService:GetDataAsync(player):await()
-            playerData = _playerData
-        end
+	local count = 0
+	for _ in playerData.ProcessedReceipts do
+		count += 1
+	end
 
-
-        local success, res = pcall(f, player, receiptInfo, playerData)
-        if not success then
-            warn("Error processing purchase for product " .. receiptInfo.ProductId .. ": " .. tostring(res))
-            return Enum.ProductPurchaseDecision.NotProcessedYet
-        end
-
-        if res ~= true then
-            warn("Purchase action for product", receiptInfo.ProductId, "did not return true, got:", res)
-            return Enum.ProductPurchaseDecision.NotProcessedYet
-        end
-
-        ProductPurchaseDatastore:UpdateAsync(player.UserId, function(old)
-            if not old then
-                old = {}
-            end
-            table.insert(old, {
-                ProductName = name,
-                ProductId = receiptInfo.ProductId,
-                Timestamp = os.time(),
-            })
-            return old
-        end)
-
-        return Enum.ProductPurchaseDecision.PurchaseGranted
-    else
-        warn("No action defined for product " .. receiptInfo.ProductId)
-        return Enum.ProductPurchaseDecision.PurchaseGranted
-    end
+	while count > MAX_PROCESSED_RECEIPTS do
+		local oldestId, oldestTime = nil, math.huge
+		for id, grantedAt in playerData.ProcessedReceipts do
+			if id ~= purchaseId and grantedAt < oldestTime then
+				oldestId, oldestTime = id, grantedAt
+			end
+		end
+		if not oldestId then
+			break
+		end
+		playerData:SetValue({ "ProcessedReceipts", oldestId }, nil)
+		count -= 1
+	end
 end
+
+--- Appends to the purchase history. This is informational only and never decides whether a purchase was granted.
+local function writePurchaseHistory(userId: number, productName: string, productId: number)
+	local ok, err = pcall(function()
+		ProductPurchaseDatastore:UpdateAsync(userId, function(old)
+			if not old then
+				old = {}
+			end
+			table.insert(old, {
+				ProductName = productName,
+				ProductId = productId,
+				Timestamp = os.time(),
+			})
+			return old
+		end)
+	end)
+	if not ok then
+		warn(`[ProcessReceipt] Failed to write purchase history for {userId}: {err}`)
+	end
+end
+
+local function handleReceipt(receiptInfo: { [string]: any }): Enum.ProductPurchaseDecision
+	local player = Players:GetPlayerByUserId(receiptInfo.PlayerId)
+	if not player then
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+
+	local action = ProductActionMap[receiptInfo.ProductId]
+	if not action then
+		-- Never consume payment for something we cannot grant. Roblox retries until a mapping is added.
+		warn(
+			`[ProcessReceipt] NO ACTION MAPPED for ProductId {receiptInfo.ProductId} (PurchaseId {receiptInfo.PurchaseId}, player {player.Name}). Purchase NOT granted; add it to ProductActionMap.`
+		)
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+
+	local purchaseId = tostring(receiptInfo.PurchaseId)
+	if inFlight[purchaseId] then
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+	inFlight[purchaseId] = true
+
+	local function finish(decision: Enum.ProductPurchaseDecision)
+		inFlight[purchaseId] = nil
+		return decision
+	end
+
+	local name = action[1]
+	local f = action[2]
+	local dataService = Knit.GetService("DataService")
+
+	-- Player data is always required: the receipt record that makes this idempotent lives in the profile.
+	local dataOk, playerData = dataService:GetDataAsync(player):timeout(DATA_TIMEOUT_SECONDS):await()
+	if not dataOk or not playerData or player.Parent ~= Players then
+		return finish(Enum.ProductPurchaseDecision.NotProcessedYet)
+	end
+
+	--- PurchaseGranted is only final once the record is in the DataStore; a crash before the next autosave would
+	--- otherwise lose a paid grant. If the save is not confirmed, the in-memory grant and record stay as they are, so
+	--- the retry Roblox sends takes the "already granted" path below instead of granting again.
+	local function saveThenDecide(): Enum.ProductPurchaseDecision
+		local saved = dataService
+			:SaveAsync(player, function(lastSavedData)
+				return typeof(lastSavedData.ProcessedReceipts) == "table"
+					and lastSavedData.ProcessedReceipts[purchaseId] ~= nil
+			end)
+			:expect()
+		if not saved then
+			warn(`[ProcessReceipt] Could not confirm save for PurchaseId {purchaseId} ({player.Name}); will retry`)
+			return Enum.ProductPurchaseDecision.NotProcessedYet
+		end
+		return Enum.ProductPurchaseDecision.PurchaseGranted
+	end
+
+	-- Already granted (and recorded in the profile): make sure it is saved, then answer without granting again.
+	if typeof(playerData.ProcessedReceipts) == "table" and playerData.ProcessedReceipts[purchaseId] then
+		return finish(saveThenDecide())
+	end
+
+	local success, res, reason = pcall(f, player, receiptInfo, playerData)
+	if not success then
+		warn("Error processing purchase for product " .. receiptInfo.ProductId .. ": " .. tostring(res))
+		return finish(Enum.ProductPurchaseDecision.NotProcessedYet)
+	end
+
+	if res ~= true then
+		warn("Purchase action for product", receiptInfo.ProductId, "was not granted:", res, reason)
+		return finish(Enum.ProductPurchaseDecision.NotProcessedYet)
+	end
+
+	-- The grant is already applied to the profile; record it before answering so a retry cannot grant twice.
+	local recorded, recordErr = pcall(recordReceipt, playerData, purchaseId)
+	if not recorded then
+		-- The grant is already in the profile, so answering NotProcessedYet here would make Roblox retry and grant
+		-- a second time. PurchaseGranted is the safer answer.
+		warn(`[ProcessReceipt] Granted {name} but failed to record PurchaseId {purchaseId}: {recordErr}`)
+		task.spawn(writePurchaseHistory, player.UserId, name, receiptInfo.ProductId)
+		return finish(Enum.ProductPurchaseDecision.PurchaseGranted)
+	end
+
+	-- History write must not delay or influence the decision. A retry skips it, so it is written once.
+	task.spawn(writePurchaseHistory, player.UserId, name, receiptInfo.ProductId)
+
+	return finish(saveThenDecide())
+end
+
+-- Knit.GetService is only valid once Knit has started; until then every receipt is answered NotProcessedYet.
+Knit.OnStart()
+	:andThen(function()
+		processReceipt = handleReceipt
+	end)
+	:catch(warn)
 
 ---> GetPurchases remote function
 -- Per-player cooldown prevents clients from spamming DataStore reads.
@@ -96,26 +232,26 @@ local FETCH_COOLDOWN_SECONDS = 10
 local fetchLastTime: { [number]: number } = {}
 
 Players.PlayerRemoving:Connect(function(player)
-    fetchLastTime[player.UserId] = nil
+	fetchLastTime[player.UserId] = nil
 end)
 
 GetPurchases.OnServerInvoke = function(player: Player)
-    local userId = player.UserId
-    local now = os.clock()
+	local userId = player.UserId
+	local now = os.clock()
 
-    if fetchLastTime[userId] and (now - fetchLastTime[userId]) < FETCH_COOLDOWN_SECONDS then
-        return nil
-    end
-    fetchLastTime[userId] = now
+	if fetchLastTime[userId] and (now - fetchLastTime[userId]) < FETCH_COOLDOWN_SECONDS then
+		return nil
+	end
+	fetchLastTime[userId] = now
 
-    local ok, data = pcall(function()
-        return ProductPurchaseDatastore:GetAsync(userId)
-    end)
+	local ok, data = pcall(function()
+		return ProductPurchaseDatastore:GetAsync(userId)
+	end)
 
-    if not ok then
-        warn("[GetPurchases] DataStore error for", player.Name, ":", data)
-        return nil
-    end
+	if not ok then
+		warn("[GetPurchases] DataStore error for", player.Name, ":", data)
+		return nil
+	end
 
-    return data or {}
+	return data or {}
 end

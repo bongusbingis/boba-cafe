@@ -1,0 +1,1095 @@
+diff -ru /private/tmp/claude-501/-Users-jackcrowell-Desktop-boba-cafe/7e617087-b76e-40c7-8dfe-603339237eff/scratchpad/m05pre/src/client/Modules/AppDialogs.luau src/client/Modules/AppDialogs.luau
+--- /private/tmp/claude-501/-Users-jackcrowell-Desktop-boba-cafe/7e617087-b76e-40c7-8dfe-603339237eff/scratchpad/m05pre/src/client/Modules/AppDialogs.luau	2026-04-13 00:45:21
++++ src/client/Modules/AppDialogs.luau	2026-10-13 23:09:23
+@@ -9,6 +9,7 @@
+ 
+ local Dialogs = UI.Components.Dialogs
+ local Styles = require(UI.Styles)
++local WorldPath = require(Shared.Utility.WorldPath)
+ local SmallNotification = require(UI.Components.Core.Hud.SmallNotification)
+ 
+ ---> dependencies
+@@ -28,8 +29,17 @@
+ local c = React.createElement
+ local joinDicts = require(UI.Utility.joinDicts)
+ local dialogEvent = GoodSignal.new()
+-local uiSfx = SoundService:WaitForChild("SFX").UI
+ 
++-- UI sounds are authored in the place (SoundService.SFX.UI, else SoundService.UISounds).
++-- They are looked up on use, and a missing sound is skipped.
++local function playUiSound(name: string)
++	local sound = WorldPath.find(SoundService, { "SFX", "UI", name })
++		or WorldPath.find(SoundService, { "UISounds", name })
++	if sound and sound:IsA("Sound") then
++		sound:Play()
++	end
++end
++
+ ---> constants
+ local HINT_INTERVAL = 15
+ local HINT_NATIVE = {
+@@ -138,12 +148,12 @@
+ end
+ 
+ function DialogController.Prototype.Fire(self: DialogObject)
+-	uiSfx.Pop1:Play()
++	playUiSound("Pop1")
+ 	return Promise.new(function(resolve, _)
+ 		self.onResolution = resolve
+ 		dialogEvent:Fire(self)
+ 	end):finally(function()
+-		uiSfx.Pop2:Play()
++		playUiSound("Pop2")
+ 	end)
+ end
+ 
+diff -ru /private/tmp/claude-501/-Users-jackcrowell-Desktop-boba-cafe/7e617087-b76e-40c7-8dfe-603339237eff/scratchpad/m05pre/src/client/Modules/DataController.luau src/client/Modules/DataController.luau
+--- /private/tmp/claude-501/-Users-jackcrowell-Desktop-boba-cafe/7e617087-b76e-40c7-8dfe-603339237eff/scratchpad/m05pre/src/client/Modules/DataController.luau	2026-04-13 00:58:40
++++ src/client/Modules/DataController.luau	2026-10-13 23:06:34
+@@ -1,5 +1,4 @@
+ ---> services
+-local SoundService = game:GetService("SoundService")
+ local ReplicatedStorage = game:GetService("ReplicatedStorage")
+ 
+ ---> dependencies
+@@ -9,13 +8,24 @@
+ local ReplicaController = require(Packages.ReplicaController)
+ local Promise = require(Packages.Promise)
+ local GoodSignal = require(Packages.GoodSignal)
++local SettingsConfig = require(ReplicatedStorage:WaitForChild("Shared").Configuration.SettingsConfig)
+ 
+-local SFX: SoundGroup = SoundService:WaitForChild("SFX")
+-local Music: SoundGroup = SoundService:WaitForChild("Music")
+-
+ ---> globals
+ local PlayerDataReceivedSignal = GoodSignal.new()
+ 
++-- Applies saved toggles that have a client effect (audio volumes). The callbacks
++-- skip audio groups the place does not author, so this never blocks or errors.
++local function applyClientSettings(settings: { [string]: any })
++	for _, category in SettingsConfig do
++		for _, setting in category.Settings do
++			local callback: any = setting.ClientCallback
++			if setting.Type ~= "Action" and callback then
++				callback(settings[setting.Key] == true)
++			end
++		end
++	end
++end
++
+ ---> controller declaration
+ local DataController = Knit.CreateController({
+ 	Name = "DataController",
+@@ -32,8 +42,7 @@
+ 		print("Local player data received:", replica.Data)
+ 		DataController.LocalPlayerData = setmetatable(replica.Data, { __index = replica })
+ 		PlayerDataReceivedSignal:Fire(DataController.LocalPlayerData)
+-		SFX.Volume = if replica.Data.Settings.SFXEnabled then 0.5 else 0
+-		Music.Volume = if replica.Data.Settings.MusicEnabled then 0.5 else 0
++		applyClientSettings(replica.Data.Settings or {})
+ 	end)
+ end
+ 
+diff -ru /private/tmp/claude-501/-Users-jackcrowell-Desktop-boba-cafe/7e617087-b76e-40c7-8dfe-603339237eff/scratchpad/m05pre/src/client/Modules/KitchenController.luau src/client/Modules/KitchenController.luau
+--- /private/tmp/claude-501/-Users-jackcrowell-Desktop-boba-cafe/7e617087-b76e-40c7-8dfe-603339237eff/scratchpad/m05pre/src/client/Modules/KitchenController.luau	2026-10-13 22:43:32
++++ src/client/Modules/KitchenController.luau	2026-10-13 23:08:10
+@@ -10,6 +10,7 @@
+ 
+ local Knit = require(Packages.Knit)
+ local GamepassUtil = require(Shared.Utility.GamepassUtil)
++local WorldPath = require(Shared.Utility.WorldPath)
+ 
+ ---> Constants
+ 
+@@ -46,8 +47,7 @@
+ 	end
+ 
+ 	-- Bounded wait: a missing kitchen only disables the Instant Brew perk.
+-	local assets = workspace:WaitForChild("Assets", KITCHEN_TIMEOUT_SECONDS)
+-	local kitchen = assets and assets:WaitForChild("Kitchen", KITCHEN_TIMEOUT_SECONDS)
++	local kitchen = WorldPath.waitFor(workspace, { "Assets", "Kitchen" }, KITCHEN_TIMEOUT_SECONDS)
+ 	if not kitchen then
+ 		warn("[KitchenController] workspace.Assets.Kitchen not found; Instant Brew hold times not applied.")
+ 		return
+diff -ru /private/tmp/claude-501/-Users-jackcrowell-Desktop-boba-cafe/7e617087-b76e-40c7-8dfe-603339237eff/scratchpad/m05pre/src/client/Modules/OrderController.luau src/client/Modules/OrderController.luau
+--- /private/tmp/claude-501/-Users-jackcrowell-Desktop-boba-cafe/7e617087-b76e-40c7-8dfe-603339237eff/scratchpad/m05pre/src/client/Modules/OrderController.luau	2026-10-13 22:43:32
++++ src/client/Modules/OrderController.luau	2026-10-13 23:08:16
+@@ -16,6 +16,7 @@
+ 
+ local Knit = require(Packages.Knit)
+ local GoodSignal = require(Packages.GoodSignal)
++local WorldPath = require(ReplicatedStorage:WaitForChild("Shared").Utility.WorldPath)
+ 
+ ---> Controller
+ 
+@@ -43,9 +44,7 @@
+ -- is looked up on use; when missing, the pick-up beam is skipped (warned once).
+ local warnedMissingBeam = false
+ local function getPickupBeam(): Beam?
+-	local sharedStorage = ReplicatedStorage:FindFirstChild("SharedStorage")
+-	local effects = sharedStorage and sharedStorage:FindFirstChild("Effects")
+-	local beam = effects and effects:FindFirstChild("PickupBeam")
++	local beam = WorldPath.find(ReplicatedStorage, { "SharedStorage", "Effects", "PickupBeam" })
+ 	if beam and beam:IsA("Beam") then
+ 		return beam
+ 	end
+diff -ru /private/tmp/claude-501/-Users-jackcrowell-Desktop-boba-cafe/7e617087-b76e-40c7-8dfe-603339237eff/scratchpad/m05pre/src/client/Modules/SpillController.lua src/client/Modules/SpillController.lua
+--- /private/tmp/claude-501/-Users-jackcrowell-Desktop-boba-cafe/7e617087-b76e-40c7-8dfe-603339237eff/scratchpad/m05pre/src/client/Modules/SpillController.lua	2026-10-13 22:45:21
++++ src/client/Modules/SpillController.lua	2026-10-13 23:10:37
+@@ -8,6 +8,7 @@
+ ---> dependencies
+ local Packages = ReplicatedStorage:WaitForChild("Packages")
+ local Animator = require(ReplicatedStorage.Shared.Utility.Animator)
++local WorldPath = require(ReplicatedStorage.Shared.Utility.WorldPath)
+ local Knit = require(Packages.Knit)
+ local ReplicaController = require(Packages.ReplicaController)
+ 
+@@ -17,30 +18,12 @@
+ -- Resolved in KnitStart with a bounded wait (never at require time or in KnitInit, which would block other
+ -- controllers); nil when the place does not contain them. Spills then simply do not show their UI/animations.
+ local WORLD_WAIT_SECONDS = 10
++local TRIP_MAX_SECONDS = 5 -- the trip always ends (controls back on) within this time
+ local Storage: Instance? = nil
+ local SpillsFolder: Instance? = nil
+ 
+ local BadgeService
+ 
+-local function waitForPath(root: Instance, path: { string }, deadline: number): Instance?
+-	local Current: Instance? = root
+-	for _, Name in path do
+-		local Child = Current:FindFirstChild(Name)
+-		if not Child then
+-			local Remaining = deadline - os.clock()
+-			if Remaining <= 0 then
+-				return nil
+-			end
+-			Child = Current:WaitForChild(Name, Remaining)
+-			if not Child then
+-				return nil
+-			end
+-		end
+-		Current = Child
+-	end
+-	return Current
+-end
+-
+ --- Enables or disables the default character controls (replaces the removed SetCoreAndControls controller).
+ local function setControlsEnabled(enabled: boolean)
+ 	local Ok, Err = pcall(function()
+@@ -84,15 +67,26 @@
+ 	end
+ 	playSfx("Trip_02")
+ 
++	-- Controls go off after a short delay. `Recovered` stops that delayed disable from
++	-- running after the trip has already ended, which would leave the player frozen.
++	local Recovered = false
+ 	task.delay(0.25, function()
++		if Recovered then
++			return
++		end
+ 		setControlsEnabled(false)
+ 		playSfx("Trip_01")
+ 	end)
+-	if self.Animation then
+-		self.Animation:Play()
+-		self.Animation:AdjustSpeed(1.5)
+-		self.Animation.Stopped:Wait()
++	local Animation = self.Animation
++	if Animation then
++		Animation:Play()
++		Animation:AdjustSpeed(1.5)
++		local Deadline = os.clock() + TRIP_MAX_SECONDS
++		while Animation.IsPlaying and os.clock() < Deadline do
++			task.wait()
++		end
+ 	end
++	Recovered = true
+ 	setControlsEnabled(true)
+ 	task.wait(1)
+ 
+@@ -260,8 +254,8 @@
+ 	-- Resolve the authored world on its own thread so a missing/late folder never blocks other controllers.
+ 	task.spawn(function()
+ 		local Deadline = os.clock() + WORLD_WAIT_SECONDS
+-		Storage = waitForPath(ReplicatedStorage, { "SharedStorage", "Spills" }, Deadline)
+-		SpillsFolder = waitForPath(workspace, { "Assets", "Spills" }, Deadline)
++		Storage = WorldPath.waitFor(ReplicatedStorage, { "SharedStorage", "Spills" }, Deadline - os.clock())
++		SpillsFolder = WorldPath.waitFor(workspace, { "Assets", "Spills" }, Deadline - os.clock())
+ 		if not Storage then
+ 			warn("[SpillController] SharedStorage.Spills is missing; spill animations and boards disabled")
+ 		end
+@@ -271,7 +265,7 @@
+ 
+ 		self:_HandleAnimations()
+ 
+-		local Boards = SpillsFolder and waitForPath(SpillsFolder, { "Boards" }, Deadline)
++		local Boards = SpillsFolder and WorldPath.waitFor(SpillsFolder, { "Boards" }, Deadline - os.clock())
+ 		if not Boards then
+ 			if SpillsFolder then
+ 				warn("[SpillController] workspace.Assets.Spills.Boards is missing; spill boards disabled")
+diff -ru /private/tmp/claude-501/-Users-jackcrowell-Desktop-boba-cafe/7e617087-b76e-40c7-8dfe-603339237eff/scratchpad/m05pre/src/server/Modules/KitchenService/init.luau src/server/Modules/KitchenService/init.luau
+--- /private/tmp/claude-501/-Users-jackcrowell-Desktop-boba-cafe/7e617087-b76e-40c7-8dfe-603339237eff/scratchpad/m05pre/src/server/Modules/KitchenService/init.luau	2026-10-13 22:45:56
++++ src/server/Modules/KitchenService/init.luau	2026-10-13 23:08:10
+@@ -17,6 +17,7 @@
+ local Recipes = require(ReplicatedStorage.Shared.Kitchen.Recipes)
+ local KitchenConfig = require(ReplicatedStorage.Shared.Configuration.KitchenConfig)
+ local KitchenTypes = require(ReplicatedStorage.Shared.Kitchen.KitchenTypes)
++local WorldPath = require(ReplicatedStorage.Shared.Utility.WorldPath)
+ 
+ ---> Types
+ 
+@@ -43,8 +44,7 @@
+ 
+ -- Waits (bounded) for workspace.Assets.Kitchen. Returns nil when it is missing.
+ local function waitForKitchen(): Instance?
+-	local assets = workspace:WaitForChild("Assets", WORLD_TIMEOUT_SECONDS)
+-	local kitchen = assets and assets:WaitForChild("Kitchen", WORLD_TIMEOUT_SECONDS)
++	local kitchen = WorldPath.waitFor(workspace, { "Assets", "Kitchen" }, WORLD_TIMEOUT_SECONDS)
+ 	if not kitchen then
+ 		warn("[KitchenService] workspace.Assets.Kitchen not found; kitchen stations are disabled.")
+ 	end
+@@ -58,9 +58,7 @@
+ 		return
+ 	end
+ 
+-	local selectorModels = ReplicatedStorage:FindFirstChild("SelectorModels")
+-	local kitchenModels = selectorModels and selectorModels:FindFirstChild("Kitchen")
+-	local template = kitchenModels and kitchenModels:FindFirstChild("SyrupDispenser")
++	local template = WorldPath.find(ReplicatedStorage, { "SelectorModels", "Kitchen", "SyrupDispenser" })
+ 	if not template then
+ 		warn("[KitchenService] SelectorModels.Kitchen.SyrupDispenser not found; syrup dispensers are disabled.")
+ 		return
+diff -ru /private/tmp/claude-501/-Users-jackcrowell-Desktop-boba-cafe/7e617087-b76e-40c7-8dfe-603339237eff/scratchpad/m05pre/src/server/Modules/OrderService.luau src/server/Modules/OrderService.luau
+--- /private/tmp/claude-501/-Users-jackcrowell-Desktop-boba-cafe/7e617087-b76e-40c7-8dfe-603339237eff/scratchpad/m05pre/src/server/Modules/OrderService.luau	2026-10-13 22:42:00
++++ src/server/Modules/OrderService.luau	2026-10-13 23:07:37
+@@ -114,19 +114,74 @@
+ 	return storage
+ end
+ 
+--- Returns a reason string when a client-sent order item cannot be shown on the
+--- staff screens, or nil when its shape is usable.
+-local function validateOrderItem(item: any): string?
+-	if typeof(item) ~= "table" then
+-		return "item is not a table"
++-- Shared.Ordering.Menu is required on first order: it reads the authored
++-- SelectorModels, and a problem there should stop ordering only, not KnitStart.
++local foodTable: { [string]: any }? = nil
++local menuFailed = false
++local function getFoodTable(): { [string]: any }?
++	if not foodTable and not menuFailed then
++		local ok, menu = pcall(require, ReplicatedStorage:WaitForChild("Shared").Ordering.Menu)
++		if ok and typeof(menu) == "table" and typeof(menu.FoodTable) == "table" then
++			foodTable = menu.FoodTable
++		else
++			menuFailed = true
++			warn("[OrderService] Shared.Ordering.Menu failed to load; ordering is disabled:", menu)
++		end
+ 	end
+-	if typeof(item.DefaultInfo) ~= "table" or typeof(item.DefaultInfo.ItemName) ~= "string" then
+-		return "item has no DefaultInfo.ItemName"
++	return foodTable
++end
++
++-- Rebuilds one client order item ({ Category, Item, CustomInfo }) from the server's
++-- Menu. DefaultInfo is always the Menu definition. CustomInfo may hold only the
++-- choices that item offers: each Select value is one of its listed strings, each
++-- RequiredSelection value is one of its keys (both required), and each Option is
++-- a boolean (missing = the Menu default). Returns the item to store, or nil and a
++-- reason.
++local function buildOrderItem(menu: { [string]: any }, request: any): ({ [string]: any }?, string?)
++	if typeof(request) ~= "table" or typeof(request.Category) ~= "string" or typeof(request.Item) ~= "string" then
++		return nil, "item has no Category/Item"
+ 	end
+-	if typeof(item.CustomInfo) ~= "table" then
+-		return "item has no CustomInfo"
++	local category = menu[request.Category]
++	local def = category and category.Items[request.Item]
++	if not def then
++		return nil, "unknown menu item"
+ 	end
+-	return nil
++	local customInfo = request.CustomInfo or {}
++	if typeof(customInfo) ~= "table" then
++		return nil, "CustomInfo is not a table"
++	end
++
++	local clean = {}
++	for key, choices in def.Select or {} do
++		local value = customInfo[key]
++		if typeof(value) ~= "string" or not table.find(choices, value) then
++			return nil, "invalid " .. key
++		end
++		clean[key] = value
++	end
++	for key, choices in def.RequiredSelection or {} do
++		local value = customInfo[key]
++		if typeof(value) ~= "string" or choices[value] == nil then
++			return nil, "invalid " .. key
++		end
++		clean[key] = value
++	end
++	for key, default in def.Options or {} do
++		local value = customInfo[key]
++		if value == nil then
++			value = default
++		elseif typeof(value) ~= "boolean" then
++			return nil, "invalid " .. key
++		end
++		clean[key] = value
++	end
++	for key in customInfo do
++		if clean[key] == nil then
++			return nil, "unexpected CustomInfo key"
++		end
++	end
++
++	return { Category = request.Category, Item = request.Item, DefaultInfo = def, CustomInfo = clean }, nil
+ end
+ 
+ -- Builds a display model from the non-Handle parts of a tool for placement at a
+@@ -780,15 +835,20 @@
+ 		}
+ 	end
+ 
+-	-- Copy only the array part so stray keys never reach the order table.
++	local menu = getFoodTable()
++	if not menu then
++		return { Success = false, Message = "Ordering is unavailable right now." }
++	end
++
++	-- Only the array part is read, and each item is rebuilt from the server's Menu.
+ 	local items = table.create(itemCount)
+ 	for i = 1, itemCount do
+-		local reason = validateOrderItem(orderItems[i])
+-		if reason then
+-			warn(string.format("[OrderService] Rejected order from %s: %s", player.Name, reason))
++		local item, reason = buildOrderItem(menu, orderItems[i])
++		if not item then
++			warn(string.format("[OrderService] Rejected order from %s: %s", player.Name, tostring(reason)))
+ 			return { Success = false, Message = "Invalid order." }
+ 		end
+-		items[i] = orderItems[i]
++		items[i] = item
+ 	end
+ 
+ 	if server:_hasOpenOrder(player.UserId) then
+diff -ru /private/tmp/claude-501/-Users-jackcrowell-Desktop-boba-cafe/7e617087-b76e-40c7-8dfe-603339237eff/scratchpad/m05pre/src/server/Modules/SpillService/Spill.luau src/server/Modules/SpillService/Spill.luau
+--- /private/tmp/claude-501/-Users-jackcrowell-Desktop-boba-cafe/7e617087-b76e-40c7-8dfe-603339237eff/scratchpad/m05pre/src/server/Modules/SpillService/Spill.luau	2026-10-13 22:49:05
++++ src/server/Modules/SpillService/Spill.luau	2026-10-13 23:07:21
+@@ -19,11 +19,14 @@
+ local Animator = require(Utility.Animator)
+ local ItemFader = require(Utility.ItemFader)
+ 
+-local SpillService
+-local CurrencyService
+-local DialogService
+-local ShiftService
++local ANIMATION_LOAD_TIMEOUT_SECONDS = 3
+ 
++-- Services are looked up on use. SpillService:KnitStart can build spills before
++-- Knit.OnStart resolves, so module locals assigned there would still be nil.
++local function Service(Name: string): any
++	return Knit.GetService(Name)
++end
++
+ local Spill = {}
+ Spill.__index = Spill
+ 
+@@ -74,7 +77,7 @@
+ end
+ 
+ function Spill:_FindLocationWithinRegion()
+-	local RegionSpills = SpillService.Spills[self.Type][self.Region]
++	local RegionSpills = Service("SpillService").Spills[self.Type][self.Region]
+ 	local MinDistance = Config.Min_Distance[self.Region.Name] or Config.Min_Distance.Floor
+ 
+ 	for _ = 1, 5 do
+@@ -103,10 +106,11 @@
+ end
+ 
+ function Spill:_GetCleaningTools(): (Instance, Instance)
++	local Tools = Service("SpillService").Storage.Tools
+ 	if self.Type == "Mopping" then
+-		return SpillService.Storage.Tools.Mop:Clone(), SpillService.Storage.Tools.MopBucket:Clone()
++		return Tools.Mop:Clone(), Tools.MopBucket:Clone()
+ 	else
+-		return SpillService.Storage.Tools.SprayBottle:Clone(), SpillService.Storage.Tools.DishTowel:Clone()
++		return Tools.SprayBottle:Clone(), Tools.DishTowel:Clone()
+ 	end
+ end
+ 
+@@ -135,7 +139,7 @@
+ end
+ 
+ function Spill:_FinishCleaning(Player: Player, AnimationTrack: AnimationTrack, RightTool: Instance, LeftTool: Instance)
+-	local Sparkles = SpillService.Storage.Sparkles:Clone()
++	local Sparkles = Service("SpillService").Storage.Sparkles:Clone()
+ 	Sparkles.Parent = self.Object.PrimaryPart
+ 	Sparkles:Emit(30)
+ 	AnimationTrack:Stop()
+@@ -152,7 +156,7 @@
+ 	self:_UnlockPlayerMovement(Player)
+ 	Player:SetAttribute("CleaningSpill", nil)
+ 
+-	CurrencyService:Modify(Player, "Points", Config.PointIncrement)
++	Service("CurrencyService"):Modify(Player, "Points", Config.PointIncrement)
+ 
+ 	task.wait(1)
+ 	self:Destroy()
+@@ -200,9 +204,18 @@
+ 	})
+ 
+ 	AnimationTrack:Play()
+-	repeat
++	-- An animation that never loads (e.g. no asset permission) must not hold the cleaner;
++	-- erroring here hands the player back through _RecoverFromFailedCleaning.
++	local LoadDeadline = os.clock() + ANIMATION_LOAD_TIMEOUT_SECONDS
++	while AnimationTrack.Length <= 0 do
++		if os.clock() > LoadDeadline then
++			AnimationTrack:Stop()
++			RightTool:Destroy()
++			LeftTool:Destroy()
++			error("cleaning animation did not load", 0)
++		end
+ 		task.wait()
+-	until AnimationTrack.Length > 0
++	end
+ 
+ 	self.Janitor:Add(AnimationTrack:GetMarkerReachedSignal("Sound"):Connect(function(Value: string)
+ 		if not AnimationTrack.Animation:FindFirstChild("SoundProfile") then
+@@ -228,14 +241,14 @@
+ function Spill:_ListenToCleanPrompt()
+ 	return self.Prompt.Triggered:Connect(function(Player)
+ 		if Player:GetAttribute("CleaningSpill") or Player:GetAttribute("Restocking") or self.Cleaning then
+-			DialogService:Notify(Player, {
++			Service("DialogService"):Notify(Player, {
+ 				Title = "Notification",
+ 				Description = "You can't do that right now.",
+ 			})
+ 			return
+ 		end
+ 
+-		if not ShiftService:IsClockedIn(Player) then
++		if not Service("ShiftService"):IsClockedIn(Player) then
+ 			return
+ 		end
+ 
+@@ -276,7 +289,7 @@
+ 			return
+ 		end
+ 
+-		SpillService.Client.Trip:Fire(Player)
++		Service("SpillService").Client.Trip:Fire(Player)
+ 		SpillsReplica:FireAllClients(self.Object.SignStartPosition, {
+ 			Time = 0.6,
+ 			EasingStyle = "Bounce",
+@@ -293,6 +306,7 @@
+ end
+ 
+ function Spill:_Build()
++	local SpillService = Service("SpillService")
+ 	self.Object = SpillService.Storage.Spills[self._Object]:Clone()
+ 	self.Object.Parent = SpillService.SpillsFolder.Active
+ 	self.Janitor:Add(self.Object)
+@@ -341,7 +355,7 @@
+ 	self.Cleaning = true
+ 	self.Prompt.Enabled = false
+ 
+-	local Sparkles = SpillService.Storage.Sparkles:Clone()
++	local Sparkles = Service("SpillService").Storage.Sparkles:Clone()
+ 	Sparkles.Parent = self.Object.PrimaryPart
+ 	Sparkles:Emit(30)
+ 
+@@ -363,16 +377,7 @@
+ 
+ 	self.Destroyed = true
+ 	self.Janitor:Cleanup()
+-	SpillService:SpillCleaned(self)
++	Service("SpillService"):SpillCleaned(self)
+ end
+-
+-Knit.OnStart()
+-	:andThen(function()
+-		CurrencyService = Knit.GetService("CurrencyService")
+-		DialogService = Knit.GetService("DialogService")
+-		SpillService = Knit.GetService("SpillService")
+-		ShiftService = Knit.GetService("ShiftService")
+-	end)
+-	:catch(warn)
+ 
+ return Spill
+diff -ru /private/tmp/claude-501/-Users-jackcrowell-Desktop-boba-cafe/7e617087-b76e-40c7-8dfe-603339237eff/scratchpad/m05pre/src/server/Modules/SpillService/init.luau src/server/Modules/SpillService/init.luau
+--- /private/tmp/claude-501/-Users-jackcrowell-Desktop-boba-cafe/7e617087-b76e-40c7-8dfe-603339237eff/scratchpad/m05pre/src/server/Modules/SpillService/init.luau	2026-10-13 22:43:52
++++ src/server/Modules/SpillService/init.luau	2026-10-13 23:06:57
+@@ -9,6 +9,7 @@
+ local ReplicaService = require(Packages.ReplicaService)
+ local SpillObject = require(script.Spill)
+ local TableUtil = require(Packages.TableUtil)
++local WorldPath = require(Shared.Utility.WorldPath)
+ 
+ ---> constants
+ local WORLD_WAIT_SECONDS = 10 -- total budget for resolving the authored world/assets in KnitStart
+@@ -49,46 +50,26 @@
+ 	return Count
+ end
+ 
+---- Walks `path` below `root`, waiting for each child until `deadline` (os.clock()). Returns nil if any is missing.
+-local function WaitForPath(root: Instance, path: { string }, deadline: number): Instance?
+-	local Current: Instance? = root
+-	for _, Name in path do
+-		local Child = Current:FindFirstChild(Name)
+-		if not Child then
+-			local Remaining = deadline - os.clock()
+-			if Remaining <= 0 then
+-				return nil
+-			end
+-			Child = Current:WaitForChild(Name, Remaining)
+-			if not Child then
+-				return nil
+-			end
+-		end
+-		Current = Child
+-	end
+-	return Current
+-end
+-
+ --- Resolves the authored world and assets spills depend on. Each missing path is reported with a warning.
+ --- Returns true only if everything required is present.
+ function SpillService:_ResolveWorld(): boolean
+ 	local Deadline = os.clock() + WORLD_WAIT_SECONDS
+ 	local Missing = {}
+ 
+-	local SpillsFolder = WaitForPath(workspace, { "Assets", "Spills" }, Deadline)
++	local SpillsFolder = WorldPath.waitFor(workspace, { "Assets", "Spills" }, Deadline - os.clock())
+ 	if not SpillsFolder then
+ 		table.insert(Missing, "workspace.Assets.Spills")
+-	elseif not WaitForPath(SpillsFolder, { "Areas" }, Deadline) then
++	elseif not WorldPath.waitFor(SpillsFolder, { "Areas" }, Deadline - os.clock()) then
+ 		table.insert(Missing, "workspace.Assets.Spills.Areas")
+ 	end
+ 
+-	local Storage = WaitForPath(ReplicatedStorage, { "SharedStorage", "Spills" }, Deadline)
++	local Storage = WorldPath.waitFor(ReplicatedStorage, { "SharedStorage", "Spills" }, Deadline - os.clock())
+ 	if not Storage then
+ 		table.insert(Missing, "ReplicatedStorage.SharedStorage.Spills")
+ 	else
+ 		-- Everything a Mopping spill and its cleaning interaction clone or read.
+ 		for _, Path in { { "Spills", "Boba" }, { "Tools", "Mop" }, { "Tools", "MopBucket" }, { "Sparkles" } } do
+-			if not WaitForPath(Storage, Path, Deadline) then
++			if not WorldPath.waitFor(Storage, Path, Deadline - os.clock()) then
+ 				table.insert(Missing, "ReplicatedStorage.SharedStorage.Spills." .. table.concat(Path, "."))
+ 			end
+ 		end
+diff -ru /private/tmp/claude-501/-Users-jackcrowell-Desktop-boba-cafe/7e617087-b76e-40c7-8dfe-603339237eff/scratchpad/m05pre/src/server/Tests/OrderService.spec.luau src/server/Tests/OrderService.spec.luau
+--- /private/tmp/claude-501/-Users-jackcrowell-Desktop-boba-cafe/7e617087-b76e-40c7-8dfe-603339237eff/scratchpad/m05pre/src/server/Tests/OrderService.spec.luau	2026-10-13 22:45:38
++++ src/server/Tests/OrderService.spec.luau	2026-10-13 23:09:23
+@@ -37,6 +37,7 @@
+ 	-- so workspace["Ordering System"] is never accessed (it is only resolved
+ 	-- in KnitStart).
+ 	local service = require(ServerScriptService.Server.Modules.OrderService)
++	local Menu = require(ReplicatedStorage.Shared.Ordering.Menu)
+ 
+ 	-- ──────────────────────────────────────────────────────────────────────
+ 	-- Test helpers
+@@ -73,6 +74,16 @@
+ 		}
+ 	end
+ 
++	-- A client CreateOrder request item: { Category, Item, CustomInfo }. The
++	-- defaults name a real Menu item with no choices.
++	local function makeRequest(category: string?, item: string?, customInfo: { [string]: any }?)
++		return {
++			Category = category or "Pastries",
++			Item = item or "Fudge Brownie",
++			CustomInfo = customInfo or {},
++		}
++	end
++
+ 	-- Build a raw Order entry directly (bypasses _addOrder / _broadcastUpdate)
+ 	local COLOR_PENDING = Color3.fromRGB(140, 140, 140)
+ 	local COLOR_PREPARING = Color3.fromRGB(229, 198, 103)
+@@ -133,10 +144,31 @@
+ 	-- Clock-in mock helpers
+ 	-- ──────────────────────────────────────────────────────────────────────
+ 
+-	-- The spec runs inside a live Play session, so keep the real references and
+-	-- put them back in afterAll.
+-	local originalShiftService = service._shiftService
+-	local originalStatisticsService = service._statisticsService
++	-- The spec runs inside a live Play session against the real service table.
++	-- Snapshot every field beforeEach replaces and put them all back in afterAll,
++	-- so ordering keeps working in that session after the run.
++	local LIVE_FIELDS = {
++		"_orders",
++		"_currentOrderNum",
++		"_orderDebounces",
++		"_areaDebounces",
++		"_statusScreens",
++		"_staffScreens",
++		"_pickUpAreas",
++		"_queue",
++		"_broadcastUpdate",
++		"_shiftService",
++		"_statisticsService",
++	}
++	local LIVE_CLIENT_FIELDS =
++		{ "NotepadUpdated", "PickUpNodeVisibilityChanged", "Announcement", "QueueUpdated", "Server" }
++	local savedFields, savedClientFields = {}, {}
++	for _, key in LIVE_FIELDS do
++		savedFields[key] = rawget(service, key)
++	end
++	for _, key in LIVE_CLIENT_FIELDS do
++		savedClientFields[key] = rawget(service.Client, key)
++	end
+ 
+ 	-- Replaces the ShiftService reference OrderService resolves in KnitStart.
+ 	local function mockClockedIn(clockedIn: boolean)
+@@ -193,8 +225,12 @@
+ 	end)
+ 
+ 	afterAll(function()
+-		service._shiftService = originalShiftService
+-		service._statisticsService = originalStatisticsService
++		for _, key in LIVE_FIELDS do
++			rawset(service, key, savedFields[key])
++		end
++		for _, key in LIVE_CLIENT_FIELDS do
++			rawset(service.Client, key, savedClientFields[key])
++		end
+ 	end)
+ 
+ 	-- ══════════════════════════════════════════════════════════════════════
+@@ -648,7 +684,7 @@
+ 		local player = makePlayer(300)
+ 
+ 		it("should reject a non-number customerId", function()
+-			local result = service.Client:CreateOrder(player, nil, { makeItem() })
++			local result = service.Client:CreateOrder(player, nil, { makeRequest() })
+ 			expect(result.Success).to.equal(false)
+ 			expect(#service._orders).to.equal(0)
+ 		end)
+@@ -660,7 +696,7 @@
+ 		end)
+ 
+ 		it("should reject orders placed for another player", function()
+-			local result = service.Client:CreateOrder(player, 10001, { makeItem() })
++			local result = service.Client:CreateOrder(player, 10001, { makeRequest() })
+ 			expect(result.Success).to.equal(false)
+ 			expect(result.Message).to.be.a("string")
+ 			expect(#service._orders).to.equal(0)
+@@ -668,7 +704,7 @@
+ 
+ 		it("should not require a rank or clock-in to order", function()
+ 			clearClockedIn()
+-			local result = service.Client:CreateOrder(player, player.UserId, { makeItem() })
++			local result = service.Client:CreateOrder(player, player.UserId, { makeRequest() })
+ 			expect(result.Success).to.equal(true)
+ 			expect(#service._orders).to.equal(1)
+ 		end)
+@@ -681,11 +717,11 @@
+ 
+ 		it("should reject orders exceeding the 4-item maximum", function()
+ 			local result = service.Client:CreateOrder(player, player.UserId, {
+-				makeItem(),
+-				makeItem(),
+-				makeItem(),
+-				makeItem(),
+-				makeItem(), -- 5 items
++				makeRequest(),
++				makeRequest(),
++				makeRequest(),
++				makeRequest(),
++				makeRequest(), -- 5 items
+ 			})
+ 			expect(result.Success).to.equal(false)
+ 			expect(#service._orders).to.equal(0)
+@@ -699,23 +735,84 @@
+ 			expect(#service._orders).to.equal(0)
+ 		end)
+ 
++		-- Each case must be rejected without storing an order or starting the debounce.
++		local REJECTED_REQUESTS = {
++			["an unknown category"] = makeRequest("Secret Menu", "Fudge Brownie"),
++			["an unknown item"] = makeRequest("Pastries", "<b>Free Robux</b>"),
++			["a non-table CustomInfo"] = makeRequest("Pastries", "Fudge Brownie", "Large" :: any),
++			["a missing Select value"] = makeRequest("Coffees", "Regular", {}),
++			["a Select value not on the Menu"] = makeRequest("Coffees", "Regular", { Size = "Huge" }),
++			["a non-boolean Option"] = makeRequest("Coffees", "Regular", { Size = "Small", Iced = "yes" }),
++			["a CustomInfo key the item does not offer"] = makeRequest("Pastries", "Fudge Brownie", { Note = "hi" }),
++			["a missing RequiredSelection"] = makeRequest("Boba Teas", "Custom Boba", {
++				Size = "Medium",
++				["Tapioca Flavor"] = "Normal",
++			}),
++			["a RequiredSelection value not on the Menu"] = makeRequest("Boba Teas", "Custom Boba", {
++				Size = "Medium",
++				["Syrup Flavor"] = "<font>Hacked</font>",
++				["Tapioca Flavor"] = "Normal",
++			}),
++		}
++		for caseName, request in REJECTED_REQUESTS do
++			it("should reject " .. caseName, function()
++				local result = service.Client:CreateOrder(player, player.UserId, { request })
++				expect(result.Success).to.equal(false)
++				expect(#service._orders).to.equal(0)
++				expect(service._orderDebounces[player.UserId]).to.equal(nil)
++			end)
++		end
++
++		it("should rebuild DefaultInfo from the server Menu, ignoring the client's", function()
++			local request = makeRequest()
++			request.DefaultInfo = { ItemName = "Hacked", Select = { Size = true } }
++			local result = service.Client:CreateOrder(player, player.UserId, { request })
++			expect(result.Success).to.equal(true)
++
++			local stored = service._orders[1].order[1]
++			expect(stored.DefaultInfo).to.equal(Menu.FoodTable["Pastries"].Items["Fudge Brownie"])
++			expect(stored.Category).to.equal("Pastries")
++			expect(stored.Item).to.equal("Fudge Brownie")
++		end)
++
++		it("should keep valid choices and fill missing Options with Menu defaults", function()
++			local result = service.Client:CreateOrder(player, player.UserId, {
++				makeRequest("Coffees", "Regular", { Size = "Large", Sugar = true }),
++				makeRequest("Boba Teas", "Custom Boba", {
++					Size = "Medium",
++					["Syrup Flavor"] = "Classic Milk Tea",
++					["Tapioca Flavor"] = "Normal",
++				}),
++			})
++			expect(result.Success).to.equal(true)
++
++			local coffee = service._orders[1].order[1].CustomInfo
++			expect(coffee.Size).to.equal("Large")
++			expect(coffee.Sugar).to.equal(true)
++			expect(coffee.Iced).to.equal(false)
++
++			local boba = service._orders[1].order[2].CustomInfo
++			expect(boba["Syrup Flavor"]).to.equal("Classic Milk Tea")
++			expect(boba["Tapioca Flavor"]).to.equal("Normal")
++		end)
++
+ 		it("should not start the debounce for a rejected order", function()
+ 			service.Client:CreateOrder(player, player.UserId, {})
+ 			expect(service._orderDebounces[player.UserId]).to.equal(nil)
+ 		end)
+ 
+ 		it("should accept a valid 1-item order", function()
+-			local result = service.Client:CreateOrder(player, player.UserId, { makeItem() })
++			local result = service.Client:CreateOrder(player, player.UserId, { makeRequest() })
+ 			expect(result.Success).to.equal(true)
+ 			expect(#service._orders).to.equal(1)
+ 		end)
+ 
+ 		it("should accept a valid 4-item order", function()
+ 			local result = service.Client:CreateOrder(player, player.UserId, {
+-				makeItem(),
+-				makeItem(),
+-				makeItem(),
+-				makeItem(),
++				makeRequest(),
++				makeRequest(),
++				makeRequest(),
++				makeRequest(),
+ 			})
+ 			expect(result.Success).to.equal(true)
+ 			expect(#service._orders).to.equal(1)
+@@ -723,33 +820,33 @@
+ 		end)
+ 
+ 		it("should apply a per-player debounce on the second call", function()
+-			service.Client:CreateOrder(player, player.UserId, { makeItem() })
+-			local result = service.Client:CreateOrder(player, player.UserId, { makeItem() }) -- debounced
++			service.Client:CreateOrder(player, player.UserId, { makeRequest() })
++			local result = service.Client:CreateOrder(player, player.UserId, { makeRequest() }) -- debounced
+ 			expect(result.Success).to.equal(false)
+ 			expect(#service._orders).to.equal(1)
+ 		end)
+ 
+ 		it("should set a debounce entry for the ordering player", function()
+-			service.Client:CreateOrder(player, player.UserId, { makeItem() })
++			service.Client:CreateOrder(player, player.UserId, { makeRequest() })
+ 			expect(service._orderDebounces[player.UserId]).to.equal(true)
+ 		end)
+ 
+ 		it("should reject a second order while the first is still open", function()
+ 			service._orders = { makeOrder({ customer = player.UserId, status = "Ready for Pick Up" }) }
+-			local result = service.Client:CreateOrder(player, player.UserId, { makeItem() })
++			local result = service.Client:CreateOrder(player, player.UserId, { makeRequest() })
+ 			expect(result.Success).to.equal(false)
+ 			expect(#service._orders).to.equal(1)
+ 		end)
+ 
+ 		it("should allow a different player to order while first is debounced", function()
+ 			local other = makePlayer(999)
+-			service.Client:CreateOrder(player, player.UserId, { makeItem() })
+-			service.Client:CreateOrder(other, other.UserId, { makeItem() })
++			service.Client:CreateOrder(player, player.UserId, { makeRequest() })
++			service.Client:CreateOrder(other, other.UserId, { makeRequest() })
+ 			expect(#service._orders).to.equal(2)
+ 		end)
+ 
+ 		it("should store the calling player as the customer", function()
+-			service.Client:CreateOrder(player, player.UserId, { makeItem() })
++			service.Client:CreateOrder(player, player.UserId, { makeRequest() })
+ 			expect(service._orders[1].customer).to.equal(player.UserId)
+ 		end)
+ 	end)
+diff -ru /private/tmp/claude-501/-Users-jackcrowell-Desktop-boba-cafe/7e617087-b76e-40c7-8dfe-603339237eff/scratchpad/m05pre/src/shared/Configuration/SettingsConfig.luau src/shared/Configuration/SettingsConfig.luau
+--- /private/tmp/claude-501/-Users-jackcrowell-Desktop-boba-cafe/7e617087-b76e-40c7-8dfe-603339237eff/scratchpad/m05pre/src/shared/Configuration/SettingsConfig.luau	2026-10-13 22:43:17
++++ src/shared/Configuration/SettingsConfig.luau	2026-10-13 23:06:28
+@@ -25,6 +25,19 @@
+ 
+ local MIN_STAFF_RANK = 7
+ 
++-- Audio groups are authored in the place and may be missing or plain Folders (only a
++-- SoundGroup has a Volume). In that case the toggle is skipped with a single warning.
++local warnedAudioGroups: { [string]: boolean } = {}
++local function setGroupVolume(name: string, isEnabled: boolean)
++	local group = SoundService:FindFirstChild(name)
++	if group and group:IsA("SoundGroup") then
++		group.Volume = if isEnabled then 0.5 else 0
++	elseif not warnedAudioGroups[name] then
++		warnedAudioGroups[name] = true
++		warn(`[Settings] SoundService.{name} is missing or not a SoundGroup; its volume toggle is skipped.`)
++	end
++end
++
+ local config: { Category } = {
+ 	{
+ 		Category = "Game Passes",
+@@ -37,10 +50,10 @@
+ 		Category = "Game Audio",
+ 		Settings = {
+ 			{ Key = "MusicEnabled", Label = "Music", Default = true, ClientCallback = function(isEnabled)
+-				SoundService.Music.Volume = isEnabled and 0.5 or 0
++				setGroupVolume("Music", isEnabled)
+ 			end},
+             { Key = "SFXEnabled", Label = "SFX", Default = true, ClientCallback = function(isEnabled)
+-				SoundService.SFX.Volume = isEnabled and 0.5 or 0
++				setGroupVolume("SFX", isEnabled)
+ 			end},
+ 		},
+ 	},
+diff -ru /private/tmp/claude-501/-Users-jackcrowell-Desktop-boba-cafe/7e617087-b76e-40c7-8dfe-603339237eff/scratchpad/m05pre/src/shared/Kitchen/RecipeConstructors.luau src/shared/Kitchen/RecipeConstructors.luau
+--- /private/tmp/claude-501/-Users-jackcrowell-Desktop-boba-cafe/7e617087-b76e-40c7-8dfe-603339237eff/scratchpad/m05pre/src/shared/Kitchen/RecipeConstructors.luau	2026-10-13 22:43:06
++++ src/shared/Kitchen/RecipeConstructors.luau	2026-10-13 23:08:10
+@@ -1,6 +1,7 @@
+ ---> Services
+ 
+ local ReplicatedStorage = game:GetService("ReplicatedStorage")
++local WorldPath = require(ReplicatedStorage:WaitForChild("Shared").Utility.WorldPath)
+ 
+ ---> Constants
+ 
+@@ -16,20 +17,9 @@
+ local SharedStorage = ReplicatedStorage:WaitForChild("SharedStorage", ASSET_TIMEOUT_SECONDS)
+ local SelectorModels = ReplicatedStorage:FindFirstChild("SelectorModels")
+ 
+-local function findPath(root: Instance?, path: { string }): Instance?
+-	local current = root
+-	for _, name in path do
+-		if not current then
+-			return nil
+-		end
+-		current = current:FindFirstChild(name)
+-	end
+-	return current
+-end
++local Tools = WorldPath.find(SharedStorage, { "Tools", "Kitchen" })
++local Animations = WorldPath.find(SharedStorage, { "Animations", "Kitchen" })
+ 
+-local Tools = findPath(SharedStorage, { "Tools", "Kitchen" })
+-local Animations = findPath(SharedStorage, { "Animations", "Kitchen" })
+-
+ if not Tools then
+ 	warn("[Recipes] ReplicatedStorage.SharedStorage.Tools.Kitchen not found; recipes that give tools are skipped.")
+ end
+@@ -49,7 +39,7 @@
+ 	if not Tools then
+ 		return nil -- already warned once for the whole folder
+ 	end
+-	local tool = findPath(Tools, path)
++	local tool = WorldPath.find(Tools, path)
+ 	if not tool then
+ 		warn(string.format("[Recipes] Tool Tools.Kitchen.%s not found; skipping it.", table.concat(path, ".")))
+ 	end
+diff -ru /private/tmp/claude-501/-Users-jackcrowell-Desktop-boba-cafe/7e617087-b76e-40c7-8dfe-603339237eff/scratchpad/m05pre/src/shared/UI/Components/Core/Hud/TopBar.luau src/shared/UI/Components/Core/Hud/TopBar.luau
+--- /private/tmp/claude-501/-Users-jackcrowell-Desktop-boba-cafe/7e617087-b76e-40c7-8dfe-603339237eff/scratchpad/m05pre/src/shared/UI/Components/Core/Hud/TopBar.luau	2026-10-13 22:43:44
++++ src/shared/UI/Components/Core/Hud/TopBar.luau	2026-10-13 23:08:10
+@@ -16,6 +16,7 @@
+ 
+ ---> dependencies
+ local React = require(Packages.React)
++local WorldPath = require(Shared.Utility.WorldPath)
+ 
+ ---> styles
+ local Styles = require(UI.Styles)
+@@ -34,8 +35,7 @@
+ local c = React.createElement
+ 
+ local function waitForComputers(): Instance?
+-	local orderingSystem = workspace:WaitForChild("Ordering System", ORDERING_SYSTEM_TIMEOUT_SECONDS)
+-	local computers = orderingSystem and orderingSystem:WaitForChild("Computers", ORDERING_SYSTEM_TIMEOUT_SECONDS)
++	local computers = WorldPath.waitFor(workspace, { "Ordering System", "Computers" }, ORDERING_SYSTEM_TIMEOUT_SECONDS)
+ 	if not computers then
+ 		warn('[TopBar] workspace["Ordering System"].Computers not found; register prompts disabled.')
+ 	end
+diff -ru /private/tmp/claude-501/-Users-jackcrowell-Desktop-boba-cafe/7e617087-b76e-40c7-8dfe-603339237eff/scratchpad/m05pre/src/shared/UI/Components/Dialogs/ActionPrompt.luau src/shared/UI/Components/Dialogs/ActionPrompt.luau
+--- /private/tmp/claude-501/-Users-jackcrowell-Desktop-boba-cafe/7e617087-b76e-40c7-8dfe-603339237eff/scratchpad/m05pre/src/shared/UI/Components/Dialogs/ActionPrompt.luau	2026-04-13 00:43:17
++++ src/shared/UI/Components/Dialogs/ActionPrompt.luau	2026-10-13 23:09:23
+@@ -13,11 +13,22 @@
+ local Page = require(UI.Components.Core.Page)
+ local Pane = require(UI.Components.Pane)
+ local PromptButton = require(UI.Components.Buttons.PromptButton)
++local WorldPath = require(Shared.Utility.WorldPath)
+ 
+ local c = React.createElement
+ 
+ local BUTTON_HEIGHT = 50
+ 
++-- UI sounds are authored in the place (SoundService.SFX.UI, else SoundService.UISounds).
++-- A missing sound is skipped.
++local function playUiSound(name: string)
++	local sound = WorldPath.find(SoundService, { "SFX", "UI", name })
++		or WorldPath.find(SoundService, { "UISounds", name })
++	if sound and sound:IsA("Sound") then
++		sound:Play()
++	end
++end
++
+ type ButtonDef = {
+ 	Text: string,
+ 	Color: Color3?,
+@@ -53,11 +64,11 @@
+ 		if closeFnRef.current then
+ 			closeFnRef.current()
+ 		end
+-		SoundService.SFX.UI.Pop2:Play()
++		playUiSound("Pop2")
+ 		props.OnResolution(text)
+ 	end
+ 
+-	SoundService.SFX.UI.Pop1:Play()
++	playUiSound("Pop1")
+ 
+ 	local buttonElements = {}
+ 	for i, buttonDef in ipairs(props.Buttons) do
+diff -ru /private/tmp/claude-501/-Users-jackcrowell-Desktop-boba-cafe/7e617087-b76e-40c7-8dfe-603339237eff/scratchpad/m05pre/src/shared/UI/Pages/MobileOrder/init.luau src/shared/UI/Pages/MobileOrder/init.luau
+--- /private/tmp/claude-501/-Users-jackcrowell-Desktop-boba-cafe/7e617087-b76e-40c7-8dfe-603339237eff/scratchpad/m05pre/src/shared/UI/Pages/MobileOrder/init.luau	2026-10-13 22:49:28
++++ src/shared/UI/Pages/MobileOrder/init.luau	2026-10-13 23:07:55
+@@ -201,6 +201,7 @@
+ 
+ 		local nextOrder = table.clone(orderItems)
+ 		table.insert(nextOrder, {
++			Category = selectedCategory,
+ 			Item = selectedItemKey,
+ 			DefaultInfo = activeItemData,
+ 			CustomInfo = customInfo,
+@@ -216,8 +217,10 @@
+ 		setOrderItems(nextOrder)
+ 	end
+ 
++	local isSubmitting = React.useRef(false)
++
+ 	local function onSubmitOrder()
+-		if #orderItems == 0 then
++		if isSubmitting.current or #orderItems == 0 then
+ 			return
+ 		end
+ 
+@@ -227,30 +230,38 @@
+ 			return
+ 		end
+ 
+-		-- Players can only order for themselves; the server replies { Success, Message? }.
+-		local ok, result = pcall(function()
+-			return Knit.GetService("OrderService"):CreateOrder(localPlayer.UserId, orderItems)
+-		end)
+-		if not ok then
+-			warn("[MobileOrder] failed to submit order", result)
+-			setSubmitFailed(true)
+-			setSubmitMessage("Unable to submit order.")
+-			return
++		-- Players can only order for themselves. The server rebuilds each item from its
++		-- own Menu, so only the choice is sent, and it replies { Success, Message? }.
++		local request = table.create(#orderItems)
++		for i, orderItem in orderItems do
++			request[i] = { Category = orderItem.Category, Item = orderItem.Item, CustomInfo = orderItem.CustomInfo }
+ 		end
+ 
+-		local success = typeof(result) == "table" and result.Success == true
+-		local message = typeof(result) == "table" and result.Message or nil
+-		setSubmitFailed(not success)
+-		if success then
+-			setSubmitMessage(message or "Order sent.")
+-			setOrderItems({})
+-			setSelectedTab("Menu")
+-			if props.OnSubmitted then
+-				props.OnSubmitted()
++		isSubmitting.current = true
++		task.spawn(function()
++			-- Knit client methods return a Promise; expect() yields and throws on rejection.
++			local ok, result = pcall(function()
++				return Knit.GetService("OrderService"):CreateOrder(localPlayer.UserId, request):expect()
++			end)
++			isSubmitting.current = false
++			if not ok then
++				warn("[MobileOrder] failed to submit order", result)
+ 			end
+-		else
+-			setSubmitMessage(message or "Unable to submit order.")
+-		end
++
++			local success = ok and typeof(result) == "table" and result.Success == true
++			local message = if ok and typeof(result) == "table" then result.Message else nil
++			setSubmitFailed(not success)
++			if success then
++				setSubmitMessage(message or "Order sent.")
++				setOrderItems({})
++				setSelectedTab("Menu")
++				if props.OnSubmitted then
++					props.OnSubmitted()
++				end
++			else
++				setSubmitMessage(message or "Unable to submit order.")
++			end
++		end)
+ 	end
+ 
+ 	local function renderMenuTab()
+diff -ru /private/tmp/claude-501/-Users-jackcrowell-Desktop-boba-cafe/7e617087-b76e-40c7-8dfe-603339237eff/scratchpad/m05pre/src/shared/UI/Pages/Ordering/init.luau src/shared/UI/Pages/Ordering/init.luau
+--- /private/tmp/claude-501/-Users-jackcrowell-Desktop-boba-cafe/7e617087-b76e-40c7-8dfe-603339237eff/scratchpad/m05pre/src/shared/UI/Pages/Ordering/init.luau	2026-10-13 22:49:44
++++ src/shared/UI/Pages/Ordering/init.luau	2026-10-13 23:07:55
+@@ -230,6 +230,7 @@
+ 
+ 		local newOrder = table.clone(orderItems)
+ 		table.insert(newOrder, {
++			Category = selCategory,
+ 			Item = selItemKey,
+ 			DefaultInfo = item,
+ 			CustomInfo = customInfo,
+@@ -261,12 +262,22 @@
+ 			return
+ 		end
+ 
++		-- The server rebuilds each item from its own Menu, so only the choice is sent.
++		local request = table.create(#orderItems)
++		for i, orderItem in orderItems do
++			request[i] = { Category = orderItem.Category, Item = orderItem.Item, CustomInfo = orderItem.CustomInfo }
++		end
++
+ 		isSubmitting.current = true
+ 		task.spawn(function()
++			-- Knit client methods return a Promise; expect() yields and throws on rejection.
+ 			local ok, result = pcall(function()
+-				return Knit.GetService("OrderService"):CreateOrder(Players.LocalPlayer.UserId, orderItems)
++				return Knit.GetService("OrderService"):CreateOrder(Players.LocalPlayer.UserId, request):expect()
+ 			end)
+ 			isSubmitting.current = false
++			if not ok then
++				warn("[Ordering] CreateOrder failed:", result)
++			end
+ 
+ 			local success = ok and typeof(result) == "table" and result.Success == true
+ 			local message = if ok and typeof(result) == "table" then result.Message else nil
+Only in src/shared/Utility: WorldPath.luau

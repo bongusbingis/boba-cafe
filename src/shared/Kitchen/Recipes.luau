@@ -5,17 +5,11 @@
     WARNING: This file must never contain server logic, RemoteEvent calls,
     or any code that has side effects. It is intended to be safe for
     replication to the client. Keep it as plain data only.
+
+    Tools come from SharedStorage.Tools.Kitchen through RecipeConstructors.getTool,
+    which warns and returns nil when a tool is missing. A recipe whose tools are
+    all missing is left out of Recipes.Items instead of erroring the require.
 --]]
-
----> Services
-
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-
----> Assets
-
-local SharedStorage = ReplicatedStorage:WaitForChild("SharedStorage")
-
-local Tools = SharedStorage.Tools.Kitchen
 
 ---> Modules
 
@@ -26,6 +20,44 @@ local makeTeaVariant = RecipeConstructors.makeTeaVariant
 local makeHotChocolateVariant = RecipeConstructors.makeHotChocolateVariant
 local makeCupGiver = RecipeConstructors.makeCupGiver
 local makeGrabSelector = RecipeConstructors.makeGrabSelector
+local getTool = RecipeConstructors.getTool
+local getTools = RecipeConstructors.getTools
+
+---> Assets
+
+local mugTool = getTool({ "Mug" })
+
+local foodDisplayTools = getTools({
+	{ "Mochi", "Orange Mochi" },
+	{ "Mochi", "Mint Mochi" },
+	{ "Mochi", "Strawberry Mochi" },
+	{ "Mochi", "Vanilla Mochi" },
+	{ "Mochi", "Cookies n' Cream Mochi" },
+	{ "Macaron", "Vanilla Macaron" },
+	{ "Macaron", "Cookies n' Cream Macaron" },
+	{ "Macaron", "Caramel Macaron" },
+	{ "Macaron", "Strawberry Macaron" },
+	{ "Macaron", "Blueberry Macaron" },
+	{ "Macaron", "Cherry Macaron" },
+	{ "Macaron", "Mint Macaron" },
+	{ "Macaron", "Chocolate Macaron" },
+	{ "Pastry", "Fudge Brownie" },
+})
+
+local iceCreamTools = getTools({
+	{ "IceCream", "Strawberry Ice Cream" },
+	{ "IceCream", "Mint Ice Cream" },
+	{ "IceCream", "Chocolate Ice Cream" },
+	{ "IceCream", "Pistachio Ice Cream" },
+	{ "IceCream", "Cookie Dough Ice Cream" },
+	{ "IceCream", "Vanilla Ice Cream" },
+	{ "IceCream", "Bubble Gum Ice Cream" },
+	{ "IceCream", "Ube Ice Cream" },
+	{ "IceCream", "Orange Sherbet Ice Cream" },
+	{ "IceCream", "Cotton Candy Ice Cream" },
+	{ "IceCream", "Cherry Sherbet Ice Cream" },
+	{ "IceCream", "Watermelon Sherbet Ice Cream" },
+})
 
 ---> Recipes
 
@@ -76,13 +108,13 @@ Recipes.Items = {
 	["Clear Cup"] = makeCupGiver("Clear Cup"),
 	["Cup"] = makeCupGiver("Cup"),
 
-	["Mug"] = {
+	["Mug"] = mugTool and {
 		HoldDuration = 0,
 		Actions = {
 			--{ "AnimateRaw", Animations.Grab_01, true },
-			{ "GiveTool", Tools["Mug"] },
+			{ "GiveTool", mugTool },
 		},
-	},
+	} or nil,
 
 	["Sink"] = {
 		Sound = "Sink",
@@ -270,38 +302,10 @@ Recipes.Items = {
 	},
 
 	---> food display
-	["Food Display"] = makeGrabSelector("Food Display", "Choose a treat:", {
-		Tools.Mochi["Orange Mochi"],
-		Tools.Mochi["Mint Mochi"],
-		Tools.Mochi["Strawberry Mochi"],
-		Tools.Mochi["Vanilla Mochi"],
-		Tools.Mochi["Cookies n' Cream Mochi"],
-		Tools.Macaron["Vanilla Macaron"],
-		Tools.Macaron["Cookies n' Cream Macaron"],
-		Tools.Macaron["Caramel Macaron"],
-		Tools.Macaron["Strawberry Macaron"],
-		Tools.Macaron["Blueberry Macaron"],
-		Tools.Macaron["Cherry Macaron"],
-		Tools.Macaron["Mint Macaron"],
-		Tools.Macaron["Chocolate Macaron"],
-		Tools.Pastry["Fudge Brownie"],
-	}),
+	["Food Display"] = makeGrabSelector("Food Display", "Choose a treat:", foodDisplayTools),
 
 	---> ice cream freezer
-	["Ice Cream Freezer"] = makeGrabSelector("Ice Cream Freezer", "Choose a flavor:", {
-		Tools.IceCream["Strawberry Ice Cream"],
-		Tools.IceCream["Mint Ice Cream"],
-		Tools.IceCream["Chocolate Ice Cream"],
-		Tools.IceCream["Pistachio Ice Cream"],
-		Tools.IceCream["Cookie Dough Ice Cream"],
-		Tools.IceCream["Vanilla Ice Cream"],
-		Tools.IceCream["Bubble Gum Ice Cream"],
-		Tools.IceCream["Ube Ice Cream"],
-		Tools.IceCream["Orange Sherbet Ice Cream"],
-		Tools.IceCream["Cotton Candy Ice Cream"],
-		Tools.IceCream["Cherry Sherbet Ice Cream"],
-		Tools.IceCream["Watermelon Sherbet Ice Cream"],
-	}),
+	["Ice Cream Freezer"] = makeGrabSelector("Ice Cream Freezer", "Choose a flavor:", iceCreamTools),
 }
 
 for name: string, color: Color3 in Recipes.Syrups do
@@ -322,7 +326,9 @@ for name: string, color: Color3 in Recipes.Tapioca do
 		Sound = "Pop",
 		HoldDuration = 2,
 		Actions = {
-			{ "ToolNameValidityCheck", { "# Milk|#Tea" } },
+			-- Accepts "Milk + [Flavor] Syrup" (straight from the syrup step) and the
+			-- blended "[Flavor] Milk". Cup names ("... + Milk") are rejected.
+			{ "ToolNameValidityCheck", { "#^Milk %+ .+ Syrup|#^[^%+]+ Milk" } },
 			{
 				"SetToolHoldingProperty",
 				"Tapioca",
@@ -338,8 +344,13 @@ for name: string, color: Color3 in Recipes.Tapioca do
 			{
 				"RenameToolHolding",
 				function(old: string)
-					-- [Flavor] Milk ---> [Flavor] Boba
-					return old:gsub("Milk", "Boba")
+					-- "Milk + [Flavor] Syrup" or "[Flavor] Milk" ---> "[Flavor] Boba"
+					-- Anything after the flavor (e.g. " + Sugar") is kept.
+					local flavor, rest = old:match("^Milk %+ (.+) Syrup(.*)$")
+					if not flavor then
+						flavor, rest = old:match("^([^%+]+) Milk(.*)$")
+					end
+					return flavor and (flavor .. " Boba" .. rest) or old
 				end,
 			},
 		},

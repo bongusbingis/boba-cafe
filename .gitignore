@@ -11,3 +11,7 @@
 /sourcemap.json
 /aftman.toml
 /default.project.json
+
+# Agent workflow (operational state; evidence and decisions.md are committed)
+/.review/agent-workflow/board.json
+/.review/agent-workflow/completed.ndjson

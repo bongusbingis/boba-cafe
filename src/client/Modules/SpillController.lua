@@ -8,23 +8,53 @@ local TweenService = game:GetService("TweenService")
 ---> dependencies
 local Packages = ReplicatedStorage:WaitForChild("Packages")
 local Animator = require(ReplicatedStorage.Shared.Utility.Animator)
+local WorldPath = require(ReplicatedStorage.Shared.Utility.WorldPath)
 local Knit = require(Packages.Knit)
 local ReplicaController = require(Packages.ReplicaController)
 
 ---> assets
 local LocalPlayer = Players.LocalPlayer
 
-local Storage = ReplicatedStorage.SharedStorage.Spills
-local SpillsFolder = workspace.Assets.Spills
+-- Resolved in KnitStart with a bounded wait (never at require time or in KnitInit, which would block other
+-- controllers); nil when the place does not contain them. Spills then simply do not show their UI/animations.
+local WORLD_WAIT_SECONDS = 10
+local TRIP_MAX_SECONDS = 5 -- the trip always ends (controls back on) within this time
+local Storage: Instance? = nil
+local SpillsFolder: Instance? = nil
 
 local BadgeService
+
+--- Enables or disables the default character controls (replaces the removed SetCoreAndControls controller).
+local function setControlsEnabled(enabled: boolean)
+	local Ok, Err = pcall(function()
+		local PlayerModule = require(LocalPlayer.PlayerScripts:WaitForChild("PlayerModule", 5))
+		local Controls = PlayerModule:GetControls()
+		if enabled then
+			Controls:Enable()
+		else
+			Controls:Disable()
+		end
+	end)
+	if not Ok then
+		warn("[SpillController] Could not toggle player controls:", Err)
+	end
+end
 
 local SpillController = Knit.CreateController({
 	Name = "SpillController",
 	Tripped = false,
 	Boards = {},
 	ActiveTweens = {},
+	Percent = nil :: number?,
 })
+
+local function playSfx(name: string)
+	local Sfx = Sounds:FindFirstChild("SFX")
+	local Sound = Sfx and Sfx:FindFirstChild(name)
+	if Sound and Sound:IsA("Sound") then
+		Sound:Play()
+	end
+end
 
 function SpillController:_Trip()
 	if self.Tripped or LocalPlayer:GetAttribute("CleaningSpill") then
@@ -32,17 +62,32 @@ function SpillController:_Trip()
 	end
 
 	self.Tripped = true
-	BadgeService:AwardBadgeByName("Slipped")
-	Sounds.SFX.Trip_02:Play()
+	if BadgeService then
+		BadgeService:AwardBadgeByName("Slipped")
+	end
+	playSfx("Trip_02")
 
+	-- Controls go off after a short delay. `Recovered` stops that delayed disable from
+	-- running after the trip has already ended, which would leave the player frozen.
+	local Recovered = false
 	task.delay(0.25, function()
-		Knit.Controllers.SetCoreAndControls:SetPlayerControlsEnabled(false)
-		Sounds.SFX.Trip_01:Play()
+		if Recovered then
+			return
+		end
+		setControlsEnabled(false)
+		playSfx("Trip_01")
 	end)
-	self.Animation:Play()
-	self.Animation:AdjustSpeed(1.5)
-	self.Animation.Stopped:Wait()
-	Knit.Controllers.SetCoreAndControls:SetPlayerControlsEnabled(true)
+	local Animation = self.Animation
+	if Animation then
+		Animation:Play()
+		Animation:AdjustSpeed(1.5)
+		local Deadline = os.clock() + TRIP_MAX_SECONDS
+		while Animation.IsPlaying and os.clock() < Deadline do
+			task.wait()
+		end
+	end
+	Recovered = true
+	setControlsEnabled(true)
 	task.wait(1)
 
 	self.Tripped = false
@@ -58,14 +103,23 @@ local function waitForAnimator(character: Model): Animator
 end
 
 function SpillController:_HandleAnimations()
-	local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
-	waitForAnimator(character) -- ensure Animator exists before LoadAnimation
-	self.Animation = Animator:LoadAnimation(character, Storage.Animations.FallingAnimation)
+	local fallingAnimation = Storage
+		and Storage:FindFirstChild("Animations")
+		and Storage.Animations:FindFirstChild("FallingAnimation")
+	if not fallingAnimation then
+		warn(
+			"[SpillController] SharedStorage.Spills.Animations.FallingAnimation is missing; tripping animation disabled"
+		)
+		return
+	end
 
-	LocalPlayer.CharacterAdded:Connect(function(newCharacter)
-		waitForAnimator(newCharacter)
-		self.Animation = Animator:LoadAnimation(newCharacter, Storage.Animations.FallingAnimation)
-	end)
+	local function load(character: Model)
+		waitForAnimator(character) -- ensure Animator exists before LoadAnimation
+		self.Animation = Animator:LoadAnimation(character, fallingAnimation)
+	end
+
+	load(LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait())
+	LocalPlayer.CharacterAdded:Connect(load)
 end
 
 function SpillController:_NewSpillsReplica(Replica)
@@ -81,7 +135,7 @@ function SpillController:_NewSpillsReplica(Replica)
 			Sound: string
 		)
 			if Sound then
-				Sounds.SFX[Sound]:Play()
+				playSfx(Sound)
 			end
 			TweenService
 				:Create(
@@ -99,6 +153,7 @@ function SpillController:_NewSpillsReplica(Replica)
 end
 
 function SpillController:_NewCleanlinessReplica(Value)
+	self.Percent = Value
 	for _, Board in pairs(self.Boards) do
 		local Bar = Board.Holder.Main.Progressbar.Content
 		local Label = Board.Holder.Main.Progressbar.Label
@@ -131,7 +186,7 @@ function SpillController:_NewCleanlinessReplica(Value)
 		if Value >= 100 then
 			Bar.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 			Bar.Rainbow.Enabled = true
-			Label.Text = `Boost Active!`
+			Label.Text = `{Value}%`
 		else
 			Bar.BackgroundColor3 = Color3.fromRGB(132, 220, 0)
 			Bar.Rainbow.Enabled = false
@@ -141,7 +196,13 @@ function SpillController:_NewCleanlinessReplica(Value)
 end
 
 function SpillController:_RenderBoard(Board)
-	local Gui = Storage.BoardInterface:Clone()
+	local Template = Storage and Storage:FindFirstChild("BoardInterface")
+	if not Template then
+		warn("[SpillController] SharedStorage.Spills.BoardInterface is missing; spill board UI disabled")
+		return
+	end
+
+	local Gui = Template:Clone()
 	Gui.ResetOnSpawn = false
 	Gui.Parent = LocalPlayer.PlayerGui
 	Gui.Adornee = Board:IsA("BasePart") and Board or Board.Screen
@@ -158,13 +219,19 @@ function SpillController:_RenderBoard(Board)
 	-- end)
 
 	table.insert(self.Boards, Gui)
+	if self.Percent then
+		self:_NewCleanlinessReplica(self.Percent)
+	end
 end
 
 function SpillController:KnitStart()
 	local SpillService = Knit.GetService("SpillService")
-	BadgeService = Knit.GetService("BadgeService")
+	local BadgeOk, BadgeResult = pcall(Knit.GetService, "BadgeService")
+	if BadgeOk then
+		BadgeService = BadgeResult
+	end
 
-	self:_HandleAnimations()
+	-- Replicas and signals do not depend on the authored world, so connect them immediately.
 	ReplicaController.ReplicaOfClassCreated("SpillsReplica", function(Replica)
 		self:_NewSpillsReplica(Replica)
 	end)
@@ -181,17 +248,37 @@ function SpillController:KnitStart()
 	end)
 
 	LocalPlayer:GetAttributeChangedSignal("CleaningSpill"):Connect(function()
-		Knit.Controllers.SetCoreAndControls:SetPlayerControlsEnabled(not LocalPlayer:GetAttribute("CleaningSpill"))
+		setControlsEnabled(not LocalPlayer:GetAttribute("CleaningSpill"))
 	end)
-end
 
-function SpillController:KnitInit()
-	for _, Board in SpillsFolder.Boards:GetChildren() do
-		self:_RenderBoard(Board)
-	end
+	-- Resolve the authored world on its own thread so a missing/late folder never blocks other controllers.
+	task.spawn(function()
+		local Deadline = os.clock() + WORLD_WAIT_SECONDS
+		Storage = WorldPath.waitFor(ReplicatedStorage, { "SharedStorage", "Spills" }, Deadline - os.clock())
+		SpillsFolder = WorldPath.waitFor(workspace, { "Assets", "Spills" }, Deadline - os.clock())
+		if not Storage then
+			warn("[SpillController] SharedStorage.Spills is missing; spill animations and boards disabled")
+		end
+		if not SpillsFolder then
+			warn("[SpillController] workspace.Assets.Spills is missing; spill boards disabled")
+		end
 
-	SpillsFolder.Boards.ChildAdded:Connect(function(Board)
-		self:_RenderBoard(Board)
+		self:_HandleAnimations()
+
+		local Boards = SpillsFolder and WorldPath.waitFor(SpillsFolder, { "Boards" }, Deadline - os.clock())
+		if not Boards then
+			if SpillsFolder then
+				warn("[SpillController] workspace.Assets.Spills.Boards is missing; spill boards disabled")
+			end
+			return
+		end
+
+		for _, Board in Boards:GetChildren() do
+			self:_RenderBoard(Board)
+		end
+		Boards.ChildAdded:Connect(function(Board)
+			self:_RenderBoard(Board)
+		end)
 	end)
 end
 

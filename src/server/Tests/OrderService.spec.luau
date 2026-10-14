@@ -1,3 +1,5 @@
+-- TestEZ injects describe/it/expect/beforeEach/afterEach/afterAll as globals.
+--# selene: allow(undefined_variable)
 --[[
     OrderService.spec.luau
     Comprehensive TestEZ tests for OrderService.
@@ -12,8 +14,9 @@
       This means _updateOrders will prune every order whose customer is not
       an actual server player. Tests that rely on a "live customer" are
       annotated and tested at the state level only.
-    • RankUtil methods reach the Roblox group API. We monkey-patch them for
-      all rank-gated tests and restore the originals in afterEach.
+    • Barista actions are gated on ShiftService's clocked-in state. KnitStart
+      never runs here, so we inject a fake `_shiftService` per test
+      (mockClockedIn) and clear it in beforeEach (nil = nobody clocked in).
     • Knit signals are server→client RemoteSignals. We replace them with
       plain mock tables (trackable locally) in beforeEach.
     • _broadcastUpdate calls _updateOrders which prunes orders (see above).
@@ -30,11 +33,11 @@ return function()
 	local ReplicatedStorage = game:GetService("ReplicatedStorage")
 	local ServerStorage = game:GetService("ServerStorage")
 
-	local RankUtil = require(ReplicatedStorage.Shared.Utility.RankUtil)
-
 	-- Require the service table. KnitInit/KnitStart are never invoked here,
-	-- so workspace["Ordering System"] is never accessed.
+	-- so workspace["Ordering System"] is never accessed (it is only resolved
+	-- in KnitStart).
 	local service = require(ServerScriptService.Server.Modules.OrderService)
+	local Menu = require(ReplicatedStorage.Shared.Ordering.Menu)
 
 	-- ──────────────────────────────────────────────────────────────────────
 	-- Test helpers
@@ -68,6 +71,16 @@ return function()
 		return {
 			DefaultInfo = { ItemName = name or "Boba" },
 			CustomInfo = {},
+		}
+	end
+
+	-- A client CreateOrder request item: { Category, Item, CustomInfo }. The
+	-- defaults name a real Menu item with no choices.
+	local function makeRequest(category: string?, item: string?, customInfo: { [string]: any }?)
+		return {
+			Category = category or "Pastries",
+			Item = item or "Fudge Brownie",
+			CustomInfo = customInfo or {},
 		}
 	end
 
@@ -128,20 +141,46 @@ return function()
 	end
 
 	-- ──────────────────────────────────────────────────────────────────────
-	-- Rank mock helpers
+	-- Clock-in mock helpers
 	-- ──────────────────────────────────────────────────────────────────────
 
-	local _origCanEnterKitchen = RankUtil.CanEnterKitchen
-	local _origCanUseOrdering = RankUtil.CanUseOrderingSystem
-
-	local function mockRank(enterKitchen: boolean, useOrdering: boolean?)
-		RankUtil.CanEnterKitchen = function() return enterKitchen end
-		RankUtil.CanUseOrderingSystem = function() return if useOrdering == nil then enterKitchen else useOrdering end
+	-- The spec runs inside a live Play session against the real service table.
+	-- Snapshot every field beforeEach replaces and put them all back in afterAll,
+	-- so ordering keeps working in that session after the run.
+	local LIVE_FIELDS = {
+		"_orders",
+		"_currentOrderNum",
+		"_orderDebounces",
+		"_areaDebounces",
+		"_statusScreens",
+		"_staffScreens",
+		"_pickUpAreas",
+		"_queue",
+		"_broadcastUpdate",
+		"_shiftService",
+		"_statisticsService",
+	}
+	local LIVE_CLIENT_FIELDS =
+		{ "NotepadUpdated", "PickUpNodeVisibilityChanged", "Announcement", "QueueUpdated", "Server" }
+	local savedFields, savedClientFields = {}, {}
+	for _, key in LIVE_FIELDS do
+		savedFields[key] = rawget(service, key)
+	end
+	for _, key in LIVE_CLIENT_FIELDS do
+		savedClientFields[key] = rawget(service.Client, key)
 	end
 
-	local function restoreRank()
-		RankUtil.CanEnterKitchen = _origCanEnterKitchen
-		RankUtil.CanUseOrderingSystem = _origCanUseOrdering
+	-- Replaces the ShiftService reference OrderService resolves in KnitStart.
+	local function mockClockedIn(clockedIn: boolean)
+		service._shiftService = {
+			IsClockedIn = function()
+				return clockedIn
+			end,
+		}
+	end
+
+	local function clearClockedIn()
+		service._shiftService = nil
 	end
 
 	-- ──────────────────────────────────────────────────────────────────────
@@ -156,12 +195,14 @@ return function()
 		service._statusScreens = {}
 		service._staffScreens = {}
 		service._pickUpAreas = {}
+		service._queue = {}
 
 		-- Replace Knit RemoteSignals with local mock objects so we can track
 		-- fires without needing the full networking stack.
 		service.Client.NotepadUpdated = makeMockSignal()
 		service.Client.PickUpNodeVisibilityChanged = makeMockSignal()
 		service.Client.Announcement = makeMockSignal()
+		service.Client.QueueUpdated = makeMockSignal()
 
 		-- Wire Client.Server so that Client methods (CreateOrder) work correctly.
 		service.Client.Server = service
@@ -172,12 +213,24 @@ return function()
 		-- _updateOrders directly.
 		service._broadcastUpdate = function() end
 
-		-- Default: no rank access
-		restoreRank()
+		-- Fake players have no profile, so skip statistics.
+		service._statisticsService = nil
+
+		-- Default: nobody is clocked in
+		clearClockedIn()
 	end)
 
 	afterEach(function()
-		restoreRank()
+		clearClockedIn()
+	end)
+
+	afterAll(function()
+		for _, key in LIVE_FIELDS do
+			rawset(service, key, savedFields[key])
+		end
+		for _, key in LIVE_CLIENT_FIELDS do
+			rawset(service.Client, key, savedClientFields[key])
+		end
 	end)
 
 	-- ══════════════════════════════════════════════════════════════════════
@@ -378,27 +431,32 @@ return function()
 	describe("_canClaimOrder", function()
 		local player = makePlayer(100)
 
-		it("should return false when player lacks kitchen rank", function()
-			mockRank(false)
+		it("should return false when player is clocked out", function()
+			mockClockedIn(false)
 			expect(service:_canClaimOrder(player)).to.equal(false)
 		end)
 
 		it("should return false when player already has an active Being Prepared order", function()
-			mockRank(true)
+			mockClockedIn(true)
 			service._orders = {
 				makeOrder({ status = "Being Prepared", preparedBy = player.UserId }),
 			}
 			expect(service:_canClaimOrder(player)).to.equal(false)
 		end)
 
-		it("should return true for a ranked player with no active order", function()
-			mockRank(true)
+		it("should return false before ShiftService is resolved", function()
+			clearClockedIn()
+			expect(service:_canClaimOrder(player)).to.equal(false)
+		end)
+
+		it("should return true for a clocked-in player with no active order", function()
+			mockClockedIn(true)
 			service._orders = {}
 			expect(service:_canClaimOrder(player)).to.equal(true)
 		end)
 
 		it("should return true even if player has Pending or Ready orders that are not theirs", function()
-			mockRank(true)
+			mockClockedIn(true)
 			service._orders = {
 				makeOrder({ status = "Pending Preparation", preparedBy = nil }),
 				makeOrder({ status = "Ready for Pick Up", preparedBy = player.UserId }),
@@ -415,42 +473,42 @@ return function()
 		local player = makePlayer(200)
 
 		it("should do nothing when there are no pending orders", function()
-			mockRank(true)
+			mockClockedIn(true)
 			service._orders = {}
 			service:_claimNextOrder(player)
 			expect(#service._orders).to.equal(0)
 		end)
 
-		it("should do nothing when player cannot claim (no rank)", function()
-			mockRank(false)
+		it("should do nothing when player cannot claim (clocked out)", function()
+			mockClockedIn(false)
 			service._orders = { makeOrder() }
 			service:_claimNextOrder(player)
 			expect(service._orders[1].status).to.equal("Pending Preparation")
 		end)
 
 		it("should change order status to Being Prepared", function()
-			mockRank(true)
+			mockClockedIn(true)
 			service._orders = { makeOrder({ orderNum = "0001" }) }
 			service:_claimNextOrder(player)
 			expect(service._orders[1].status).to.equal("Being Prepared")
 		end)
 
 		it("should set preparedBy to the claiming player's UserId", function()
-			mockRank(true)
+			mockClockedIn(true)
 			service._orders = { makeOrder() }
 			service:_claimNextOrder(player)
 			expect(service._orders[1].preparedBy).to.equal(player.UserId)
 		end)
 
 		it("should set statusColor to the preparing colour", function()
-			mockRank(true)
+			mockClockedIn(true)
 			service._orders = { makeOrder() }
 			service:_claimNextOrder(player)
 			expect(service._orders[1].statusColor).to.equal(COLOR_PREPARING)
 		end)
 
 		it("should fire NotepadUpdated with SetNewOrder", function()
-			mockRank(true)
+			mockClockedIn(true)
 			local items = { makeItem("Tea") }
 			service._orders = { makeOrder({ order = items }) }
 			service:_claimNextOrder(player)
@@ -463,7 +521,7 @@ return function()
 		end)
 
 		it("should claim the oldest pending order when multiple exist", function()
-			mockRank(true)
+			mockClockedIn(true)
 			local older = makeOrder({ orderNum = "0001" })
 			local newer = makeOrder({ orderNum = "0009" })
 			service._orders = { newer, older }
@@ -473,7 +531,7 @@ return function()
 		end)
 
 		it("should not let a player claim a second order while one is active", function()
-			mockRank(true)
+			mockClockedIn(true)
 			local active = makeOrder({ status = "Being Prepared", preparedBy = player.UserId })
 			local pending = makeOrder({ orderNum = "0002" })
 			service._orders = { active, pending }
@@ -565,84 +623,231 @@ return function()
 	end)
 
 	-- ══════════════════════════════════════════════════════════════════════
-	-- Client.CreateOrder
+	-- Queue gating (_joinQueue / _handleClaimOrQueue)
+	-- ══════════════════════════════════════════════════════════════════════
+
+	describe("queue gating", function()
+		it("should not let a clocked-out player join the queue", function()
+			mockClockedIn(false)
+			local player = makePlayer(400)
+			service:_joinQueue(player)
+			expect(#service._queue).to.equal(0)
+		end)
+
+		it("should let a clocked-in player join the queue", function()
+			mockClockedIn(true)
+			local player = makePlayer(401)
+			service:_joinQueue(player)
+			expect(#service._queue).to.equal(1)
+			expect(service._queue[1]).to.equal(player.UserId)
+		end)
+
+		it("should ignore a clocked-out player at the staff screen", function()
+			mockClockedIn(false)
+			local player = makePlayer(402)
+			service._orders = { makeOrder() }
+			service:_handleClaimOrQueue(player)
+			expect(service._orders[1].status).to.equal("Pending Preparation")
+			expect(#service._queue).to.equal(0)
+		end)
+
+		it("should claim directly for a clocked-in player when orders are pending", function()
+			mockClockedIn(true)
+			local player = makePlayer(403)
+			service._orders = { makeOrder() }
+			service:_handleClaimOrQueue(player)
+			expect(service._orders[1].status).to.equal("Being Prepared")
+			expect(service._orders[1].preparedBy).to.equal(player.UserId)
+		end)
+
+		it("should queue a clocked-in player when no orders are pending", function()
+			mockClockedIn(true)
+			local player = makePlayer(404)
+			service:_handleClaimOrQueue(player)
+			expect(#service._queue).to.equal(1)
+		end)
+
+		it("should remove a player from the queue on _leaveQueue", function()
+			mockClockedIn(true)
+			local player = makePlayer(405)
+			service:_joinQueue(player)
+			service:_leaveQueue(player)
+			expect(#service._queue).to.equal(0)
+		end)
+	end)
+
+	-- ══════════════════════════════════════════════════════════════════════
+	-- Client.CreateOrder (open to every player, self-only)
 	-- ══════════════════════════════════════════════════════════════════════
 
 	describe("Client.CreateOrder", function()
 		local player = makePlayer(300)
 
-		it("should do nothing when customerId is nil", function()
-			mockRank(false, true)
-			service.Client:CreateOrder(player, nil, { makeItem() })
+		it("should reject a non-number customerId", function()
+			local result = service.Client:CreateOrder(player, nil, { makeRequest() })
+			expect(result.Success).to.equal(false)
 			expect(#service._orders).to.equal(0)
 		end)
 
-		it("should do nothing when orderItems is nil", function()
-			mockRank(false, true)
-			service.Client:CreateOrder(player, 10001, nil)
+		it("should reject a non-table orderItems", function()
+			local result = service.Client:CreateOrder(player, player.UserId, "Boba")
+			expect(result.Success).to.equal(false)
 			expect(#service._orders).to.equal(0)
 		end)
 
-		it("should reject players without the ordering rank", function()
-			RankUtil.CanUseOrderingSystem = function() return false end
-			service.Client:CreateOrder(player, 10001, { makeItem() })
+		it("should reject orders placed for another player", function()
+			local result = service.Client:CreateOrder(player, 10001, { makeRequest() })
+			expect(result.Success).to.equal(false)
+			expect(result.Message).to.be.a("string")
 			expect(#service._orders).to.equal(0)
+		end)
+
+		it("should not require a rank or clock-in to order", function()
+			clearClockedIn()
+			local result = service.Client:CreateOrder(player, player.UserId, { makeRequest() })
+			expect(result.Success).to.equal(true)
+			expect(#service._orders).to.equal(1)
 		end)
 
 		it("should reject an empty order array", function()
-			RankUtil.CanUseOrderingSystem = function() return true end
-			service.Client:CreateOrder(player, 10001, {})
+			local result = service.Client:CreateOrder(player, player.UserId, {})
+			expect(result.Success).to.equal(false)
 			expect(#service._orders).to.equal(0)
 		end)
 
 		it("should reject orders exceeding the 4-item maximum", function()
-			RankUtil.CanUseOrderingSystem = function() return true end
-			service.Client:CreateOrder(player, 10001, {
-				makeItem(), makeItem(), makeItem(), makeItem(), makeItem(), -- 5 items
+			local result = service.Client:CreateOrder(player, player.UserId, {
+				makeRequest(),
+				makeRequest(),
+				makeRequest(),
+				makeRequest(),
+				makeRequest(), -- 5 items
 			})
+			expect(result.Success).to.equal(false)
 			expect(#service._orders).to.equal(0)
 		end)
 
+		it("should reject malformed items", function()
+			local result = service.Client:CreateOrder(player, player.UserId, { "Boba" })
+			expect(result.Success).to.equal(false)
+			result = service.Client:CreateOrder(player, player.UserId, { { DefaultInfo = {}, CustomInfo = {} } })
+			expect(result.Success).to.equal(false)
+			expect(#service._orders).to.equal(0)
+		end)
+
+		-- Each case must be rejected without storing an order or starting the debounce.
+		local REJECTED_REQUESTS = {
+			["an unknown category"] = makeRequest("Secret Menu", "Fudge Brownie"),
+			["an unknown item"] = makeRequest("Pastries", "<b>Free Robux</b>"),
+			["a non-table CustomInfo"] = makeRequest("Pastries", "Fudge Brownie", "Large" :: any),
+			["a missing Select value"] = makeRequest("Coffees", "Regular", {}),
+			["a Select value not on the Menu"] = makeRequest("Coffees", "Regular", { Size = "Huge" }),
+			["a non-boolean Option"] = makeRequest("Coffees", "Regular", { Size = "Small", Iced = "yes" }),
+			["a CustomInfo key the item does not offer"] = makeRequest("Pastries", "Fudge Brownie", { Note = "hi" }),
+			["a missing RequiredSelection"] = makeRequest("Boba Teas", "Custom Boba", {
+				Size = "Medium",
+				["Tapioca Flavor"] = "Normal",
+			}),
+			["a RequiredSelection value not on the Menu"] = makeRequest("Boba Teas", "Custom Boba", {
+				Size = "Medium",
+				["Syrup Flavor"] = "<font>Hacked</font>",
+				["Tapioca Flavor"] = "Normal",
+			}),
+		}
+		for caseName, request in REJECTED_REQUESTS do
+			it("should reject " .. caseName, function()
+				local result = service.Client:CreateOrder(player, player.UserId, { request })
+				expect(result.Success).to.equal(false)
+				expect(#service._orders).to.equal(0)
+				expect(service._orderDebounces[player.UserId]).to.equal(nil)
+			end)
+		end
+
+		it("should rebuild DefaultInfo from the server Menu, ignoring the client's", function()
+			local request = makeRequest()
+			request.DefaultInfo = { ItemName = "Hacked", Select = { Size = true } }
+			local result = service.Client:CreateOrder(player, player.UserId, { request })
+			expect(result.Success).to.equal(true)
+
+			local stored = service._orders[1].order[1]
+			expect(stored.DefaultInfo).to.equal(Menu.FoodTable["Pastries"].Items["Fudge Brownie"])
+			expect(stored.Category).to.equal("Pastries")
+			expect(stored.Item).to.equal("Fudge Brownie")
+		end)
+
+		it("should keep valid choices and fill missing Options with Menu defaults", function()
+			local result = service.Client:CreateOrder(player, player.UserId, {
+				makeRequest("Coffees", "Regular", { Size = "Large", Sugar = true }),
+				makeRequest("Boba Teas", "Custom Boba", {
+					Size = "Medium",
+					["Syrup Flavor"] = "Classic Milk Tea",
+					["Tapioca Flavor"] = "Normal",
+				}),
+			})
+			expect(result.Success).to.equal(true)
+
+			local coffee = service._orders[1].order[1].CustomInfo
+			expect(coffee.Size).to.equal("Large")
+			expect(coffee.Sugar).to.equal(true)
+			expect(coffee.Iced).to.equal(false)
+
+			local boba = service._orders[1].order[2].CustomInfo
+			expect(boba["Syrup Flavor"]).to.equal("Classic Milk Tea")
+			expect(boba["Tapioca Flavor"]).to.equal("Normal")
+		end)
+
+		it("should not start the debounce for a rejected order", function()
+			service.Client:CreateOrder(player, player.UserId, {})
+			expect(service._orderDebounces[player.UserId]).to.equal(nil)
+		end)
+
 		it("should accept a valid 1-item order", function()
-			RankUtil.CanUseOrderingSystem = function() return true end
-			service.Client:CreateOrder(player, 10001, { makeItem() })
+			local result = service.Client:CreateOrder(player, player.UserId, { makeRequest() })
+			expect(result.Success).to.equal(true)
 			expect(#service._orders).to.equal(1)
 		end)
 
 		it("should accept a valid 4-item order", function()
-			RankUtil.CanUseOrderingSystem = function() return true end
-			service.Client:CreateOrder(player, 10001, {
-				makeItem(), makeItem(), makeItem(), makeItem(),
+			local result = service.Client:CreateOrder(player, player.UserId, {
+				makeRequest(),
+				makeRequest(),
+				makeRequest(),
+				makeRequest(),
 			})
+			expect(result.Success).to.equal(true)
 			expect(#service._orders).to.equal(1)
 			expect(service._orders[1].numItems).to.equal(4)
 		end)
 
 		it("should apply a per-player debounce on the second call", function()
-			RankUtil.CanUseOrderingSystem = function() return true end
-			service.Client:CreateOrder(player, 10001, { makeItem() })
-			service.Client:CreateOrder(player, 10002, { makeItem() }) -- debounced
+			service.Client:CreateOrder(player, player.UserId, { makeRequest() })
+			local result = service.Client:CreateOrder(player, player.UserId, { makeRequest() }) -- debounced
+			expect(result.Success).to.equal(false)
 			expect(#service._orders).to.equal(1)
 		end)
 
 		it("should set a debounce entry for the ordering player", function()
-			RankUtil.CanUseOrderingSystem = function() return true end
-			service.Client:CreateOrder(player, 10001, { makeItem() })
+			service.Client:CreateOrder(player, player.UserId, { makeRequest() })
 			expect(service._orderDebounces[player.UserId]).to.equal(true)
 		end)
 
+		it("should reject a second order while the first is still open", function()
+			service._orders = { makeOrder({ customer = player.UserId, status = "Ready for Pick Up" }) }
+			local result = service.Client:CreateOrder(player, player.UserId, { makeRequest() })
+			expect(result.Success).to.equal(false)
+			expect(#service._orders).to.equal(1)
+		end)
+
 		it("should allow a different player to order while first is debounced", function()
-			RankUtil.CanUseOrderingSystem = function() return true end
 			local other = makePlayer(999)
-			service.Client:CreateOrder(player, 10001, { makeItem() })
-			service.Client:CreateOrder(other, 10002, { makeItem() })
+			service.Client:CreateOrder(player, player.UserId, { makeRequest() })
+			service.Client:CreateOrder(other, other.UserId, { makeRequest() })
 			expect(#service._orders).to.equal(2)
 		end)
 
-		it("should store the customer UserId from the argument", function()
-			RankUtil.CanUseOrderingSystem = function() return true end
-			service.Client:CreateOrder(player, 77777, { makeItem() })
-			expect(service._orders[1].customer).to.equal(77777)
+		it("should store the calling player as the customer", function()
+			service.Client:CreateOrder(player, player.UserId, { makeRequest() })
+			expect(service._orders[1].customer).to.equal(player.UserId)
 		end)
 	end)
 
@@ -974,7 +1179,7 @@ return function()
 		end)
 
 		it("claimed orders use the preparing (yellow) colour", function()
-			mockRank(true)
+			mockClockedIn(true)
 			local player = makePlayer(800)
 			service._orders = { makeOrder() }
 			service:_claimNextOrder(player)

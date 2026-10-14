@@ -1,0 +1,51 @@
+# REVIVAL-001-M0.4 Scenario 1 — TestEZ run (TESTS_ENABLED=true locally, reverted after)
+# Studio 0bec4a01-246f-4fcf-b1b5-d37cfaf45e80, place 89999123284040, Play (Server+Client)
+# Raw console output via get_console_output ~15 s after Play start. Repeated asset-permission lines collapsed where marked.
+
+The experience doesn't have access permission to use asset id 13655987384. Click to share access
+The experience doesn't have access permission to use asset id 13651538692. Click to share access
+The experience doesn't have access permission to use asset id 13651540778. Click to share access
+The experience doesn't have access permission to use asset id 13655528152. Click to share access
+The experience doesn't have access permission to use asset id 13655988810. Click to share access
+[... same 5 asset ids repeated several times ...]
+[Server] Knit started successfully.
+Failed to load sound rbxassetid://13655528152: User is not authorized to access Asset.
+Failed to load sound rbxassetid://13655988810: User is not authorized to access Asset.
+Failed to load sound rbxassetid://13655987384: User is not authorized to access Asset.
+Failed to load sound rbxassetid://13651540778: User is not authorized to access Asset.
+Failed to load sound rbxassetid://13651538692: User is not authorized to access Asset.
+[BadgeService] - Not running BadgeService in Studio.
+[profilestore]: Roblox API services available - data will be saved
+DataService [STUDIO] Profile loaded for player 176353970
+UI is not a valid member of Folder "SoundService.SFX"
+Stack Begin
+Script 'Players.bongusbingis.PlayerScripts.Client.Modules.AppDialogs', Line 31
+Stack End
+Requested module experienced an error while loading
+Stack Begin
+Script 'ReplicatedStorage.Packages._Index.sleitnick_knit@1.7.0.knit.KnitClient', Line 227 - function AddControllersDeep
+Script 'Players.bongusbingis.PlayerScripts.Client', Line 7
+Stack End
+[Tests] Running OrderService tests...
+------------------------------------------------------------
+[CurrencyService] Invalid currency type: Gems
+[CurrencyService] Invalid currency type: 5
+[CurrencyService] Invalid currency type: nil
+[CurrencyService] Invalid spend amount: 0
+[CurrencyService] Invalid spend amount: -50
+[CurrencyService] Invalid spend amount: nan
+[CurrencyService] Invalid spend amount: inf
+[CurrencyService] Invalid spend amount: 1.5
+[CurrencyService] Invalid spend amount: 10
+[CurrencyService] Invalid spend amount: 0
+[CurrencyService] Invalid spend amount: -1
+[OrderService] Rejected order from Player_300: item is not a table
+[OrderService] Rejected order from Player_300: item has no DefaultInfo.ItemName
+Test results:
+[+] Tests
+   [+] CurrencyService  (20 cases: TrySpendAsync data unavailable / insufficient balance / invalid amount / invalid currency type / sufficient balance — all [+])
+   [+] OrderService     (92 cases: _addOrder, _broadcastUpdate, _canClaimOrder, _claimNextOrder, _getNextOrder, _getPendingCount, _getPlayerOrder, _handlePickUp customer + staff paths, _updateOrders, Client.CreateOrder, order number formatting, queue gating, status colours, tool collection logic — all [+])
+   [+] ShiftService     (10 cases: Client.SetClockedIn, IsClockedIn/SetClockedIn, PlayerAdded — all [+])
+122 passed, 0 failed, 0 skipped
+[Tests] All 122 test(s) passed.
+[SpillService] Spills disabled; missing authored content: ReplicatedStorage.SharedStorage.Spills.Spills.Boba, ReplicatedStorage.SharedStorage.Spills.Tools.Mop, ReplicatedStorage.SharedStorage.Spills.Tools.MopBucket, ReplicatedStorage.SharedStorage.Spills.Sparkles

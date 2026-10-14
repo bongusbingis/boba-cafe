@@ -1,0 +1,37 @@
+# REVIVAL-001-M0.4 re-run after M0.5 — Scenario 1 TestEZ (TESTS_ENABLED=true locally, reverted after; git diff clean)
+# Studio 0bec4a01-246f-4fcf-b1b5-d37cfaf45e80. Console ~15 s after Play. Repeated asset-permission lines collapsed.
+
+[asset permission / Failed to load sound lines for ids 13651538692, 13651540778, 13655528152, 13655987384, 13655988810 — repeated]
+[Server] Knit started successfully.
+[BadgeService] - Not running BadgeService in Studio.
+[profilestore]: Roblox API services available - data will be saved
+[SpillController] SharedStorage.Spills.Animations.FallingAnimation is missing; tripping animation disabled
+[Client] Knit started successfully.
+[ReplicaController]: Initial data received
+DataService [STUDIO] Profile loaded for player 176353970
+Local player data received: {["Currency"] = {["BobaBucks"] = 0, ["Points"] = 0}, ... full profile dump ...}
+[Settings] SoundService.Music is missing or not a SoundGroup; its volume toggle is skipped.
+[Settings] SoundService.SFX is missing or not a SoundGroup; its volume toggle is skipped.
+[Tests] Running OrderService tests...
+------------------------------------------------------------
+[CurrencyService] Invalid currency type: Gems / 5 / nil
+[CurrencyService] Invalid spend amount: 0 / -50 / nan / inf / 1.5 / 10 / 0 / -1
+[OrderService] Rejected order from Player_300: item has no Category/Item (x2)
+[OrderService] Rejected order from Player_300: unexpected CustomInfo key
+[OrderService] Rejected order from Player_300: CustomInfo is not a table
+[OrderService] Rejected order from Player_300: unknown menu item (x2)
+[OrderService] Rejected order from Player_300: invalid Size (x2)
+[OrderService] Rejected order from Player_300: invalid Syrup Flavor (x2)
+[OrderService] Rejected order from Player_300: invalid Iced
+Test results:
+[+] Tests
+   [+] CurrencyService  20 cases, all [+]
+   [+] OrderService     103 cases, all [+]  (Client.CreateOrder now 26 cases incl. "should rebuild DefaultInfo from the server Menu, ignoring the client's",
+                        "should reject a CustomInfo key the item does not offer", "should reject a missing RequiredSelection", "should reject a missing Select value",
+                        "should reject a non-boolean Option", "should reject a non-table CustomInfo", "should reject a RequiredSelection value not on the Menu",
+                        "should reject a Select value not on the Menu", "should reject an unknown category", "should reject an unknown item",
+                        "should keep valid choices and fill missing Options with Menu defaults")
+   [+] ShiftService     10 cases, all [+]
+133 passed, 0 failed, 0 skipped
+[Tests] All 133 test(s) passed.
+[SpillService] Spills disabled; missing authored content: ReplicatedStorage.SharedStorage.Spills.Spills.Boba, ReplicatedStorage.SharedStorage.Spills.Tools.Mop, ReplicatedStorage.SharedStorage.Spills.Tools.MopBucket, ReplicatedStorage.SharedStorage.Spills.Sparkles

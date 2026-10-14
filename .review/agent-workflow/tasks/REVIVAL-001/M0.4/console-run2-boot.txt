@@ -1,0 +1,13 @@
+# run2 scenario 1 boot console (Play server+client, TESTS_ENABLED=false). Repeated lines compressed with (xN).
+The experience doesn't have access permission to use asset id 13655528152 / 13651540778 / 13655988810 / 13655987384 / 13651538692. Click to share access   (~25 lines total, known)
+Failed to load sound rbxassetid://13651538692 / 13655528152 / 13655987384 / 13655988810 / 13651540778: User is not authorized to access Asset.   (10 lines, known)
+[SpillController] SharedStorage.Spills.Animations.FallingAnimation is missing; tripping animation disabled
+[Client] Knit started successfully.
+[ReplicaController]: Initial data received
+[Settings] SoundService.Music is missing or not a SoundGroup; its volume toggle is skipped.
+[Settings] SoundService.SFX is missing or not a SoundGroup; its volume toggle is skipped.
+[Server] Knit started successfully.
+[BadgeService] - Not running BadgeService in Studio.
+[profilestore]: Roblox API services available - data will be saved
+DataService [STUDIO] Profile loaded for player 176353970
+[SpillService] Spills disabled; missing authored content: ReplicatedStorage.SharedStorage.Spills.Spills.Boba, ReplicatedStorage.SharedStorage.Spills.Tools.Mop, ReplicatedStorage.SharedStorage.Spills.Tools.MopBucket, ReplicatedStorage.SharedStorage.Spills.Sparkles

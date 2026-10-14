@@ -1,0 +1,15 @@
+src/server/init.server.luau
+src/server/Modules/OrderService.luau
+src/server/Modules/ShiftService.luau
+src/server/Modules/KitchenService/init.luau
+src/server/Modules/KitchenService/InteractionRunner.luau
+src/server/Scripts/Teams.server.luau
+src/shared/Configuration/TeamsConfig.luau
+src/shared/Kitchen/Recipes.luau
+src/shared/Kitchen/RecipeConstructors.luau
+src/shared/UI/Components/Core/Hud/TopBar.luau
+src/shared/UI/Components/Core/Hud/BottomLeft.luau
+src/client/Modules/OrderController.luau
+src/client/Modules/KitchenController.luau
+src/server/Tests/OrderService.spec.luau
+src/server/Tests/ShiftService.spec.luau

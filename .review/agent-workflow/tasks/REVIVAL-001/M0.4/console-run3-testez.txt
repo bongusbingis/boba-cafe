@@ -1,0 +1,24 @@
+# run3 scenario 1: TestEZ via workspace attribute RunTests=true (Edit), then Play. Condensed (per-case [+] lines elided; asset-permission/sound lines elided as known).
+[Server] Knit started successfully.
+[Client] Knit started successfully.
+[ReplicaController]: Initial data received
+DataService [STUDIO] Profile loaded for player 176353970
+Local player data received: ... ["Statistics"] = {["BobasOrdered"] = 0, ["ItemsOrdered"] = 1, ["OrdersCreated"] = 2, ["OrdersPrepared"] = 1, ...}
+[Settings] SoundService.Music / SoundService.SFX is missing or not a SoundGroup; its volume toggle is skipped.
+[Tests] Running test suite...
+[CurrencyService] Invalid ... / [OrderService] Rejected order from Player_300: ...  (expected negative-case warnings)
+Test results:
+[+] Tests
+   [+] BobaRecipe
+      [+] Recipes.Syrups
+         [+] should accept every tapioca flavor
+         [+] should produce '[Syrup] Boba' for every syrup, with and without the blender
+      [+] Tapioca step
+         [+] should keep a sugar suffix
+         [+] should refuse a cup that has milk but no syrup
+         [+] should refuse a mug of steamed milk
+   [+] CurrencyService (20 cases)  [+] OrderService (103 cases)  [+] ShiftService (10 cases)
+138 passed, 0 failed, 0 skipped
+[Tests] All 138 test(s) passed.
+[SpillService] Spills disabled; missing authored content: ...Spills.Boba, ...Tools.Mop, ...Tools.MopBucket, ...Sparkles
+# After Stop: Edit-mode workspace:SetAttribute("RunTests", nil) -> GetAttribute == nil confirmed.
