@@ -31,6 +31,7 @@ local PerkService = Knit.CreateService({
 	Name = "PerkService",
 
 	_tipRemainder = {} :: { [Player]: number }, -- fractional boost BB carried per player
+	_storageMultiplier = {} :: { [Player]: number }, -- Double Storage multiplier per player
 })
 
 ---> private
@@ -85,16 +86,34 @@ function PerkService:TakeTipExtra(player: Player, basePay: number, bonus: number
 	return extra
 end
 
+-- Resolves the Double Storage multiplier once (yields on a cold pass cache; never call
+-- it from a count-then-insert span). Departed players are not re-added.
+function PerkService:RefreshStorageMultiplier(player: Player)
+	local multiplier = if self:HasPerk(player, "InventoryX2") then PerkConfig.StorageMultiplier else 1
+	if (player :: any).Parent ~= nil then
+		self._storageMultiplier[player] = multiplier
+	end
+end
+
+-- Synchronous, no yield. 1 until resolved, so it only ever blocks an addition.
+function PerkService:GetStorageMultiplier(player: Player): number
+	return self._storageMultiplier[player] or 1
+end
+
 ---> lifecycle
 function PerkService:PlayerAdded(player: Player)
-	-- Warm the pass cache so serve/XP paths read it without yielding.
+	-- Warm the pass cache so serve/XP paths read it without yielding, then resolve the
+	-- storage multiplier once the prefetch settles (no await in the hook).
 	pcall(function()
-		(GamepassUtil :: any):PrefetchAllPassesAsync(player)
+		(GamepassUtil :: any):PrefetchAllPassesAsync(player):andThen(function()
+			self:RefreshStorageMultiplier(player)
+		end)
 	end)
 end
 
 function PerkService:PlayerRemoving(player: Player)
 	self._tipRemainder[player] = nil
+	self._storageMultiplier[player] = nil
 end
 
 return PerkService

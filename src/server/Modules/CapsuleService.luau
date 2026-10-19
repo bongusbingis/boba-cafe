@@ -50,6 +50,16 @@ local function getDataService()
 	return Knit.GetService("DataService")
 end
 
+-- Storage limit for one player, doubled by the Double Storage pass (DEC-028 E20).
+-- Synchronous (cached multiplier), so count-then-insert spans never yield.
+local function storageLimit(player: Player, itemType: string): number
+	local multiplier = 1
+	pcall(function()
+		multiplier = Knit.GetService("PerkService"):GetStorageMultiplier(player)
+	end)
+	return require(Shared.Inventory.Utility).GetInventoryLimit("Storage", itemType :: any, multiplier)
+end
+
 local function getDialogService()
 	return Knit.GetService("DialogService")
 end
@@ -239,8 +249,7 @@ function CapsuleService:PurchaseNametagCapsules(player: Player, packSize: number
 				existingId, existing = id, item
 			end
 		end
-		local limits = require(Shared.Configuration.InventoryLimits)
-		if not existing and slots >= limits.Storage.Capsules then
+		if not existing and slots >= storageLimit(player, "Capsules") then
 			return false, "InventoryFull"
 		end
 
@@ -322,8 +331,7 @@ function CapsuleService:PurchaseDeterministicNametag(player: Player, nametagName
 				existingId, existing = id, item
 			end
 		end
-		local limits = require(Shared.Configuration.InventoryLimits)
-		if not existing and slots >= limits.Storage.Nametags then
+		if not existing and slots >= storageLimit(player, "Nametags") then
 			return false, "InventoryFull"
 		end
 		local spent = Knit.GetService("CurrencyService"):TrySpendAsync(player, "BobaBucks", price)
@@ -585,8 +593,7 @@ function CapsuleService:HasCapsuleSpace(player: Player): boolean
 		return false
 	end
 	local ok, hasSpace = pcall(function()
-		local limits = require(Shared.Configuration.InventoryLimits)
-		return countCapsules(inv) < limits.Storage.Capsules
+		return countCapsules(inv) < storageLimit(player, "Capsules")
 	end)
 	return ok and hasSpace == true
 end
@@ -599,8 +606,7 @@ function CapsuleService:GrantEarnedCapsule(player: Player, capsuleName: string):
 		return false, "InternalError"
 	end
 	local ok, result = pcall(function()
-		local limits = require(Shared.Configuration.InventoryLimits)
-		if countCapsules(inv) >= limits.Storage.Capsules then
+		if countCapsules(inv) >= storageLimit(player, "Capsules") then
 			return "InventoryFull"
 		end
 		local itemId = inv:Insert({
@@ -862,8 +868,7 @@ function CapsuleService:KnitStart()
 				for _ in capsulesInventory.Inventory do
 					capsuleCount += 1
 				end
-				local inventoryLimits = require(Shared.Configuration.InventoryLimits)
-				if capsuleCount >= inventoryLimits.Storage.Capsules then
+				if capsuleCount >= storageLimit(player, "Capsules") then
 					warn("[CapsuleService]: Capsule inventory is full; starter reward not claimed", player.Name)
 					return
 				end

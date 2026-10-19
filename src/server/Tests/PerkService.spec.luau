@@ -181,6 +181,42 @@ return function()
 		end)
 	end)
 
+	describe("Storage multiplier (Double Storage)", function()
+		local DOUBLE_STORAGE = 14067346
+
+		it("should be 1 with no refresh", function()
+			expect(service:GetStorageMultiplier(makePlayer(701) :: any)).to.equal(1)
+		end)
+
+		it("should be 2 for an owner, and 1 again after the pass is released", function()
+			local player = { UserId = 702, Name = "Player_702", Parent = {} } :: any
+			ownedPasses[DOUBLE_STORAGE] = true
+			service:RefreshStorageMultiplier(player)
+			expect(service:GetStorageMultiplier(player)).to.equal(PerkConfig.StorageMultiplier)
+			expect(service:GetStorageMultiplier(player)).to.equal(2)
+			ownedPasses[DOUBLE_STORAGE] = nil
+			service:RefreshStorageMultiplier(player)
+			expect(service:GetStorageMultiplier(player)).to.equal(1)
+			service:PlayerRemoving(player)
+		end)
+
+		it("should clear the entry on PlayerRemoving", function()
+			local player = { UserId = 703, Name = "Player_703", Parent = {} } :: any
+			ownedPasses[DOUBLE_STORAGE] = true
+			service:RefreshStorageMultiplier(player)
+			service:PlayerRemoving(player)
+			expect(service._storageMultiplier[player]).to.equal(nil)
+			expect(service:GetStorageMultiplier(player)).to.equal(1)
+		end)
+
+		it("should not write an entry for a departed player", function()
+			local player = { UserId = 704, Name = "Player_704", Parent = nil } :: any
+			ownedPasses[DOUBLE_STORAGE] = true
+			service:RefreshStorageMultiplier(player)
+			expect(service._storageMultiplier[player]).to.equal(nil)
+		end)
+	end)
+
 	describe("Tip remainder carry", function()
 		it("should carry the fraction and pay whole BB only", function()
 			local player = makePlayer(601) :: any

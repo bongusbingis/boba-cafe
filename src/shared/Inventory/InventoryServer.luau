@@ -242,7 +242,13 @@ function InventoryServer.Prototype:Insert(itemRootData: InventoryItemRoot): stri
 		currentStorage += 1
 	end
 
-	if currentStorage >= Utility.GetInventoryLimit("Storage", self.Metadata._type) then
+	-- Synchronous cached read (Server is ServerScriptService.Server); failure leaves 1.
+	local multiplier = 1
+	pcall(function()
+		multiplier = require(Server.Modules.PerkService):GetStorageMultiplier(self.Metadata._player)
+	end)
+
+	if currentStorage >= Utility.GetInventoryLimit("Storage", self.Metadata._type, multiplier) then
 		warn(("[InventoryServer]: %s inventory is full for %s"):format(self.Metadata._player.Name, self.Metadata._type))
 		return nil
 	end

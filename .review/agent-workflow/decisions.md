@@ -2,6 +2,38 @@
 
 Newest first. Each entry is `## <GOAL> / DEC-###: <title>` with Date, Source, and Decision. Prime is the only writer. Numbering continues; never reuse a number.
 
+## REVIVAL-001 / DEC-042: Double Storage scope; Team Combo on throttled serves (Q-D1, Q-D2, Q-P3)
+
+- **Date:** 2026-10-19.
+- **Source:** Jack in session: ""OK" for remaining open questions" (Prime's recommended options).
+- **Decision:**
+  - **Q-D1 = A:** Double Storage (perk `InventoryX2`) doubles Storage limits only. Equipped limits are unchanged.
+  - **Q-D2 = A:** a player who loses the pass while over the normal limit loses nothing. New additions are blocked until they are under the limit.
+  - **Q-P3 = A:** a farm-throttled real-order serve still gets the Team Combo pay bonus on its reduced pay, as built. It doesn't advance or reset the chain (M4-FIXES-P3).
+
+## REVIVAL-001 / DEC-041: Daily rewards shell, no dim, text-only Quests button (Q16-Q18)
+
+- **Date:** 2026-10-19.
+- **Source:** Jack in session: "Q16: A, Q17: A, Q18: A" (Prime's recommended options in `packets/M4-UI-DAILY-REDO.md`).
+- **Decision:**
+  - **Q16 = A:** the daily rewards screen is rebuilt as a one-tab `OpenableMenu`: a tab title, a hint line, seven Shop-style rows (`ShopItem` and token colours), and a `PromptButton` for Claim. It stays in the dialog host behind the Daily button.
+  - **Q17 = A:** no dim. The modal backdrop is deleted, which removes the layering bug. Close is the red X, as in every other menu.
+  - **Q18 = A:** the Quests button is text-only, like the Recipe Book button (`Icon = ""`, `GREEN_MID`). No new icon asset.
+
+## REVIVAL-001 / DEC-040: Real players order through the Boba Phone, not the counter registers (Q19)
+
+- **Date:** 2026-10-19.
+- **Source:** Jack in session: "Q19: B. I want to have a separate way of ordering; disable the ordering ui prompt at the counters. Instead, examine StarterGui/UIArchive/OldUI/BobaPhone; this was the legacy, fully-scripted mobile ordering system. Retire all apps except for "Boba", which is the main mobile ordering system page similar to what a Starbucks customer would see in the Starbucks app in real life. It is fully scripted and mostly just needs a port to react. For your convenience I have used a plugin to raw-port the UI to react (under module __REACT__PHONE) but it will likely take some work and changes to get it working with the new ordering system and whatnot. The boba phone should be a tool in every player's inventory".
+- **Context:** the register "Use Ordering System" prompt (`TopBar.luau`) showed for every player and fought with the NPC Serve prompt for clocked-in baristas at the counter.
+- **Decision:**
+  - The counter register prompt that opens the ordering UI is disabled.
+  - Real players order through the legacy **Boba Phone** (`StarterGui.UIArchive.OldUI.BobaPhone`), ported to React. Jack's raw plugin port is the module `__REACT__PHONE`, the starting point.
+  - Only the **"Boba"** app is kept: the Starbucks-app-style mobile ordering page. Every other phone app is retired.
+  - The ported Boba app submits through the current ordering system (`OrderService:CreateOrder`, same queue, the real-player bonus is unchanged).
+  - The Boba Phone is a **Tool in every player's inventory**.
+  - Look and layout follow the legacy phone (DEC-013: replicate the existing style). Any asset the code expects but can't find is BLOCKED (DEC-008).
+  - Jack approved this scope widening; it replaces the planned MobileOrder kiosk for player ordering.
+
 ## REVIVAL-001 / DEC-039: Quests get their own button and menu (Q15)
 
 - **Date:** 2026-10-19.

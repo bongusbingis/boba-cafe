@@ -29,4 +29,6 @@ local PetTipBonus: { [string]: number } = {
 return {
 	Perks = Perks,
 	PetTipBonus = PetTipBonus,
+	-- Double Storage (InventoryX2) doubles Storage limits, DEC-028 E20 / revival-plan 6.3.
+	StorageMultiplier = 2,
 }

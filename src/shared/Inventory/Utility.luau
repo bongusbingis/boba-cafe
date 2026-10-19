@@ -15,7 +15,7 @@ type InventoryItemRoot = Types.InventoryItemRoot
 type ItemType = Types.ItemType
 
 function Utility.AssertValidItemType(itemType: ItemType)
-	assert(ITEM_DATA_MAP[itemType] or  ItemDefinitions[itemType], (`Invalid inventory item type: {itemType}`))
+	assert(ITEM_DATA_MAP[itemType] or ItemDefinitions[itemType], `Invalid inventory item type: {itemType}`)
 end
 
 function Utility.ValidateItem(itemId: string, itemType: ItemType, itemData: InventoryItemRoot): (boolean, string?)
@@ -29,7 +29,7 @@ function Utility.ValidateItem(itemId: string, itemType: ItemType, itemData: Inve
 
 	local itemTypeDefinitions = ITEM_DATA_MAP[itemType]
 	if not itemTypeDefinitions then
-		return false, (`Unknown itemType {itemType}`)
+		return false, `Unknown itemType {itemType}`
 	end
 
 	if typeof(itemData) ~= "table" then
@@ -41,7 +41,7 @@ function Utility.ValidateItem(itemId: string, itemType: ItemType, itemData: Inve
 	end
 
 	if itemTypeDefinitions[itemData.Name] == nil then
-		return false, (`{itemData.Name} is not a valid item in {itemType}`)
+		return false, `{itemData.Name} is not a valid item in {itemType}`
 	end
 
 	if itemData.Equipped ~= nil and typeof(itemData.Equipped) ~= "boolean" then
@@ -61,12 +61,21 @@ function Utility.ValidateItem(itemId: string, itemType: ItemType, itemData: Inve
 	return true
 end
 
-function Utility.GetInventoryLimit(limitType: "Equipped" | "Storage", itemType: ItemType): number
+function Utility.GetInventoryLimit(
+	limitType: "Equipped" | "Storage",
+	itemType: ItemType,
+	storageMultiplier: number?
+): number
 	local limitData = InventoryLimits[limitType]
-	assert(limitData ~= nil, (`Missing inventory limit group {limitType}`))
+	assert(limitData ~= nil, `Missing inventory limit group {limitType}`)
 
 	local itemLimitForType = limitData[itemType]
-	assert(typeof(itemLimitForType) == "number", (`Missing inventory limit for {limitType}.{itemType}`))
+	assert(typeof(itemLimitForType) == "number", `Missing inventory limit for {limitType}.{itemType}`)
+
+	-- Only Storage scales (Double Storage pass, DEC-042 Q-D1); Equipped never does.
+	if limitType == "Storage" and typeof(storageMultiplier) == "number" and storageMultiplier >= 1 then
+		return math.floor(itemLimitForType * storageMultiplier)
+	end
 
 	return itemLimitForType
 end
