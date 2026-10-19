@@ -74,11 +74,7 @@ local function startAnimation(label: TextLabel, animation: { Frames: { any } }?,
 					goal.TextTransparency = nextFrame.Transparency
 				end
 
-				local tween = TweenService:Create(
-					label,
-					TweenInfo.new(frame.Transition, Enum.EasingStyle.Linear),
-					goal
-				)
+				local tween = TweenService:Create(label, TweenInfo.new(frame.Transition, Enum.EasingStyle.Linear), goal)
 				activeTween = tween
 				tween:Play()
 				tween.Completed:Wait()
@@ -114,7 +110,8 @@ local function buildOverhead(player: Player, character: Model)
 
 	local usernameLabel = Instance.new("TextLabel")
 	usernameLabel.BackgroundTransparency = 1
-	usernameLabel.FontFace = Font.new("rbxasset://fonts/families/SourceSansPro.json", Enum.FontWeight.Bold, Enum.FontStyle.Normal)
+	usernameLabel.FontFace =
+		Font.new("rbxasset://fonts/families/SourceSansPro.json", Enum.FontWeight.Bold, Enum.FontStyle.Normal)
 	usernameLabel.Position = UDim2.fromScale(0, 0.725)
 	usernameLabel.Size = UDim2.fromScale(1, 0.15)
 	usernameLabel.Text = player.Name
@@ -124,13 +121,48 @@ local function buildOverhead(player: Player, character: Model)
 
 	local roleLabel = Instance.new("TextLabel")
 	roleLabel.BackgroundTransparency = 1
-	roleLabel.FontFace = Font.new("rbxasset://fonts/families/SourceSansPro.json", Enum.FontWeight.Regular, Enum.FontStyle.Italic)
+	roleLabel.FontFace =
+		Font.new("rbxasset://fonts/families/SourceSansPro.json", Enum.FontWeight.Regular, Enum.FontStyle.Italic)
 	roleLabel.Position = UDim2.fromScale(0, 0.85)
 	roleLabel.Size = UDim2.fromScale(1, 0.15)
 	roleLabel.Text = "Customer"
 	roleLabel.TextColor3 = Color3.new(1, 1, 1)
 	roleLabel.TextScaled = true
 	roleLabel.Parent = frame
+
+	---> Level title line, under the name (copy of the role line style)
+	local titleLabel = Instance.new("TextLabel")
+	titleLabel.BackgroundTransparency = 1
+	titleLabel.FontFace =
+		Font.new("rbxasset://fonts/families/SourceSansPro.json", Enum.FontWeight.Regular, Enum.FontStyle.Italic)
+	titleLabel.Position = UDim2.fromScale(0, 1)
+	titleLabel.Size = UDim2.fromScale(1, 0.15)
+	titleLabel.TextColor3 = Color3.new(1, 1, 1)
+	titleLabel.TextScaled = true
+	titleLabel.Parent = frame
+	local function refreshTitle()
+		local isVeteran = player:GetAttribute("IsVeteran") == true
+		local rawLevelTitle = player:GetAttribute("LevelTitle")
+		local levelTitle = if typeof(rawLevelTitle) == "string" and rawLevelTitle ~= "" then rawLevelTitle else nil
+
+		if isVeteran and levelTitle then
+			titleLabel.Text = "Veteran • " .. levelTitle
+		elseif isVeteran then
+			titleLabel.Text = "Veteran"
+		elseif levelTitle then
+			titleLabel.Text = levelTitle
+		else
+			titleLabel.Text = ""
+		end
+		titleLabel.Visible = titleLabel.Text ~= ""
+	end
+	refreshTitle()
+	local titleConn = player:GetAttributeChangedSignal("LevelTitle"):Connect(refreshTitle)
+	local veteranConn = player:GetAttributeChangedSignal("IsVeteran"):Connect(refreshTitle)
+	titleLabel.Destroying:Connect(function()
+		titleConn:Disconnect()
+		veteranConn:Disconnect()
+	end)
 
 	---> Nickname label: TweenService owns its color exclusively
 	local nicknameLabel = Instance.new("TextLabel")
@@ -168,10 +200,7 @@ local function buildOverhead(player: Player, character: Model)
 	rerenders[player.UserId] = rerender
 
 	local cached = cosmetics[player.UserId]
-	rerender(
-		cached and cached.Nickname or "",
-		cached and cached.Nametag
-	)
+	rerender(cached and cached.Nickname or "", cached and cached.Nametag)
 end
 
 local function playerAdded(player: Player)

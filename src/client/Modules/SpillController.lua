@@ -108,7 +108,7 @@ function SpillController:_HandleAnimations()
 		and Storage.Animations:FindFirstChild("FallingAnimation")
 	if not fallingAnimation then
 		warn(
-			"[SpillController] SharedStorage.Spills.Animations.FallingAnimation is missing; tripping animation disabled"
+			"[SpillController] SharedStorage.CleanlinessStorage.Animations.FallingAnimation is missing; tripping animation disabled"
 		)
 		return
 	end
@@ -198,7 +198,7 @@ end
 function SpillController:_RenderBoard(Board)
 	local Template = Storage and Storage:FindFirstChild("BoardInterface")
 	if not Template then
-		warn("[SpillController] SharedStorage.Spills.BoardInterface is missing; spill board UI disabled")
+		warn("[SpillController] SharedStorage.CleanlinessStorage.BoardInterface is missing; spill board UI disabled")
 		return
 	end
 
@@ -254,10 +254,10 @@ function SpillController:KnitStart()
 	-- Resolve the authored world on its own thread so a missing/late folder never blocks other controllers.
 	task.spawn(function()
 		local Deadline = os.clock() + WORLD_WAIT_SECONDS
-		Storage = WorldPath.waitFor(ReplicatedStorage, { "SharedStorage", "Spills" }, Deadline - os.clock())
+		Storage = WorldPath.waitFor(ReplicatedStorage, { "SharedStorage", "CleanlinessStorage" }, Deadline - os.clock())
 		SpillsFolder = WorldPath.waitFor(workspace, { "Assets", "Spills" }, Deadline - os.clock())
 		if not Storage then
-			warn("[SpillController] SharedStorage.Spills is missing; spill animations and boards disabled")
+			warn("[SpillController] SharedStorage.CleanlinessStorage is missing; spill animations and boards disabled")
 		end
 		if not SpillsFolder then
 			warn("[SpillController] workspace.Assets.Spills is missing; spill boards disabled")

@@ -16,6 +16,7 @@ local Packages = ReplicatedStorage:WaitForChild("Packages")
 ---> Dependencies
 
 local Knit = require(Packages.Knit)
+local GoodSignal = require(Packages.GoodSignal)
 local OrderSpec = require(ReplicatedStorage:WaitForChild("Shared").Ordering.OrderSpec)
 
 ---> Types
@@ -101,6 +102,10 @@ local OrderService = Knit.CreateService({
 		QueueUpdated = Knit.CreateSignal(),
 	},
 
+	-- Server-only signals (RealOrderService listens)
+	OrderCreated = GoodSignal.new(),
+	OrderPickedUp = GoodSignal.new(), -- (customerId, baristaPlayer, grade, specs, tools, items)
+
 	_currentOrderNum = 0 :: number,
 	_orders = {} :: { Order },
 	_queue = {} :: { number }, -- ordered list of waiting barista UserIds
@@ -108,6 +113,7 @@ local OrderService = Knit.CreateService({
 	_staffScreens = {} :: { SurfaceGui },
 	_pickUpAreas = {} :: { Model },
 	_orderDebounces = {} :: { [number]: boolean },
+	_freeSince = {} :: { [number]: number }, -- UserId -> os.clock() when last free (idle-longest dispatch)
 
 	-- Resolved in KnitStart after all services are ready
 	_statisticsService = nil :: any,
@@ -132,12 +138,21 @@ end
 -- Shared.Ordering.Menu is required on first order: it reads the authored
 -- SelectorModels, and a problem there should stop ordering only, not KnitStart.
 local foodTable: { [string]: any }? = nil
+local isLaunchItem: ((category: any, item: any, customInfo: any?) -> boolean)? = nil
 local menuFailed = false
 local function getFoodTable(): { [string]: any }?
 	if not foodTable and not menuFailed then
 		local ok, menu = pcall(require, ReplicatedStorage:WaitForChild("Shared").Ordering.Menu)
 		if ok and typeof(menu) == "table" and typeof(menu.FoodTable) == "table" then
 			foodTable = menu.FoodTable
+			if typeof(menu.IsLaunchItem) == "function" then
+				isLaunchItem = menu.IsLaunchItem
+			else
+				-- Without the launch list nothing can be called makeable: fail closed.
+				warn("[OrderService] Shared.Ordering.Menu has no IsLaunchItem; ordering is disabled.")
+				foodTable = nil
+				menuFailed = true
+			end
 		else
 			menuFailed = true
 			warn("[OrderService] Shared.Ordering.Menu failed to load; ordering is disabled:", menu)
@@ -308,6 +323,43 @@ function OrderService:_hasOpenOrder(customerId: number): boolean
 	return false
 end
 
+-- Returns the player's claimed ("Being Prepared") order to the queue, the same state
+-- _updateOrders gives an order whose barista left, and resets their notepad and node
+-- prompts. This is the way out of an order that cannot be made. A waiting barista
+-- is handed the order straight away.
+function OrderService:_releaseClaimedOrder(player: Player)
+	local order = self:_getPlayerOrder(player.UserId, "Being Prepared")
+	if not order then
+		return
+	end
+
+	order.status = "Pending Preparation"
+	order.statusColor = COLOR_PENDING
+	order.preparedBy = nil
+
+	self.Client.NotepadUpdated:Fire(player, "ResetOrder")
+	for _, node in self._pickUpAreas do
+		if node.OrderOwner.Value == 0 then
+			self.Client.PickUpNodeVisibilityChanged:Fire(player, node, false)
+		end
+	end
+
+	self:_tryDispatchFromQueue()
+	self:_broadcastUpdate()
+end
+
+-- ShiftService.ClockedInChanged handler.
+function OrderService:_onClockedInChanged(player: Player, clockedIn: boolean)
+	if not clockedIn then
+		self:_leaveQueue(player)
+		self:_releaseClaimedOrder(player)
+	else
+		self._freeSince[player.UserId] = os.clock()
+		self:_tryDispatchFromQueue()
+		self:_broadcastUpdate()
+	end
+end
+
 function OrderService:_canClaimOrder(player: Player): boolean
 	return self:_isClockedIn(player) and self:_getPlayerOrder(player.UserId, "Being Prepared") == nil
 end
@@ -397,8 +449,7 @@ function OrderService:_updateStaffScreens()
 			local customer = Players:GetPlayerByUserId(nextOrder.customer)
 			screen.Frame.Customer.Text = customer and customer.Name or "Unknown"
 			screen.Frame.OrderNum.Text = "Order " .. nextOrder.orderNum
-			screen.Frame.NumPending.Text = pendingCount
-				.. (pendingCount == 1 and " Pending Order" or " Pending Orders")
+			screen.Frame.NumPending.Text = pendingCount .. (pendingCount == 1 and " Pending Order" or " Pending Orders")
 
 			for _, item in nextOrder.order do
 				local itemFrame = screen.Frame.Frame.Template:Clone()
@@ -498,6 +549,9 @@ function OrderService:_addOrder(customerId: number, orderItems: { any }, specs: 
 	-- Immediately hand the order to the first barista in the queue, if any.
 	self:_tryDispatchFromQueue()
 	self:_broadcastUpdate()
+	pcall(function()
+		self.OrderCreated:Fire(customerId)
+	end)
 end
 
 function OrderService:_claimNextOrder(player: Player)
@@ -575,9 +629,6 @@ end
 -- Dequeues the first waiting barista and assigns the next pending order to them.
 -- Called whenever a new order is placed and the queue is non-empty.
 function OrderService:_tryDispatchFromQueue()
-	if #self._queue == 0 then
-		return
-	end
 	local nextOrder = self:_getNextOrder()
 	if not nextOrder then
 		return
@@ -606,6 +657,22 @@ function OrderService:_tryDispatchFromQueue()
 			self:_broadcastQueuePositions()
 			return
 		end
+	end
+
+	-- M2-REALORDER: nobody waiting in the queue. Auto-assign to the clocked-in
+	-- barista with no active order who has been idle longest (no claim needed).
+	local best: Player? = nil
+	local bestSince = math.huge
+	for _, staff in Players:GetPlayers() do
+		if self:_canClaimOrder(staff) then
+			local since = self._freeSince[staff.UserId] or 0
+			if since < bestSince then
+				best, bestSince = staff, since
+			end
+		end
+	end
+	if best then
+		self:_claimNextOrder(best)
 	end
 end
 
@@ -639,15 +706,29 @@ end
 --   • If the area belongs to the triggering player → they pick up their order.
 --   • Otherwise → the player is a staff member depositing a prepared order.
 function OrderService:_handlePickUp(player: Player, area: Model)
+	if player.Character then
+		local root = player.Character:FindFirstChild("HumanoidRootPart") or player.Character.PrimaryPart
+		local areaPart = if area:IsA("BasePart")
+			then area
+			else (area.PrimaryPart or area:FindFirstChildWhichIsA("BasePart"))
+		if root and root:IsA("BasePart") and areaPart and areaPart:IsA("BasePart") then
+			if (root.Position - areaPart.Position).Magnitude > 25 then
+				return
+			end
+		end
+	end
+
 	local ownerValue: IntValue = area.OrderOwner
 
 	if ownerValue.Value == player.UserId then
 		-- ── Customer path: collect their completed order ──────────────────────
 		self.Client.PickUpNodeVisibilityChanged:Fire(player, area, false)
 
+		local pickedTools: { Instance } = {}
 		local orderFolder = ServerStorage[ORDER_PICKUP_FOLDER]:FindFirstChild("Order_" .. player.UserId)
 		if orderFolder then
 			local tools = orderFolder:GetChildren()
+			pickedTools = tools
 
 			if self._statisticsService then
 				self._statisticsService:IncrementStat(player, "ItemsOrdered", #tools)
@@ -689,14 +770,36 @@ function OrderService:_handlePickUp(player: Player, area: Model)
 			local order = self._orders[i]
 			if order.customer == player.UserId and order.status == "Ready for Pick Up" then
 				table.remove(self._orders, i)
+				local barista = order.preparedBy and Players:GetPlayerByUserId(order.preparedBy) or nil
+				local handed = pickedTools
+				pcall(function()
+					self.OrderPickedUp:Fire(player.UserId, barista, order.grade, order.specs, handed, order.order)
+				end)
+				if order.preparedBy then
+					self._freeSince[order.preparedBy] = os.clock()
+				end
 			end
 		end
 
 		self:_updateStatusScreens()
+		self:_tryDispatchFromQueue()
 	else
 		-- ── Staff path: deposit a prepared order ──────────────────────────────
 		local playerOrder = self:_getPlayerOrder(player.UserId, "Being Prepared")
 		if not playerOrder then
+			return
+		end
+
+		-- A node another barista has already filled keeps its owner: refuse, and hide
+		-- the stale prompt on this barista's client.
+		if ownerValue.Value ~= 0 then
+			self.Client.PickUpNodeVisibilityChanged:Fire(player, area, false)
+			self.Client.Announcement:Fire(
+				player,
+				"Cannot Deposit Order!",
+				"This spot is taken. Use a free one.",
+				COLOR_ERROR
+			)
 			return
 		end
 
@@ -732,13 +835,18 @@ function OrderService:_handlePickUp(player: Player, area: Model)
 		playerOrder.status = "Ready for Pick Up"
 		playerOrder.statusColor = COLOR_READY
 		playerOrder.grade = grade
+		self._freeSince[player.UserId] = os.clock()
 		self:_updateStatusScreens()
+		self:_tryDispatchFromQueue()
 
 		local orderFolder = Instance.new("Folder")
 		orderFolder.Name = "Order_" .. playerOrder.customer
 		orderFolder.Parent = ServerStorage[ORDER_PICKUP_FOLDER]
 
 		for i, tool in tools do
+			-- A served tool keeps its marks when picked up, so mark it spent: it can no
+			-- longer satisfy another order (FindServeTools skips it).
+			tool:SetAttribute("Served", true)
 			if PICKUP_MODEL_OFFSETS[i] then
 				local displayModel = createModelFromTool(tool)
 				displayModel.Parent = area
@@ -783,10 +891,14 @@ end
 -- reads: the caller moves or destroys the tools, in the same synchronous block.
 -- Never yields.
 function OrderService:FindServeTools(player: Player, specs: { Spec }): ({ Tool }?, Grade, { string })
-	local entries = collectTools(player.Character, player.Backpack)
-	local candidates = table.create(#entries)
-	for i, entry in entries do
-		candidates[i] = entry.Tool:GetAttributes()
+	local entries: { ToolEntry } = {}
+	local candidates: { { [string]: any } } = {}
+	for _, entry in collectTools(player.Character, player.Backpack) do
+		-- A tool that was already served (and picked up again) cannot serve another order.
+		if entry.Tool:GetAttribute("Served") ~= true then
+			table.insert(entries, entry)
+			table.insert(candidates, entry.Tool:GetAttributes())
+		end
 	end
 
 	local picks, grade, reasons = OrderSpec.PickTools(specs, candidates)
@@ -834,6 +946,17 @@ function OrderService.Client:CreateOrder(player: Player, customerId: any, orderI
 	local items = table.create(itemCount)
 	local specs = table.create(itemCount)
 	for i = 1, itemCount do
+		-- Only launch-menu items can be made at a station today. An order for anything
+		-- else could never be deposited and would lock the barista and the customer.
+		local request = orderItems[i]
+		if
+			isLaunchItem == nil
+			or typeof(request) ~= "table"
+			or not isLaunchItem(request.Category, request.Item, request.CustomInfo)
+		then
+			return { Success = false, Message = "That item isn't available right now." }
+		end
+
 		local item, spec, reason = buildOrderItem(menu, orderItems[i])
 		if not item or not spec then
 			warn(string.format("[OrderService] Rejected order from %s: %s", player.Name, tostring(reason)))
@@ -961,12 +1084,10 @@ function OrderService:KnitStart()
 		self._questService = questService
 	end
 
-	-- Clocking out leaves the barista queue. An order already being prepared
-	-- stays with the player so they can still finish and deposit it.
+	-- Clocking out leaves the barista queue and returns a claimed order to it, so a
+	-- barista who cannot make their order is never stuck with it.
 	self._shiftService.ClockedInChanged:Connect(function(player: Player, clockedIn: boolean)
-		if not clockedIn then
-			self:_leaveQueue(player)
-		end
+		self:_onClockedInChanged(player, clockedIn)
 	end)
 
 	-- The world is resolved last because it may yield.

@@ -26,6 +26,11 @@ local function getKitchenSounds(): Instance?
 	return kitchenSounds
 end
 
+-- The tool the player is holding, as the kitchen actions find it.
+local function getHeldTool(player: Player): Tool?
+	return player.Character and player.Character:FindFirstChildWhichIsA("Tool")
+end
+
 ---> Types
 
 type ActionData = KitchenTypes.ActionData
@@ -85,6 +90,11 @@ function InteractionRunner:_runSelectFrom(player: Player, model: Model, actionDa
 	local DialogService = Knit.GetService("DialogService")
 	local choice: string? = nil
 
+	-- The tool held now is the one the station's gate just validated (nothing yields
+	-- between the gate and here). The branch's actions apply to whatever is held when
+	-- they run, so the dialog must not change it.
+	local gatedTool = getHeldTool(player)
+
 	if promptConfig.DialogType == "PromptSelection" then
 		local promptItems = promptConfig.Items or {}
 		local okPrompt, selectedIndex = DialogService:CreatePromptSelection(player, promptItems, {
@@ -129,6 +139,11 @@ function InteractionRunner:_runSelectFrom(player: Player, model: Model, actionDa
 		end
 
 		choice = actionChoice
+	end
+
+	if gatedTool ~= nil and getHeldTool(player) ~= gatedTool then
+		-- Nothing in the branch has run, so there is nothing to undo.
+		return { Success = false, Error = "SelectFrom: held tool changed" }
 	end
 
 	local branch = branchMap[choice]

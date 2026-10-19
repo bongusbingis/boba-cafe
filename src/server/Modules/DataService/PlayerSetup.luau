@@ -1,6 +1,5 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TextService = game:GetService("TextService")
-local HttpService = game:GetService("HttpService")
 
 ---> dependencies
 local Packages = ReplicatedStorage:WaitForChild("Packages")
@@ -77,25 +76,4 @@ return {
 		Knit.GetService("CosmeticsService"):SetupPlayerCosmetics(player, proxy)
 		Knit.GetService("PetService"):SetupPlayerPets(player, proxy)
 	end,
-	function(player: Player, proxy) ---> grant free group pet
-		xpcall(function()
-			if player:IsInGroupAsync(3174578) then
-				local freeItemsRedeemed = proxy.Data.Inventory.FreeItemsRedeemed
-				if table.find(freeItemsRedeemed, "GroupPet") then
-					return
-				end
-
-				table.insert(freeItemsRedeemed, "GroupPet")
-				proxy:SetValue({ "Inventory", "Items", "Pets", HttpService:GenerateGUID(false)}, {
-					Name = "Ant Pet",
-					Tier = "Basic",
-					Equipped = false,
-					Properties = {},
-				})
-			end
-		end, function(err)
-			warn(err)
-		end)
-	end,
-	
 }

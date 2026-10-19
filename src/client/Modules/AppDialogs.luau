@@ -1,5 +1,6 @@
 ---> services
 local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
 local SoundService = game:GetService("SoundService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -41,6 +42,11 @@ local function playUiSound(name: string)
 end
 
 ---> constants
+-- TUNING: the pulse on the dialog button the current recipe step wants (M1.5d).
+local PULSE_THICKNESS = 4
+local PULSE_TWEEN = TweenInfo.new(0.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true)
+local PULSE_FIND_ATTEMPTS = 10 -- the dialog renders a frame or two after it is queued
+local PULSE_FIND_INTERVAL = 0.1
 local HINT_INTERVAL = 15
 local HINT_NATIVE = {
 	Size = UDim2.fromScale(0.65, 0.05),
@@ -65,6 +71,61 @@ type QueueItem = {
 }
 
 type Queue = { QueueItem }
+
+local priorityGui: ScreenGui? = nil
+local pulseToken = 0
+local activePulse: { Tween: Tween, Stroke: UIStroke }? = nil
+
+local function clearPulse()
+	pulseToken += 1
+	if activePulse then
+		activePulse.Tween:Cancel()
+		activePulse.Stroke:Destroy()
+		activePulse = nil
+	end
+end
+
+-- The guided choice for the open dialog, or nil. Never errors: guidance is optional.
+local function currentChoice(): string?
+	local ok, choice = pcall(function()
+		return Knit.GetController("KitchenController"):GetCurrentChoice()
+	end)
+	return if ok and typeof(choice) == "string" then choice else nil
+end
+
+-- Finds the button whose label reads `choice` (size, coffee and food pickers all label a
+-- button with the choice) and pulses a gold outline on it. If no button matches, nothing happens.
+local function pulseChoice(choice: string)
+	clearPulse()
+	local token = pulseToken
+	task.spawn(function()
+		for _ = 1, PULSE_FIND_ATTEMPTS do
+			if token ~= pulseToken or priorityGui == nil then
+				return
+			end
+			for _, descendant in priorityGui:GetDescendants() do
+				if (descendant:IsA("TextLabel") or descendant:IsA("TextButton")) and descendant.Text == choice then
+					local button = descendant:FindFirstAncestorWhichIsA("GuiButton")
+						or (if descendant:IsA("TextButton") then descendant else nil)
+					if button then
+						local stroke = Instance.new("UIStroke")
+						stroke.Name = "GuidePulse"
+						stroke.Color = Styles.GOLD
+						stroke.Thickness = PULSE_THICKNESS
+						stroke.Transparency = 0
+						stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+						stroke.Parent = button
+						local tween = TweenService:Create(stroke, PULSE_TWEEN, { Transparency = 0.8 })
+						tween:Play()
+						activePulse = { Tween = tween, Stroke = stroke }
+						return
+					end
+				end
+			end
+			task.wait(PULSE_FIND_INTERVAL)
+		end
+	end)
+end
 
 local function formatBrackets(str: string): string
 	return str:gsub("%[(.-)%]", " <font color='#f5c242'>%1</font> ")
@@ -108,8 +169,13 @@ local function dialogHolder()
 	end, {})
 
 	React.useEffect(function()
+		clearPulse()
 		if queue[1] then
 			local current = queue[1]
+			local choice = currentChoice()
+			if choice then
+				pulseChoice(choice)
+			end
 			setDialogOnScreen(c(
 				current.Component,
 				joinDicts({
@@ -174,12 +240,21 @@ function DialogController:Notify(notification: { Title: string, Description: str
 	SmallNotification.Push(notification)
 end
 
+--[[
+	Pushes a plain-text toast (SmallNotification takes `Text`; Notify's Title and Description
+	are not read by it). Used for "Next: <step>" and the Clock In reminder.
+]]
+function DialogController:Toast(text: string)
+	SmallNotification.Push({ Text = text })
+end
+
 function DialogController:KnitInit()
 	local handle = Instance.new("ScreenGui")
 	handle.Name = "Priority"
 	handle.DisplayOrder = 100
 	handle.ResetOnSpawn = false
 	handle.Parent = Players.LocalPlayer.PlayerGui
+	priorityGui = handle
 
 	local root = ReactRoblox.createRoot(handle)
 	root:render(c(dialogHolder))

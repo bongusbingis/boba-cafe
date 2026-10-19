@@ -159,124 +159,128 @@ local function makeToggleHandler(itemType, _id, entry, itemDef, _layoutOrder, _u
 		local displayName = getEntryDisplayName(entry)
 
 		local DataController = Knit.GetController("DataController")
-		DataController:GetDataAsync():andThen(function(playerData)
-			local shouldDisablePetHatch = itemType == "Capsules"
-				and itemDef
-				and itemDef.ItemType == "Pets"
-				and hasActivePetHatch(playerData)
+		DataController:GetDataAsync()
+			:andThen(function(playerData)
+				local shouldDisablePetHatch = itemType == "Capsules"
+					and itemDef
+					and itemDef.ItemType == "Pets"
+					and hasActivePetHatch(playerData)
 
-			if actionOverride then
-				buttons = cloneButtons(actionOverride)
+				if actionOverride then
+					buttons = cloneButtons(actionOverride)
 
-				local capsuleUseLabel = resolveCapsuleUseLabel(itemType, itemDef)
-				if capsuleUseLabel then
-					for _, button in ipairs(buttons) do
-						if button.Text == "Hatch" then
-							button.Text = capsuleUseLabel
-							displayToAction[capsuleUseLabel] = "Hatch"
-							if shouldDisablePetHatch and capsuleUseLabel == "Hatch" then
-								button.Disabled = true
+					local capsuleUseLabel = resolveCapsuleUseLabel(itemType, itemDef)
+					if capsuleUseLabel then
+						for _, button in ipairs(buttons) do
+							if button.Text == "Hatch" then
+								button.Text = capsuleUseLabel
+								displayToAction[capsuleUseLabel] = "Hatch"
+								if shouldDisablePetHatch and capsuleUseLabel == "Hatch" then
+									button.Disabled = true
+								end
 							end
 						end
 					end
 				end
-			end
 
-			local hasSellButton = hasButton(buttons, "Sell")
-			local hasRenameButton = hasButton(buttons, "Rename")
+				local hasSellButton = hasButton(buttons, "Sell")
+				local hasRenameButton = hasButton(buttons, "Rename")
 
-			if itemDef.CanBeSold and not hasSellButton then
-				table.insert(buttons, { Text = "Sell", Color = Styles.ROSE })
-			end
-
-			if itemType == "Pets" and not hasRenameButton then
-				table.insert(buttons, { Text = "Rename", Color = Styles.GOLD })
-			end
-
-			local appDialogs = Knit.GetController("DialogController")
-			local dialog = appDialogs.new("ActionPrompt", {
-				Title = displayName,
-				Text = "Choose an action:",
-				OffsetX = 0.1,
-				Buttons = buttons,
-			})
-			activeDialogRef.current = dialog
-			dialog:Fire():andThen(function(action: string)
-				activeDialogRef.current = nil
-				local resolvedAction = displayToAction[action] or action
-				if resolvedAction == "Close" then
-					return
+				if itemDef.CanBeSold and not hasSellButton then
+					table.insert(buttons, { Text = "Sell", Color = Styles.ROSE })
 				end
 
-				if resolvedAction == "Sell" then
-					local sellPrice = getSellPrice(itemDef.Tier)
-					local priceText = `[{sellPrice} Boba Bucks]`
-					local confirmDialog = appDialogs.new("ButtonPrompt", {
-						Title = "Sell Item",
-						Text = appDialogs.FormatBrackets(`Sell |{displayName}| for {priceText}?`),
-						Buttons = {
-							{ Text = "Sell", Color = Styles.GREEN },
-							{ Text = "Cancel", Color = Styles.RED },
-						},
-						OffsetX = 0.1,
-					})
-					activeDialogRef.current = confirmDialog
-					confirmDialog:Fire():andThen(function(choice)
-						activeDialogRef.current = nil
-						if choice == "Sell" then
-							entry:Sell()
-						end
-					end)
-					return
+				if itemType == "Pets" and not hasRenameButton then
+					table.insert(buttons, { Text = "Rename", Color = Styles.GOLD })
 				end
 
-				if resolvedAction == "Rename" and itemType == "Pets" then
-					local function showRenamePrompt(errorText: string?)
-						local text = errorText
-							or string.format(
-								"Enter a new name. Leave blank to reset. Max %d characters.",
-								PetConfig.MAX_RENAME_LENGTH
-							)
+				local appDialogs = Knit.GetController("DialogController")
+				local dialog = appDialogs.new("ActionPrompt", {
+					Title = displayName,
+					Text = "Choose an action:",
+					OffsetX = 0.1,
+					Buttons = buttons,
+				})
+				activeDialogRef.current = dialog
+				dialog:Fire():andThen(function(action: string)
+					activeDialogRef.current = nil
+					local resolvedAction = displayToAction[action] or action
+					if resolvedAction == "Close" then
+						return
+					end
 
-						local renameDialog = appDialogs.new("TextInputPrompt", {
-							Title = "Rename Pet",
-							Text = text,
-							PlaceholderText = displayName,
+					if resolvedAction == "Sell" then
+						local sellPrice = getSellPrice(itemDef.Tier)
+						local priceText = `[{sellPrice} Boba Bucks]`
+						local confirmDialog = appDialogs.new("ButtonPrompt", {
+							Title = "Sell Item",
+							Text = appDialogs.FormatBrackets(`Sell |{displayName}| for {priceText}?`),
+							Buttons = {
+								{ Text = "Sell", Color = Styles.GREEN },
+								{ Text = "Cancel", Color = Styles.RED },
+							},
 							OffsetX = 0.1,
 						})
-
-						activeDialogRef.current = renameDialog
-						renameDialog:Fire():andThen(function(newName)
+						activeDialogRef.current = confirmDialog
+						confirmDialog:Fire():andThen(function(choice)
 							activeDialogRef.current = nil
-							if typeof(newName) ~= "string" then
-								return
+							if choice == "Sell" then
+								entry:Sell()
 							end
-
-							local trimmedName = trimText(newName)
-							if trimmedName ~= "" and #trimmedName > PetConfig.MAX_RENAME_LENGTH then
-								showRenamePrompt(string.format("That name is too long (max %d).", PetConfig.MAX_RENAME_LENGTH))
-								return
-							end
-
-							entry:Rename(trimmedName)
 						end)
+						return
 					end
 
-					showRenamePrompt(nil)
-					return
-				end
+					if resolvedAction == "Rename" and itemType == "Pets" then
+						local function showRenamePrompt(errorText: string?)
+							local text = errorText
+								or string.format(
+									"Enter a new name. Leave blank to reset. Max %d characters.",
+									PetConfig.MAX_RENAME_LENGTH
+								)
 
-				-- "Equip"/"Unequip" are direct methods on InventoryItem.
-				-- Any other action (e.g. "Hatch") is a registered ItemAction.
-				if resolvedAction == "Equip" or resolvedAction == "Unequip" then
-					entry[resolvedAction](entry)
-				else
-					entry:Use(resolvedAction)
-				end
+							local renameDialog = appDialogs.new("TextInputPrompt", {
+								Title = "Rename Pet",
+								Text = text,
+								PlaceholderText = displayName,
+								OffsetX = 0.1,
+							})
+
+							activeDialogRef.current = renameDialog
+							renameDialog:Fire():andThen(function(newName)
+								activeDialogRef.current = nil
+								if typeof(newName) ~= "string" then
+									return
+								end
+
+								local trimmedName = trimText(newName)
+								if trimmedName ~= "" and #trimmedName > PetConfig.MAX_RENAME_LENGTH then
+									showRenamePrompt(
+										string.format("That name is too long (max %d).", PetConfig.MAX_RENAME_LENGTH)
+									)
+									return
+								end
+
+								entry:Rename(trimmedName)
+							end)
+						end
+
+						showRenamePrompt(nil)
+						return
+					end
+
+					-- "Equip"/"Unequip" are direct methods on InventoryItem.
+					-- Any other action (e.g. "Hatch") is a registered ItemAction.
+					if resolvedAction == "Equip" or resolvedAction == "Unequip" then
+						entry[resolvedAction](entry)
+					else
+						entry:Use(resolvedAction)
+					end
+				end)
 			end)
-		end):catch(function(err)
-			warn("[InventoryComponent]: Failed to read player hatch state", err)
-		end)
+			:catch(function(err)
+				warn("[InventoryComponent]: Failed to read player hatch state", err)
+			end)
 
 		-- local equipped = entry:IsEquipped()
 		-- updateFn(function(t)
@@ -304,8 +308,15 @@ local function buildStackCard(itemType, name, ids, playerInventory, itemDef, lay
 		return nil
 	end
 
-	local count = #ids
-	local onClick = makeToggleHandler(itemType, representativeId, representativeEntry, itemDef, layoutOrder, updateFn, aDialogRef)
+	local count = 0
+	for _, id in ids do
+		local item = playerInventory:GetItemFromId(id)
+		if item then
+			count += item:GetStackCount()
+		end
+	end
+	local onClick =
+		makeToggleHandler(itemType, representativeId, representativeEntry, itemDef, layoutOrder, updateFn, aDialogRef)
 
 	return c(ItemCard, {
 		Name = name,
@@ -329,7 +340,7 @@ local BATCH_DELAY = 0.05
 local SPIN_PERIOD = 1.4 -- seconds per full rotation cycle
 
 ---> item types where duplicate names are collapsed into one card with a ×N badge
-local STACKABLE_TYPES = { ["Nametags"] = true }
+local STACKABLE_TYPES = { ["Nametags"] = true, ["Capsules"] = true }
 
 local function easeInOutBack(t: number): number
 	local c1 = 1.70158
@@ -407,7 +418,16 @@ return function(props: {
 							else
 								local itemDef = InventoryItemDefinitions[props.ItemType][name]
 								local tier = InventoryItemDefinitions.Tiers[(itemDef and itemDef.Tier) or "Basic"]
-								new["stack:" .. name] = buildStackCard(props.ItemType, name, ids, playerInventory, itemDef, tier.Weight * 1000, updateGridChildren, activeDialogRef)
+								new["stack:" .. name] = buildStackCard(
+									props.ItemType,
+									name,
+									ids,
+									playerInventory,
+									itemDef,
+									tier.Weight * 1000,
+									updateGridChildren,
+									activeDialogRef
+								)
 							end
 							return new
 						end)
@@ -444,7 +464,16 @@ return function(props: {
 					local tier = InventoryItemDefinitions.Tiers[itemDef.Tier or "Basic"]
 					updateGridChildren(function(t)
 						local new = table.clone(t)
-						new["stack:" .. name] = buildStackCard(props.ItemType, name, ids, playerInventory, itemDef, tier.Weight * 1000, updateGridChildren, activeDialogRef)
+						new["stack:" .. name] = buildStackCard(
+							props.ItemType,
+							name,
+							ids,
+							playerInventory,
+							itemDef,
+							tier.Weight * 1000,
+							updateGridChildren,
+							activeDialogRef
+						)
 						return new
 					end)
 				else
@@ -491,15 +520,38 @@ return function(props: {
 					table.insert(nameGroups[entry.Name].ids, id)
 					newStackData.idToName[id] = entry.Name
 				else
-					local onClick = makeToggleHandler(props.ItemType, id, entry, itemDef, layoutOrder, updateGridChildren, activeDialogRef)
-					table.insert(cardList, { id = id, card = buildCard(props.ItemType, entry, itemDef, layoutOrder, entry:IsEquipped(), onClick) })
+					local onClick = makeToggleHandler(
+						props.ItemType,
+						id,
+						entry,
+						itemDef,
+						layoutOrder,
+						updateGridChildren,
+						activeDialogRef
+					)
+					table.insert(
+						cardList,
+						{
+							id = id,
+							card = buildCard(props.ItemType, entry, itemDef, layoutOrder, entry:IsEquipped(), onClick),
+						}
+					)
 				end
 			end
 
 			if isStackableType then
 				for name, group in nameGroups do
 					newStackData.nameToIds[name] = group.ids
-					local card = buildStackCard(props.ItemType, name, group.ids, playerInventory, group.itemDef, group.layoutOrder, updateGridChildren, activeDialogRef)
+					local card = buildStackCard(
+						props.ItemType,
+						name,
+						group.ids,
+						playerInventory,
+						group.itemDef,
+						group.layoutOrder,
+						updateGridChildren,
+						activeDialogRef
+					)
 					if card then
 						table.insert(cardList, { id = "stack:" .. name, card = card })
 					end

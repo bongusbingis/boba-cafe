@@ -13,74 +13,79 @@
 ---> Helpers
 
 local function getHeldTool(player: Player): Tool?
-    return (player.Character and player.Character:FindFirstChildWhichIsA("Tool"))
+	return (player.Character and player.Character:FindFirstChildWhichIsA("Tool"))
 end
 
 ---> Action
 
 local function isLiteral(value: any): boolean
-    local valueType = typeof(value)
-    return valueType == "string" or valueType == "boolean" or valueType == "number"
+	local valueType = typeof(value)
+	return valueType == "string" or valueType == "boolean" or valueType == "number"
 end
 
 local function GiveTool(player: Player, _actionModel: Model, toolToClone: Tool, attributes: { [string]: any }?): boolean
-    local character = player.Character
-    if not character then
-        return false
-    end
+	local character = player.Character
+	if not character then
+		return false
+	end
 
-    -- Check the attributes before touching the held tool, so a bad recipe entry changes nothing.
-    if attributes ~= nil then
-        if typeof(attributes) ~= "table" then
-            warn("[GiveTool] Expected a table of attributes.")
-            return false
-        end
-        for name, value in attributes do
-            if typeof(name) ~= "string" or not isLiteral(value) then
-                warn(string.format("[GiveTool] Attribute '%s' is not a literal; nothing was given.", tostring(name)))
-                return false
-            end
-        end
-    end
+	-- Check the attributes before touching the held tool, so a bad recipe entry changes nothing.
+	if attributes ~= nil then
+		if typeof(attributes) ~= "table" then
+			warn("[GiveTool] Expected a table of attributes.")
+			return false
+		end
+		for name, value in attributes do
+			if typeof(name) ~= "string" or not isLiteral(value) then
+				warn(string.format("[GiveTool] Attribute '%s' is not a literal; nothing was given.", tostring(name)))
+				return false
+			end
+		end
+	end
 
-    local held = getHeldTool(player)
-    if held then
-        held.Parent = player.Backpack
-    end
+	local held = getHeldTool(player)
+	if held then
+		held.Parent = player.Backpack
+	end
 
-    local clone = toolToClone:Clone()
+	local clone = toolToClone:Clone()
 
-    clone:SetAttribute("Item", toolToClone.Name)
-    if attributes then
-        for name, value in attributes do
-            clone:SetAttribute(name, value)
-        end
-    end
+	clone:SetAttribute("Item", toolToClone.Name)
+	if attributes then
+		for name, value in attributes do
+			clone:SetAttribute(name, value)
+		end
+	end
 
-    local autoWeld = clone:GetAttribute("AutoWeld")
-    if autoWeld == true or autoWeld == nil then
-        local handle = clone:FindFirstChild("Handle") :: BasePart?
-        if handle then
-            for _, part in clone:GetDescendants() do
-                if part:IsA("BasePart") and part ~= handle then
-                    local weld = Instance.new("WeldConstraint")
-                    weld.Part0 = handle
-                    weld.Part1 = part :: BasePart
-                    weld.Parent = handle
-                end
-            end
-        end
-    end
+	local autoWeld = clone:GetAttribute("AutoWeld")
+	if autoWeld == true or autoWeld == nil then
+		local handle = clone:FindFirstChild("Handle") :: BasePart?
+		if handle then
+			for _, part in clone:GetDescendants() do
+				if part:IsA("BasePart") and part ~= handle then
+					local weld = Instance.new("WeldConstraint")
+					weld.Part0 = handle
+					weld.Part1 = part :: BasePart
+					weld.Parent = handle
+				end
+			end
+		end
+	end
 
-    for _, part in clone:GetDescendants() do
-        if part:IsA("BasePart") then
-            part.Anchored = false
-            part.CanCollide = false
-        end
-    end
+	for _, part in clone:GetDescendants() do
+		if part:IsA("BasePart") then
+			part.Anchored = false
+			part.CanCollide = false
+		end
+	end
 
-    clone.Parent = character
-    return true
+	clone.Parent = character
+	pcall(function()
+		require(game:GetService("ReplicatedStorage").Packages.Knit)
+			.GetService("AnalyticsEvents")
+			:Funnel(player, 3, "FirstItemTaken")
+	end)
+	return true
 end
 
 return GiveTool

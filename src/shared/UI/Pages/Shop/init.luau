@@ -19,7 +19,7 @@ local c = React.createElement
 -- local success, playerPolicyInfo: { ArePaidRandomItemsRestricted: boolean } =
 -- 	pcall(PolicyService.GetPolicyInfoForPlayerAsync, PolicyService, Players.LocalPlayer)
 
-local paidRandomItemsRestricted = false--success and playerPolicyInfo.ArePaidRandomItemsRestricted or false
+local paidRandomItemsRestricted = false --success and playerPolicyInfo.ArePaidRandomItemsRestricted or false
 
 local PAGES: { OpenableMenu.Page } = {
 	{
@@ -39,6 +39,7 @@ local PAGES: { OpenableMenu.Page } = {
 	},
 	{ Key = "Currency", Label = "Currency", Content = c(require(script.Currency)) },
 	{ Key = "Pets", Label = "Pets", Content = c(require(script.Pets)) },
+	{ Key = "Group Benefit", Label = "Group Benefit", Content = c(require(script.GroupBenefit)) },
 	{ Key = "Passes", Label = "Passes", Content = c(require(script.Passes)) },
 	{
 		Key = "Nametags",

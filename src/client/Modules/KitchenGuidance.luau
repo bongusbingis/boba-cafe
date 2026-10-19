@@ -1,0 +1,152 @@
+--!strict
+--[[
+	Module: KitchenGuidance
+	Description: Pure logic behind the kitchen hints (M1.2 design 3.9, M1.5c/d). No Instances
+	             are touched, so it is unit tested (server/Tests/KitchenGuidance.spec). The
+	             Highlight, beam and toast code in KitchenController and AppDialogs calls it.
+
+	Not a controller: Knit.AddControllersDeep only requires this file.
+--]]
+
+---> Dependencies
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local OrderSpec = require(ReplicatedStorage:WaitForChild("Shared").Ordering.OrderSpec)
+
+---> Types
+
+export type Point = { X: number, Y: number, Z: number } -- a Vector3 fits
+
+export type Guidance = {
+	Station: string?, -- the model name to highlight; nil at the Serve step
+	Choice: string?, -- the dialog button to pulse at that station
+	Label: string, -- "Medium Clear Cup", or "Serve your customer" at the Serve step
+	IsServe: boolean, -- every step is done: the Highlight goes to the NPC
+	Current: number,
+	Total: number,
+	Item: string, -- the spec's Item (the "first time each item appears" key)
+}
+
+export type BeamState = {
+	CustomersSeen: number, -- distinct orders this session, counting the current one
+	ItemSeenBefore: boolean, -- the current Item has been shown on an earlier order
+	IdleSeconds: number, -- time since the held tool last changed
+}
+
+---> Constants
+
+local KitchenGuidance = {}
+
+-- TUNING (design 3.9): the beam shows for the first N customers of a session.
+KitchenGuidance.BEAM_FIRST_CUSTOMERS = 3
+-- TUNING (design 3.9): the beam shows again after this many seconds without progress.
+KitchenGuidance.BEAM_IDLE_SECONDS = 20
+-- TUNING (design 3.9): no more than this many Highlights exist at once.
+KitchenGuidance.MAX_HIGHLIGHTS = 2
+-- TUNING: stations that are never "the wrong station" (cleaning, lids, and the Blender
+-- while PENDING JACK: Q3 is open). Using one is not a mistake to correct.
+KitchenGuidance.NEUTRAL_STATIONS = { Sink = true, Lids = true, Blender = true } :: { [string]: boolean }
+
+---> Public
+
+-- The index of the nearest point to `origin` (straight-line distance), or nil for an
+-- empty list. Ties keep the first.
+function KitchenGuidance.NearestIndex(points: { Point }, origin: Point): number?
+	local bestIndex: number? = nil
+	local bestSquared = math.huge
+	for index, point in points do
+		local dx, dy, dz = point.X - origin.X, point.Y - origin.Y, point.Z - origin.Z
+		local squared = dx * dx + dy * dy + dz * dz
+		if squared < bestSquared then
+			bestSquared = squared
+			bestIndex = index
+		end
+	end
+	return bestIndex
+end
+
+-- Turns whatever OrderController.CurrentOrder holds into an OrderSpec, or nil. The
+-- ticket is the CustomerService NPC ticket { Id, NpcModel, Label, Spec = { Category,
+-- Item, CustomInfo?, Size? }, PatienceEnd, PatienceTotal, Scripted, Rescue }; its
+-- `.Spec` order item is resolved by `fromOrderItem` (normally OrderSpec.FromOrderItem).
+-- A spec itself, a bare order item and a list whose first entry is one of those are
+-- accepted too (notepad orders). Never errors.
+function KitchenGuidance.ResolveSpec(order: any, fromOrderItem: (any) -> (any?, string?)): OrderSpec.OrderSpec?
+	if typeof(order) ~= "table" then
+		return nil
+	end
+	if typeof(order.Kind) == "string" and typeof(order.Item) == "string" and typeof(order.Label) == "string" then
+		return order
+	end
+	if order.Spec ~= nil then
+		return KitchenGuidance.ResolveSpec(order.Spec, fromOrderItem)
+	end
+	if typeof(order.Category) == "string" and typeof(order.Item) == "string" then
+		local ok, spec = pcall(fromOrderItem, order)
+		if ok and typeof(spec) == "table" then
+			return spec
+		end
+		return nil
+	end
+	if order[1] ~= nil then
+		return KitchenGuidance.ResolveSpec(order[1], fromOrderItem)
+	end
+	return nil
+end
+
+-- Where the held tool is in the order. nil when the item has no recipe chain (no card,
+-- no hints). `attrs` are the equipped tool's attributes, nil when nothing is held.
+function KitchenGuidance.Compute(spec: OrderSpec.OrderSpec?, attrs: { [string]: any }?): Guidance?
+	if spec == nil then
+		return nil
+	end
+	local steps = OrderSpec.Steps(spec)
+	if #steps == 0 then
+		return nil
+	end
+	local current = OrderSpec.StepState(spec, attrs)
+	local step = steps[current]
+	if step == nil then
+		return {
+			Station = nil,
+			Choice = nil,
+			Label = "Serve your customer",
+			IsServe = true,
+			Current = current,
+			Total = #steps,
+			Item = spec.Item,
+		}
+	end
+	return {
+		Station = step.Station,
+		Choice = step.Choice,
+		Label = step.Label,
+		IsServe = false,
+		Current = current,
+		Total = #steps,
+		Item = spec.Item,
+	}
+end
+
+-- Design 3.9: the beam shows for the first N customers, the first time each item
+-- appears, and after the idle time. Any one is enough.
+function KitchenGuidance.ShouldShowBeam(state: BeamState): boolean
+	return state.CustomersSeen <= KitchenGuidance.BEAM_FIRST_CUSTOMERS
+		or not state.ItemSeenBefore
+		or state.IdleSeconds >= KitchenGuidance.BEAM_IDLE_SECONDS
+end
+
+-- The toast text when the player starts using `station` and it is not the current
+-- step, or nil when there is nothing to say (right station, no guidance, neutral
+-- station).
+function KitchenGuidance.WrongStationMessage(guidance: Guidance?, station: string): string?
+	if guidance == nil or guidance.Station == station then
+		return nil
+	end
+	if KitchenGuidance.NEUTRAL_STATIONS[station] then
+		return nil
+	end
+	return "Next: " .. guidance.Label
+end
+
+return KitchenGuidance

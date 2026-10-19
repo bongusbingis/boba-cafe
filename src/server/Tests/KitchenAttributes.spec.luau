@@ -8,7 +8,7 @@
 	Testing strategy
 	────────────────
 	The real Recipes data and the real GiveTool / SetToolAttributes /
-	ToolNameValidityCheck / RenameToolHolding actions run against real Tool and Model
+	ToolNameValidityCheck / ToolAttributeCheck / RenameToolHolding actions run against real Tool and Model
 	instances. The player is a plain table ({ Character, Backpack }). A small runner
 	walks a recipe's Actions in order and follows SelectFrom branches by a chosen key;
 	AnimateRaw and SetToolHoldingProperty are skipped because they change neither
@@ -35,6 +35,7 @@ return function()
 		GiveTool = GiveTool,
 		SetToolAttributes = SetToolAttributes,
 		ToolNameValidityCheck = require(ActionsFolder.ToolNameValidityCheck),
+		ToolAttributeCheck = require(ActionsFolder.ToolAttributeCheck),
 		RenameToolHolding = require(ActionsFolder.RenameToolHolding),
 	}
 	-- Actions that change neither a tool's name nor its attributes.

@@ -865,6 +865,56 @@ return function()
 			end)
 		end
 
+		-- Launch menu (Q12): items no station can make are refused before any state changes.
+		local OFF_MENU_REQUESTS = {
+			["a smoothie"] = makeRequest("Smoothies", "Banana Smoothie", { Size = "Small" }),
+			["a tea"] = makeRequest("Teas", "Green", { Size = "Small", Iced = false }),
+			["water"] = makeRequest("Others", "Water", { Size = "Small", Ice = true }),
+			["a pastry with no recipe"] = makeRequest("Pastries", "Croissant"),
+			["a latte"] = makeRequest("Coffees", "Latte", { Size = "Small", Iced = false, Sugar = false }),
+			["a boba syrup with no dispenser"] = makeRequest("Boba Teas", "Custom Boba", {
+				Size = "Medium",
+				["Syrup Flavor"] = "Almond",
+				["Tapioca Flavor"] = "Normal",
+			}),
+			["a tapioca off the launch menu"] = makeRequest("Boba Teas", "Custom Boba", {
+				Size = "Medium",
+				["Syrup Flavor"] = "Classic Milk Tea",
+				["Tapioca Flavor"] = "Pumpkin Paradise",
+			}),
+		}
+		for caseName, request in OFF_MENU_REQUESTS do
+			it("should refuse " .. caseName .. " as not on the launch menu", function()
+				local result = service.Client:CreateOrder(player, player.UserId, { request })
+				expect(result.Success).to.equal(false)
+				expect(result.Message).to.equal("That item isn't available right now.")
+				expect(#service._orders).to.equal(0)
+				expect(service._orderDebounces[player.UserId]).to.equal(nil)
+			end)
+		end
+
+		it("should refuse the whole order when only one item is off the menu", function()
+			local result = service.Client:CreateOrder(player, player.UserId, {
+				makeRequest(),
+				makeRequest("Smoothies", "Banana Smoothie", { Size = "Small" }),
+			})
+			expect(result.Success).to.equal(false)
+			expect(#service._orders).to.equal(0)
+		end)
+
+		it("should accept every item the Menu lists as launch-menu, at a valid choice", function()
+			local checked = 0
+			for categoryName, itemNames in Menu.LaunchItems do
+				for _, itemName in itemNames do
+					expect(Menu.FoodTable[categoryName].Items[itemName]).to.be.ok()
+					expect(Menu.IsLaunchItem(categoryName, itemName)).to.equal(true)
+					checked += 1
+				end
+			end
+			expect(checked > 0).to.equal(true)
+			expect(Menu.IsLaunchItem("Smoothies", "Banana Smoothie")).to.equal(false)
+		end)
+
 		it("should rebuild DefaultInfo from the server Menu, ignoring the client's", function()
 			local request = makeRequest()
 			request.DefaultInfo = { ItemName = "Hacked", Select = { Size = true } }
@@ -1263,6 +1313,7 @@ return function()
 				customer = CUSTOMER_ID,
 				status = "Being Prepared",
 				preparedBy = staff.UserId,
+				statusColor = COLOR_PREPARING,
 			}
 			for key, value in orderOverrides or {} do
 				overrides[key] = value
@@ -1465,6 +1516,166 @@ return function()
 
 			cleanPickUpFolder(CUSTOMER_ID)
 			area:Destroy()
+		end)
+	end)
+
+	describe("_handlePickUp (occupied node and served tools)", function()
+		local CUSTOMER_ID = 10001
+		local OTHER_CUSTOMER_ID = 10002
+
+		local function setup(userId: number, areaOwner: number?)
+			local staff = makePlayer(userId)
+			staff.Character = Instance.new("Model")
+			local area = makeArea(areaOwner or 0)
+			local order = makeOrder({
+				customer = CUSTOMER_ID,
+				status = "Being Prepared",
+				preparedBy = staff.UserId,
+			})
+			service._orders = { order }
+			return staff, area, order
+		end
+
+		it("should refuse a deposit into a node that is already occupied and change nothing", function()
+			local staff, area, order = setup(700, OTHER_CUSTOMER_ID)
+			local tool = makeTool(regularMedium(), staff.Backpack)
+
+			service:_handlePickUp(staff, area)
+
+			expect(order.status).to.equal("Being Prepared")
+			expect(order.grade).to.equal(nil)
+			expect(area.OrderOwner.Value).to.equal(OTHER_CUSTOMER_ID) -- the first customer keeps the node
+			expect(tool.Parent).to.equal(staff.Backpack)
+			expect(tool:GetAttribute("Served")).to.equal(nil)
+			expect(ServerStorage.OrderPickUp:FindFirstChild("Order_" .. CUSTOMER_ID)).to.equal(nil)
+			expect(#service.Client.NotepadUpdated._calls).to.equal(0)
+
+			local announcements = service.Client.Announcement._calls
+			expect(#announcements).to.equal(1)
+			expect(announcements[1][1]).to.equal(staff)
+			expect(announcements[1][2]).to.equal("Cannot Deposit Order!")
+			expect(string.find(announcements[1][3], "taken", 1, true)).to.be.ok()
+
+			-- The stale prompt is hidden for that barista.
+			local visibility = service.Client.PickUpNodeVisibilityChanged._calls
+			expect(#visibility).to.equal(1)
+			expect(visibility[1][1]).to.equal(staff)
+			expect(visibility[1][2]).to.equal(area)
+			expect(visibility[1][3]).to.equal(false)
+			area:Destroy()
+		end)
+
+		it("should mark deposited tools Served", function()
+			local staff, area = setup(701)
+			local tool = makeTool(regularMedium(), staff.Backpack)
+
+			service:_handlePickUp(staff, area)
+
+			expect(tool:GetAttribute("Served")).to.equal(true)
+
+			cleanPickUpFolder(CUSTOMER_ID)
+			area:Destroy()
+		end)
+
+		it("should refuse to deposit a tool that was already served", function()
+			local staff, area, order = setup(702)
+			local tool = makeTool(regularMedium({ Served = true }), staff.Backpack)
+
+			service:_handlePickUp(staff, area)
+
+			expect(order.status).to.equal("Being Prepared")
+			expect(area.OrderOwner.Value).to.equal(0)
+			expect(tool.Parent).to.equal(staff.Backpack)
+			local announcements = service.Client.Announcement._calls
+			expect(#announcements).to.equal(1)
+			expect(string.find(announcements[1][3], "An item is missing", 1, true)).to.be.ok()
+			area:Destroy()
+		end)
+
+		it("should not let a picked-up drink satisfy a second order", function()
+			local staff, area, order = setup(703)
+			makeTool(regularMedium(), staff.Backpack)
+
+			-- First order: deposit, then the customer picks the drink up.
+			service:_handlePickUp(staff, area)
+			expect(order.status).to.equal("Ready for Pick Up")
+			local customer = makePlayer(CUSTOMER_ID)
+			service:_handlePickUp(customer, area)
+			local drink = customer.Backpack:FindFirstChildWhichIsA("Tool")
+			expect(drink).to.be.ok()
+			expect(drink:GetAttribute("Served")).to.equal(true)
+
+			-- Hand it to the barista for a second order: it must not match.
+			drink.Parent = staff.Backpack
+			local second = makeOrder({
+				orderNum = "0002",
+				customer = OTHER_CUSTOMER_ID,
+				status = "Being Prepared",
+				preparedBy = staff.UserId,
+			})
+			service._orders = { second }
+			local tools = service:FindServeTools(staff, second.specs)
+			expect(tools).to.equal(nil)
+
+			area:Destroy()
+		end)
+	end)
+
+	describe("clock-out releases a claimed order", function()
+		local function claimed(userId: number)
+			local staff = makePlayer(userId)
+			local order = makeOrder({ status = "Being Prepared", preparedBy = userId, statusColor = COLOR_PREPARING })
+			service._orders = { order }
+			return staff, order
+		end
+
+		it("should return a Being Prepared order to the queue when the barista clocks out", function()
+			local staff, order = claimed(800)
+
+			service:_onClockedInChanged(staff, false)
+
+			expect(order.status).to.equal("Pending Preparation")
+			expect(order.statusColor).to.equal(COLOR_PENDING)
+			expect(order.preparedBy).to.equal(nil)
+			expect(service:HasActiveOrder(staff)).to.equal(false)
+			expect(service:_getNextOrder()).to.equal(order)
+
+			local notepad = service.Client.NotepadUpdated._calls
+			expect(#notepad).to.equal(1)
+			expect(notepad[1][1]).to.equal(staff)
+			expect(notepad[1][2]).to.equal("ResetOrder")
+		end)
+
+		it("should let the barista, or another one, claim the order again", function()
+			local staff, order = claimed(801)
+			service:_onClockedInChanged(staff, false)
+
+			mockClockedIn(true)
+			service:_claimNextOrder(staff)
+
+			expect(order.status).to.equal("Being Prepared")
+			expect(order.preparedBy).to.equal(staff.UserId)
+		end)
+
+		it("should keep the order when the barista clocks in", function()
+			local staff, order = claimed(802)
+
+			service:_onClockedInChanged(staff, true)
+
+			expect(order.status).to.equal("Being Prepared")
+			expect(order.preparedBy).to.equal(staff.UserId)
+		end)
+
+		it("should leave other baristas' orders and Ready orders alone", function()
+			local staff = makePlayer(803)
+			local others = makeOrder({ status = "Being Prepared", preparedBy = 999, statusColor = COLOR_PREPARING })
+			local ready = makeOrder({ orderNum = "0002", status = "Ready for Pick Up", preparedBy = 803 })
+			service._orders = { others, ready }
+
+			service:_onClockedInChanged(staff, false)
+
+			expect(others.status).to.equal("Being Prepared")
+			expect(ready.status).to.equal("Ready for Pick Up")
 		end)
 	end)
 

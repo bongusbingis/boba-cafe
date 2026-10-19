@@ -1,0 +1,118 @@
+#!/usr/bin/env bash
+# Luau code gate (AGENTS.md): no NEW Selene/StyLua findings in changed files,
+# plus a rojo build. Findings are compared against the HEAD version of each
+# file (empty baseline if untracked), ignoring line numbers.
+#
+# Usage: scripts/gate.sh [file.luau ...]
+#   With no args, checks changed + untracked .lua/.luau files (git status).
+# Exit: 0 pass, 1 new finding or build failure, 2 usage/tool error.
+set -u
+
+REPO="/mnt/c/Users/jackc/desktop/boba-cafe"
+cd "$REPO" || exit 2
+
+for tool in selene stylua rojo git; do
+	command -v "$tool" >/dev/null 2>&1 || { echo "gate: missing tool: $tool" >&2; exit 2; }
+done
+
+WORK="$(mktemp -d "${TMPDIR:-/tmp}/gate.XXXXXX")" || exit 2
+trap 'rm -rf "$WORK"' EXIT
+
+files=()
+if [ "$#" -gt 0 ]; then
+	files=("$@")
+else
+	while IFS= read -r line; do
+		status="${line:0:2}"
+		path="${line:3}"
+		case "$status" in *D*) continue ;; esac
+		case "$path" in *" -> "*) path="${path##* -> }" ;; esac
+		files+=("$path")
+	done < <(git status --porcelain --untracked-files=all)
+fi
+
+# Selene output -> normalized finding lines ("warning[code]: message"),
+# with the file:line:col prefix and "line N" references removed.
+selene_findings() {
+	selene --config "$REPO/selene.toml" --display-style=quiet "$1" 2>&1 \
+		| grep -E '^.+:[0-9]+:[0-9]+: (warning|error)\[' \
+		| sed -E 's/^.+:[0-9]+:[0-9]+: //; s/line [0-9]+/line N/g' \
+		| sort
+}
+
+fail=0
+checked=0
+for f in ${files[@]+"${files[@]}"}; do
+	case "$f" in *.lua | *.luau) ;; *) continue ;; esac
+	if [ ! -f "$f" ]; then
+		echo "FAIL  $f (not found)"
+		fail=1
+		continue
+	fi
+	checked=$((checked + 1))
+
+	# Baseline copy at the same relative path under a temp dir.
+	base="$WORK/base/$f"
+	mkdir -p "$(dirname "$base")"
+	tracked=0
+	if git cat-file -e "HEAD:$f" 2>/dev/null; then
+		git show "HEAD:$f" >"$base"
+		tracked=1
+	else
+		: >"$base"
+	fi
+
+	selene_findings "$f" >"$WORK/after.txt"
+	selene_findings "$base" >"$WORK/before.txt"
+	new="$(awk '
+		FILENAME == ARGV[1] { b[$0]++; next }
+		{ a[$0]++ }
+		END { for (k in a) { n = a[k] - b[k]; if (n > 0) printf "%dx %s\n", n, k } }
+	' "$WORK/before.txt" "$WORK/after.txt" | sort)"
+	new_count=0
+	[ -n "$new" ] && new_count="$(printf '%s\n' "$new" | awk -F'x ' '{s += $1} END {print s}')"
+
+	style="ok"
+	if ! stylua --check "$f" >/dev/null 2>&1; then
+		if [ "$tracked" = 1 ] && ! stylua --check --stdin-filepath "$f" - <"$base" >/dev/null 2>&1; then
+			style="pre-existing stylua drift"
+		else
+			style="STYLUA FAIL"
+		fi
+	fi
+
+	verdict="PASS"
+	{ [ "$new_count" -gt 0 ] || [ "$style" = "STYLUA FAIL" ]; } && { verdict="FAIL"; fail=1; }
+	before_count="$(wc -l <"$WORK/before.txt" | tr -d ' ')"
+	after_count="$(wc -l <"$WORK/after.txt" | tr -d ' ')"
+	baseline="HEAD"
+	[ "$tracked" = 0 ] && baseline="empty"
+	printf '%s  %s  selene new=%s (baseline[%s]=%s now=%s)  stylua=%s\n' \
+		"$verdict" "$f" "$new_count" "$baseline" "$before_count" "$after_count" "$style"
+	if [ "$new_count" -gt 0 ]; then
+		printf '%s\n' "$new" | sed 's/^/        NEW /'
+	fi
+	if [ "$style" = "STYLUA FAIL" ]; then
+		echo "        run: stylua $f"
+	fi
+done
+
+if [ "$checked" -eq 0 ]; then
+	echo "gate: no .lua/.luau files to check"
+fi
+
+tmp="${TMPDIR:-/tmp}"
+out="${tmp%/}/gate-build.rbxl"
+if rojo build default.project.json -o "$out" >"$WORK/rojo.txt" 2>&1; then
+	echo "PASS  rojo build -> $out"
+else
+	echo "FAIL  rojo build"
+	sed 's/^/        /' "$WORK/rojo.txt"
+	fail=1
+fi
+
+if [ "$fail" -ne 0 ]; then
+	echo "GATE: FAIL"
+	exit 1
+fi
+echo "GATE: PASS"

@@ -693,4 +693,100 @@ FoodService["FoodTable"] = {
 	},
 }
 
+-- Launch menu (REVIVAL-001 M1.2 section 7, Jack's DEC-011 / Q12). The server accepts an
+-- order only for items listed here, because the rest cannot be made at any station yet
+-- and a claimed order that can never be deposited locks the barista and the customer.
+-- Items are keyed [category] = { item keys of FoodTable }; Choices limit the
+-- RequiredSelection groups (syrups and tapioca) to the flavours that have a station.
+-- Smoothies, Teas, Water, Latte, Salted Hot Chocolate, the other pastries and the Cup are
+-- off until their recipes exist (Q19, Q22). The player UI can filter on IsLaunchItem.
+local LAUNCH_ITEMS = {
+	["Boba Teas"] = { "Custom Boba", "Matcha Tea Boba" },
+	["Coffees"] = { "Regular", "Espresso", "Decaf", "Cappuccino", "Americano", "Cortado", "Koa Coffee" },
+	["Hot Cocoas"] = { "Classic", "Caramel", "Vanilla" },
+	["Pastries"] = { "Fudge Brownie" },
+	["Ice Creams"] = {
+		"Cookie Dough",
+		"Ube",
+		"Vanilla",
+		"Chocolate",
+		"Mint",
+		"Cherry Sherbet",
+		"Orange Sherbet",
+		"Watermelon Sherbet",
+		"Bubble Gum",
+		"Cotton Candy",
+		"Pistachio",
+		"Strawberry",
+	},
+	["Macarons"] = {
+		"Vanilla",
+		"Chocolate",
+		"Mint",
+		"Caramel Cake",
+		"Cookies n' Cream",
+		"Blueberry",
+		"Strawberry",
+		"Cherry",
+	},
+	["Mochis"] = { "Mint", "Cookie & Cream", "Vanilla", "Strawberry", "Orange Cream" },
+	["Others"] = { "Milk", "Flavored Milk" },
+}
+
+local LAUNCH_CHOICES = {
+	["Syrup Flavor"] = {
+		"Classic Milk Tea",
+		"Taro",
+		"Strawberry",
+		"Mango",
+		"Matcha",
+		"Brown Sugar",
+		"Chocolate",
+		"Passion Fruit",
+	},
+	["Tapioca Flavor"] = { "Normal", "Strawberry", "Mystic Burst", "Banana Blast" },
+}
+
+local function toSet(list: { string }): { [string]: boolean }
+	local set = {}
+	for _, value in list do
+		set[value] = true
+	end
+	return set
+end
+
+local launchItemSets = {}
+for categoryName, list in LAUNCH_ITEMS do
+	launchItemSets[categoryName] = toSet(list)
+end
+local launchChoiceSets = {}
+for groupName, list in LAUNCH_CHOICES do
+	launchChoiceSets[groupName] = toSet(list)
+end
+
+FoodService["LaunchItems"] = LAUNCH_ITEMS
+FoodService["LaunchChoices"] = LAUNCH_CHOICES
+
+-- True when the item is on the launch menu. When `customInfo` is given, its syrup and
+-- tapioca picks must also be launch flavours (a missing pick is the caller's problem:
+-- the order builder rejects it). Unknown or malformed input is false.
+function FoodService.IsLaunchItem(category: any, item: any, customInfo: any?): boolean
+	if typeof(category) ~= "string" or typeof(item) ~= "string" then
+		return false
+	end
+	local set = launchItemSets[category]
+	if set == nil or set[item] ~= true then
+		return false
+	end
+	if typeof(customInfo) == "table" then
+		for groupName, allowed in launchChoiceSets do
+			local value = customInfo[groupName]
+			if value ~= nil and (typeof(value) ~= "string" or allowed[value] ~= true) then
+				return false
+			end
+		end
+	end
+	return true
+end
+
 return FoodService

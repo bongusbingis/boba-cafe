@@ -1,0 +1,24 @@
+PASS  src/server/Modules/OrderService.luau  selene new=0 (baseline[HEAD]=0 now=0)  stylua=ok
+PASS  rojo build -> /mnt/c/Users/jackc/AppData/Local/Temp/boba-gate/gate-build.rbxl
+GATE: PASS
+PASS  src/server/Tests/OrderService.spec.luau  selene new=0 (baseline[HEAD]=0 now=0)  stylua=ok
+PASS  rojo build -> /mnt/c/Users/jackc/AppData/Local/Temp/boba-gate/gate-build.rbxl
+GATE: PASS
+PASS  src/shared/Ordering/Menu.luau  selene new=0 (baseline[HEAD]=1 now=1)  stylua=ok
+PASS  rojo build -> /mnt/c/Users/jackc/AppData/Local/Temp/boba-gate/gate-build.rbxl
+GATE: PASS
+PASS  src/client/Modules/OrderController.luau  selene new=0 (baseline[HEAD]=1 now=1)  stylua=ok
+PASS  rojo build -> /mnt/c/Users/jackc/AppData/Local/Temp/boba-gate/gate-build.rbxl
+GATE: PASS
+PASS  src/server/Modules/CustomerService/init.luau  selene new=0 (baseline[HEAD]=0 now=0)  stylua=ok
+PASS  rojo build -> /mnt/c/Users/jackc/AppData/Local/Temp/boba-gate/gate-build.rbxl
+GATE: PASS
+PASS  src/server/Modules/CustomerService/Npc.luau  selene new=0 (baseline[HEAD]=0 now=0)  stylua=ok
+PASS  rojo build -> /mnt/c/Users/jackc/AppData/Local/Temp/boba-gate/gate-build.rbxl
+GATE: PASS
+PASS  src/server/Tests/CustomerService.spec.luau  selene new=0 (baseline[HEAD]=0 now=0)  stylua=ok
+PASS  rojo build -> /mnt/c/Users/jackc/AppData/Local/Temp/boba-gate/gate-build.rbxl
+GATE: PASS
+PASS  src/server/Modules/KitchenService/InteractionRunner.luau  selene new=0 (baseline[HEAD]=0 now=0)  stylua=ok
+PASS  rojo build -> /mnt/c/Users/jackc/AppData/Local/Temp/boba-gate/gate-build.rbxl
+GATE: PASS

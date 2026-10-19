@@ -126,8 +126,79 @@ Statements here describe the working tree on branch `uhweifh` as read on 2026-10
 - Staff deposit prepared items as tools into a pick-up area (one depositor at a time per area); the customer collects them from there. Item and boba counts feed `ItemsOrdered`, `BobasOrdered`, and `OrdersPrepared`.
 - The service depends on authored instances: `workspace["Ordering System"]` (`Status Screens`, `Staff Screens`, `Pick Up` nodes with `OrderOwner` and `ProximityPrompt`), waited for at most 10 s in `KnitStart` (after `ShiftService` is resolved and the clock-out hook is connected). If it is missing, a `warn` is logged and ordering screens and pick-up are disabled; each sub-folder is also optional and disables only its own feature. `ServerStorage.OrderPickUp` and `ReplicatedStorage.ModelStorage` are created in code when absent. `TopBar` resolves `Ordering System.Computers` (30 s wait, after the HUD mounts) to attach register prompts, which are available to every player.
 - Studio evidence (M0.4 run 2, one player): rejection of malformed orders, a valid order, the one-open-order rule, claim, deposit, and customer pick-up all worked. Two baristas claiming, the queue, and one player collecting another's order are unverified.
+- **OrderSpec and tool attributes.** `shared/Ordering/OrderSpec.luau` grades a finished tool against an order spec. Tool attributes: `Item`, `Size`, `Syrup`, `Tapioca`, `Iced`, `Sugar` (choices), and `Served` (set when a drink is picked up). `GiveTool` copies `Item` onto the tool; the other choice attributes are written by `SetToolAttributes` from the recipe. Stations also write `Lid`, which nothing reads. `OrderSpec.Match` grades `Perfect` (no mistake), `Close` (one minor mistake) or `Wrong` (two or more); a Grab item is always `Perfect`. Tool names are never read.
+- **Auto-match deposit.** `OrderService:FindServeTools(player, specs)` is a plain synchronous call (no yield) that finds the held or backpack tools that satisfy the specs and skips tools already marked `Served`. The pick-up step sets `Served = true` on each tool it hands over, so a drink can never satisfy a second order.
+- **Launch allowlist.** `Menu.IsLaunchItem` (`shared/Ordering/Menu.luau`, `LAUNCH_ITEMS` and the launch choice sets) is checked in `OrderService:CreateOrder` before any item is built. An item or choice not on the list is refused with `That item isn't available right now.` (no order is created, so no barista or customer is locked). If `IsLaunchItem` is missing, ordering is disabled (fail closed).
 **Depends on:** ShiftService, StatisticsService, DialogService, Promise, authored Ordering System. `QuestService` is used if it exists.
 **Consumers:** Ordering and mobile ordering UI, staff screens, Statistics, `OrderController` (pick-up beam; `SharedStorage.Effects.PickupBeam` is looked up on use and skipped with one `warn` when missing).
+
+### Customers (NPCs)
+**Purpose:** Spawns NPC customers who walk in, queue, and wait at a counter with a patience clock. A clocked-in barista is assigned each waiting customer and serves it at the counter prompt. Customers who run out of patience leave. Trash cans and the barista uniform are handled here too.
+**Owner modules:**
+- `server/Modules/CustomerService/init.luau`, `Npc.luau` (model, walk, bubble, Serve prompt), `Rules.luau` (pure pacing, patience, order and pay rules)
+- `server/Modules/UniformService.luau`, `server/Modules/TrashService.luau`
+- `shared/Configuration/CustomerConfig.luau`, `shared/Configuration/CustomerDialogue.luau`
+- `client/Modules/KitchenController.luau` (Serve or Rescue prompt label and visibility), `client/Modules/OrderController.luau` (ticket listener)
+- `server/Tests/CustomerService.spec.luau`
+
+**Authored contract (`workspace.Assets.NPC`, RIG-1):**
+
+| Path | Contents |
+| --- | --- |
+| `workspace.Assets.NPC.Entry` | BasePart. Where NPCs spawn. |
+| `workspace.Assets.NPC.Exit` | BasePart. Where NPCs leave. |
+| `workspace.Assets.NPC.Path` | Parts named `1`..`n`, walked in order from Entry. |
+| `workspace.Assets.NPC.Queue` | Parts named `1`..`k`; `1` is the front of the line. |
+| `workspace.Assets.NPC.Counter` | Parts named `1`..`m`; the NPC faces the Counter part's rotation (toward the kitchen). |
+
+Part rules: Entry and Exit must be BaseParts; Path, Queue and Counter each need at least one numbered BasePart. RIG-1 parts are 2x1x2, Anchored, with `CanCollide`, `CanQuery` and `CanTouch` off and `Transparency` 1. Current positions (RIG-1, y -11.4): Entry (4.6, 323.9); Exit (9.6, 323.9); Path.1 (4.4, 320.3); Queue 1..6 (4.2, 316.7), (1.3, 315.9), (-1.6, 315.1), (-4.5, 314.3), (-7.4, 313.6), (-10.3, 312.8); Counter 1..5 are the five registers of `workspace["Ordering System"].CustomerAreas` nearest Entry, at (-8.8, 305.9), (-1.5, 307.9), (6.0, 309.9), (14.0, 312.0), (21.9, 314.2), LookVector (0.26, -0.97) toward the kitchen. These are a first placement; the Rigger may move the parts.
+
+**Key invariants:**
+- `KnitStart` resolves the five paths above with one shared 10 s budget. If any is missing, the service logs one `warn` naming it, `Enabled` stays false, and no folder, loop or NPC is created.
+- A 1 s pacing loop spawns one NPC while the present count is below `Rules.PacingTarget(clockedInBaristas)` (1 barista: 2; 5: 7; 20 and 40: 16), the queue has room, and `SPAWN_GAP_SECONDS` (3) have passed. `SERVER_CAP` (16) limits NPCs present at once. All TUNING.
+- The NPC walks Entry, then Path, then its queue spot. The front NPC takes the lowest free Counter spot. The patience clock (`PatienceEnd`, server time, on the model) starts at assignment, not at arrival, and pauses while no barista is clocked in. At zero the NPC leaves with reason `PatienceOut`: no BobaBucks are taken, the barista's combo resets, and Cafe Rating takes a walkout hit.
+- Patience bar: Green above 50%; Yellow at or below `PATIENCE_YELLOW_FRACTION` (0.5); Red at or below `PATIENCE_RED_FRACTION` (0.25).
+- Walking uses `Humanoid:MoveTo` per node. After 6 s a segment is finished with `PivotTo`. Three `PivotTo` fallbacks in a row despawn the NPC with a `warn`. Each NPC thread runs inside `pcall`.
+- Collision groups are registered at runtime: `NPC` and `CafePlayers`. `NPC` collides with neither `CafePlayers` nor `NPC`, and still collides with the floor. Every player character's parts are moved into `CafePlayers`, including parts added later.
+- Runtime folder: `workspace.Customers` holds the NPC models (`BuiltBy` `REVIVAL-001-M1.4core`).
+- Serve prompt: each assigned NPC gets a `ProximityPrompt` named `ServePrompt` on its `HumanoidRootPart` (ActionText `Serve`, HoldDuration 0, MaxActivationDistance 8, model attribute `PromptAction = "Serve"`). The client shows `Rescue` locally for a clocked-in barista who is not assigned, once patience is at or below `RESCUE_FRACTION` (0.3). On `Triggered` the server checks, in order: clocked in (`ShiftService`); within 10 studs of the player's `PrimaryPart`; state `AtCounter`; `Rules.CanServe` (the assigned barista, or anyone on a Rescue); then `OrderService:FindServeTools`. The matched tool(s) are destroyed with no yield between pick and destroy.
+- Tickets: a barista holds up to `SLOTS_PER_BARISTA` ticket slots (1; a second from level 5, see M2 Systems). `CustomerService.Client.TicketChanged` fires `(player, ticket, slot)` on assignment, serve, walkout and reassignment, and `(player, nil, slot)` to clear. The ticket table:
+
+```
+ticket = {
+  Id = string,            -- npc.Model.Name (unique per NPC)
+  NpcModel = Model,       -- the NPC model in workspace.Customers
+  Label = string,         -- OrderSpec label, e.g. "Medium Custom Boba"
+  Spec = { Category = string, Item = string, CustomInfo = {...}?, Size = string? },
+  Items = { ... },        -- every item of the order; Spec is the first
+  Variant = string?,      -- "Karen" or "VIP"; nil for a normal customer
+  PatienceEnd = number,   -- server time (GetServerTimeNow)
+  PatienceTotal = number, -- seconds
+  Scripted = boolean,
+  Rescue = false,         -- the server always sends false; the client flips the prompt label
+  Slot = number,          -- added by the server on assignment
+}
+```
+
+- Pay (`Rules.Payout`): `CustomerConfig.PAY_TABLE` by Category, times `GRADE_MULT` (Perfect 1.0, Close 0.5), `FAST_MULT` on a fast serve, a combo of `COMBO_STEP` per consecutive Perfect up to `COMBO_CAP`, and `RESCUE_MULT` on a rescue. Every economy value is PROPOSED (Jack) until the economy is approved:
+  - `PAY_TABLE` (PROPOSED): Boba Teas 3, Coffees 2, Hot Cocoas 2, Teas 2, Pastries 1, Grab 1. The packet spellings (Coffee, Hot Cocoa, Tea) alias the same values.
+  - `GRADE_MULT` Perfect 1.0, Close 0.5; `FAST_MULT` 1.5; `FAST_FRACTION` 0.5; `COMBO_STEP` 0.1; `COMBO_CAP` 0.5; `RESCUE_MULT` 1.5; `RESCUE_FRACTION` 0.3 (all PROPOSED).
+- Order pool (`CustomerConfig.ORDER_POOL`, TUNING weights): Classic Milk Tea Boba 55, Regular coffee (hot, no sugar) 30, Fudge Brownie 15. Boba and coffee sizes: Small 30, Medium 40, Large 30 (TUNING). PENDING JACK Q3: whether boba keeps three sizes.
+- Variants (`CustomerConfig`, PROPOSED): a Karen's look comes from `SharedStorage.NPCStorage.Karen`, and a Karen plays `Confused` on a wrong serve. Ordinary NPCs take a random `HumanoidDescription` from `SharedStorage.NPCs`.
+
+**Authored paths used by this system (RIG-1 import, spelled as in the place):**
+- `ReplicatedStorage.SharedStorage.CleanlinessStorage`: `Spills` (`Boba`, `MeltedPopsicle`, `Donut`), `Sparkles`, `Animations`, `Tools` (`Broom`, `MopBucket`, `Mop`, `DishTowel`, `SprayBottle`), `BoardInterface`.
+- `ReplicatedStorage.SharedStorage.NPCStorage`: `Karen` (HumanoidDescription) and `Animations` (`Wave`, `Confused`, `BoothSit`, `ComfySit`, `CafeSit`, `CouchSit`, `Idle`). NPC-LOOK reports the imported `.rbxm` has no `Idle`, so the code skips `Idle` until one exists. RIG-1 lists it; this is open (see the RIG-1 and NPC-LOOK evidence).
+- `ReplicatedStorage.SharedStorage.NPCs`: HumanoidDescriptions for ordinary NPCs. Read by the code; not in the RIG-1 import (NOT VERIFIED in the place).
+- `ReplicatedStorage.SharedStorage.KitchenStorage.Assets`: `S_DefaultUniform` (Shirt), `P_DefaultUniform` (Pants).
+- `workspace.Map.SpawnInterior1` to `SpawnInterior4`: transparent, non-colliding Neutral spawns (RIG-1). The four old `workspace.Map.SpawnLocation` parts are disabled and kept.
+
+**UniformService (`server/Modules/UniformService.luau`):** On clock-in, a barista's Shirt and Pants templates are set to `S_DefaultUniform` and `P_DefaultUniform`; on clock-out the saved templates are restored. A missing uniform piece warns once and is skipped. Visuals are UNVERIFIED until M1.6.
+
+**TrashService (`server/Modules/TrashService.luau`):** Finds the cans by the CollectionService tag `TrashCan`, and each can gets a prompt. A player holding a drink (tool) who uses a can gets a Yes/No dialog: Yes removes the tool (refused for tools with `NotDisposable`), No keeps it. The player must still be within 12 studs when Yes is pressed. With no tool held, a toast is shown. The six cans are Models named `Trash` (PrimaryPart unset) under `workspace.Assets.Kitchen.TrashCans`, tagged `TrashCan`, with pivots (RIG-1): (-33.9, 327.6), (-19.1, 282.2), (34.7, 345.7), (55.0, 287.3), (-8.2, 377.6), (65.1, 383.0), all at y -11.1.
+
+**Depends on:** ShiftService, OrderService, CurrencyService, StatisticsService, DialogService, Progression (ticket slots), WorldPath, the authored NPC contract and NPC storage.
+**Consumers:** Serve and Rescue prompts and tickets in `KitchenController` and `OrderController`; Cafe Rating (walkout and serve deltas); Statistics (`CustomersServed`).
 
 ### Kitchen
 **Purpose:** Turns kitchen props into proximity-prompt interactions that run recipe action sequences.
@@ -136,6 +207,7 @@ Statements here describe the working tree on branch `uhweifh` as read on 2026-10
 - `shared/Kitchen/Recipes.luau`, `RecipeConstructors.luau`, `KitchenTypes.luau`
 - `shared/Configuration/KitchenConfig.luau`
 - `client/Modules/KitchenController.luau`
+- `client/Modules/KitchenGuidance.luau` (pure logic, no Instances: recipe card `Steps`, Highlight target, beam and toast rules; spec `server/Tests/KitchenGuidance.spec.luau`; required by `KitchenController` and `AppDialogs`)
 **Key invariants:**
 - Every key in `Recipes.Items` is matched by name to models under `workspace.Assets.Kitchen`; each match gets a prompt. Syrup dispensers are cloned from `ReplicatedStorage.SelectorModels.Kitchen.SyrupDispenser` along `Kitchen.Syrups` parts. `workspace.Assets.Kitchen` is waited for at most 10 s in `KnitStart`; if it is missing the kitchen is disabled with a `warn`, and a missing `Syrups` folder or dispenser template disables only the dispensers. `RecipeConstructors` (required by `Recipes` at startup) waits at most 5 s for `ReplicatedStorage.SharedStorage` and then looks up `Tools.Kitchen` and `Animations.Kitchen` with `WorldPath.find`; a missing tool skips the recipe or branch that needs it, and a missing animation drops only that step, each with a `warn`.
 - The prompt handler re-checks on the server: the player is clocked in (`ShiftService`; a clocked-out player's prompt fires and is silently ignored, with no toast), a primary part, a character, and `MAX_INTERACTION_DISTANCE`. Rank is not consulted.
@@ -143,6 +215,8 @@ Statements here describe the working tree on branch `uhweifh` as read on 2026-10
 - Studio evidence (M0.4 run 2): boot, the clock-in gate (clocked out: no dialog or tool; clocked in: the Cup size dialog opens), regular coffee, and Fudge Brownie worked. Boba recipes were not working at that run; the fix is tracked separately and is not described here.
 - `InteractionRunner` debounces per player and runs the recipe's `Actions` in order; each action is a function module in `Actions/` looked up by name. An action that is not a function is skipped with a warning; failures report to the client via `InteractionFailed`.
 - A new action is a new module in `Actions/` with the `ActionFn` signature from `KitchenTypes`, not a branch in the runner.
+- Q14 attribute gates (`KitchenService/Actions/ToolAttributeCheck.luau`, used by `Recipes.luau`) check a held tool's attributes before a Sugar or Ice step. TUNING (Q14): the Coffee Machine holds 4 s (was 7 s); the Ice Machine holds 3 s (was 5 s) and requires a coffee item that is not iced yet (`Iced = false`).
+- `KitchenGuidance` shows the hints: the recipe card rows (`Steps`), which station to highlight, the beam for the first few customers of a session, and the toasts. The Serve step highlights the NPC (`ticket.NpcModel`), not a station.
 - Recipe, drink, syrup, and menu names are shared with Ordering; keep `Recipes` and `Menu` consistent.
 **Depends on:** ShiftService, WorldPath, authored Kitchen models, tools, and SFX.
 **Consumers:** Ordering, Recipes UI, `SetItemEnabled` callers.
@@ -154,7 +228,7 @@ Statements here describe the working tree on branch `uhweifh` as read on 2026-10
 - `shared/Configuration/Spills.luau`
 - `client/Modules/SpillController.lua`
 **Key invariants:**
-- Spill regions come from `workspace.Assets.Spills.Areas`, with templates from `ReplicatedStorage.SharedStorage.Spills`; counts are capped by `MaxTotal` and `MaxSpawned`, with overflow queued, and a new spill is attempted every `SpawnInterval` seconds (30, tuning value). All of that content shares one 10 s budget in `KnitStart` (`WorldPath.waitFor` with a common deadline); if any path is missing, spills are disabled with one `warn` listing the missing paths, and the service also disables itself after repeated spawn failures. `SpillController` does the same on the client for its folders and storage. Studio run M0.4 run 2 showed `Spills disabled (4 authored paths missing)` in the current place, so spills are not exercised there.
+- Spill regions come from `workspace.Assets.Spills.Areas`, with templates from `ReplicatedStorage.SharedStorage.CleanlinessStorage` (its `Spills` folder); counts are capped by `MaxTotal` and `MaxSpawned`, with overflow queued, and a new spill is attempted every `SpawnInterval` seconds (30, tuning value). All of that content shares one 10 s budget in `KnitStart` (`WorldPath.waitFor` with a common deadline); if any path is missing, spills are disabled with one `warn` listing the missing paths, and the service also disables itself after repeated spawn failures. `SpillController` does the same on the client for its folders and storage. Studio run M0.4 run 2 showed `Spills disabled (4 authored paths missing)` in the current place, so spills are not exercised there.
 - Only clocked-in players can clean (`Spill.luau` checks `ShiftService` in the prompt handler).
 - Cleaning awards `PointIncrement` Points through `CurrencyService:Modify` and raises the global `CleanlinessReplica` (`Percent`, replicated to all) by 1 to 2.
 - Trip zones use `Zone`; tripping fires the `Trip` signal to that player only.
@@ -279,3 +353,17 @@ Statements here describe the working tree on branch `uhweifh` as read on 2026-10
 - Visuals come from `Styles.luau` (see `STYLE.md`).
 **Depends on:** React, ReactRoblox, ReactSpring, controllers.
 **Consumers:** Every player-facing screen.
+
+### M2 Systems (progression, rating, real orders, areas)
+**Purpose:** The M2 layer on top of the M1 cafe: XP and levels, a shared Cafe Rating with Rush Hour, real-player orders and ratings, shift summaries, break-area gates, and measurement events. Every value marked PROPOSED is a placeholder until Jack approves the economy. Studio checks for each system are listed in its task evidence and are UNVERIFIED until run.
+
+| Service | What it does | Key signals, attributes and paths | Config (`shared/Configuration/`) |
+| --- | --- | --- | --- |
+| `ShiftService` (M2-SHIFT) | Counts a shift's served customers, walkouts, perfects and pay; awards stars; ends the shift with a summary and a HUD card. | `ShiftEnding` (server signal; the summary may include `Xp`, `LevelBefore`, `LevelAfter`), `Client.ShiftEnded`; `ClockedIn` attribute (see Shifts & Teams); `Hud/ShiftCard.luau` | `ShiftConfig.luau`: `SHIFT_XP` 10, `SHIFT_XP_PER_STAR` 5, `SHIFT_BONUS_PER_STAR` 0 (PROPOSED) |
+| `ProgressionService` (M2-PROGRESS) | XP and levels 1 to 50. Serving earns XP; each level-up shows a toast; every 5 levels grants a nametag from the first ten `Nametags` entries. Never blocks serving. | Player attributes `Level` and `LevelTitle`; profile `Level` and `XP` (`ProfileTemplate`); `Progression.SlotsFor(level)` sets ticket slots (1, or 2 from level 5) | `Progression.luau`: `XP_PER_ITEM` 10, `XP_PERFECT` 5, `XP_FAST` 5, `MAX_LEVEL` 50, level thresholds, title names (PROPOSED) |
+| `RealOrderService` (M2-REALORDER, M2-HEARTS) | Real-player orders. The customer gets a "Real customer!" bubble; the barista gets double pay (x2) for the first 3 orders from the same customer within 10 minutes. After pick-up the customer rates the barista 1 to 5 (once per order; 60 s timeout). | Bubble `RealCustomerBubble`; `Statistics.HeartsReceived` (plus hearts to the barista) and `Statistics.HeartsCount` (plus 1); `Statistics.RegularOrders` (customer); `Served` attribute on the kept drink. Rating buttons are plain "1" to "5" (question for Jack) | `RealOrderConfig.luau`: `PAY_MULT` 2, `BONUS_ORDER_COUNT` 3, `WINDOW_SECONDS` 600 (PROPOSED) |
+| `CafeRatingService` (M2-RATING) | Server-wide Cafe Rating (0 to 100) and Rush Hour. Perfect, fast, walkout, cleaned-spill and drain deltas move the rating, divided by the number of clocked-in baristas. A Rush raises NPC pay. | Workspace attributes `CafeRating` and `RushHour`; `SpillService` `SpillCleanedSignal`; `Hud/CafeRating.luau` (meter frozen during Rush) | `RatingConfig.luau`: `START` 50, `PERFECT` +4, `CLOSE` +1, `FAST` +1, `WALKOUT` -2, `SPILL_CLEANED` +3, `SPILL_DRAIN` -0.5 per 5 s while spills exist, `SPILL_XP` 5, `RUSH_SECONDS` 120 (all PROPOSED) |
+| `TrashService` | Trash can prompts (see Customers). | Tag `TrashCan`; `workspace.Assets.Kitchen.TrashCans.Trash` (x6) | none |
+| `UniformService` | Barista uniform on clock-in (see Customers). | `SharedStorage.KitchenStorage.Assets.S_DefaultUniform` / `P_DefaultUniform` | none |
+| `AnalyticsEvents` (M1.MEASURE) | Thin wrapper over AnalyticsService: first-session funnel steps, BobaBucks economy events, custom events. Warns once, never errors or yields the caller. | Methods `Funnel`, `Economy`, `Custom` | none |
+| `AreaController` (client, M2-AREAS) | Break-area gates: below Level 3 a clone of each gate is placed in `workspace.AreaLimitsLocal`; at Level 3 that folder is destroyed. Re-runs when the `Level` attribute changes. | Waits 10 s for `ReplicatedStorage.AreaLimits.BreakGates` (the parked `Gate_Template` is never cloned); desert walls are authored at `workspace.Assets.AreaLimits.DesertWalls` and are not referenced by code. No server check | `OPEN_LEVEL` = 3 in `client/Modules/AreaController.luau` (Q20) |

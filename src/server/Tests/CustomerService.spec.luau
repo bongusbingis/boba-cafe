@@ -15,6 +15,8 @@ return function()
 
 	local Rules = require(ServerScriptService.Server.Modules.CustomerService.Rules)
 	local CustomerConfig = require(ReplicatedStorage.Shared.Configuration.CustomerConfig)
+	local OrderSpec = require(ReplicatedStorage.Shared.Ordering.OrderSpec)
+	local Menu = require(ReplicatedStorage.Shared.Ordering.Menu)
 
 	-- An rng that returns the given rolls in order, then 0.
 	local function sequence(rolls: { number }): () -> number
@@ -165,6 +167,177 @@ return function()
 				local order = Rules.PickOrder()
 				expect(typeof(order.Item)).to.equal("string")
 			end
+		end)
+	end)
+
+	-- A pool entry OrderSpec rejects makes CustomerService skip the spawn silently, so
+	-- every entry at every size must resolve against the real Menu, and be orderable.
+	describe("ORDER_POOL against the real OrderSpec and Menu", function()
+		it("should have at least one entry and one size", function()
+			expect(#CustomerConfig.ORDER_POOL > 0).to.equal(true)
+			expect(#CustomerConfig.SIZE_WEIGHTS > 0).to.equal(true)
+		end)
+
+		for index, entry in CustomerConfig.ORDER_POOL do
+			local label = `{entry.OrderItem.Category}/{entry.OrderItem.Item}`
+			local sizes = if entry.Sized then CustomerConfig.SIZE_WEIGHTS else { { Size = false } }
+
+			for _, sizeWeight in sizes do
+				it(`should resolve pool entry {index} ({label}) at size {tostring(sizeWeight.Size)}`, function()
+					local customInfo = table.clone(entry.OrderItem.CustomInfo)
+					if sizeWeight.Size then
+						customInfo.Size = sizeWeight.Size
+					end
+					local spec, reason = OrderSpec.FromOrderItem({
+						Category = entry.OrderItem.Category,
+						Item = entry.OrderItem.Item,
+						CustomInfo = customInfo,
+					})
+					expect(reason).to.equal(nil)
+					expect(spec).to.be.ok()
+				end)
+			end
+
+			it(`should keep pool entry {index} ({label}) on the launch menu`, function()
+				expect(Menu.IsLaunchItem(entry.OrderItem.Category, entry.OrderItem.Item, entry.OrderItem.CustomInfo)).to.equal(
+					true
+				)
+			end)
+		end
+
+		it("should resolve what PickOrder returns, at every size", function()
+			for rollIndex = 0, 9 do
+				for sizeIndex = 0, 9 do
+					local order = Rules.PickOrder(sequence({ rollIndex / 10, sizeIndex / 10 }))
+					local spec = OrderSpec.FromOrderItem({
+						Category = order.Category,
+						Item = order.Item,
+						CustomInfo = order.CustomInfo,
+					})
+					expect(spec).to.be.ok()
+				end
+			end
+		end)
+	end)
+
+	describe("Payout (design 3.5)", function()
+		local function boba()
+			return {
+				Category = "Boba Teas",
+				Item = "Custom Boba",
+				CustomInfo = { ["Syrup Flavor"] = "Classic Milk Tea", ["Tapioca Flavor"] = "Normal", Size = "Medium" },
+			}
+		end
+
+		local function coffee(iced, sugar)
+			return {
+				Category = "Coffees",
+				Item = "Regular",
+				CustomInfo = { Iced = iced, Sugar = sugar, Size = "Small" },
+			}
+		end
+
+		local function brownie()
+			return { Category = "Pastries", Item = "Fudge Brownie", CustomInfo = {} }
+		end
+
+		it("should pay 5 for the first Perfect scripted boba", function()
+			expect(Rules.Payout({ boba() }, "Perfect", 1, 0, true, false)).to.equal(5)
+		end)
+
+		it("should pay 2 for a Perfect non-fast coffee", function()
+			expect(Rules.Payout({ coffee(false, false) }, "Perfect", 0, 0, false, false)).to.equal(2)
+		end)
+
+		it("should charge 1 per Iced and Sugar on coffee", function()
+			expect(Rules.Payout({ coffee(true, true) }, "Perfect", 0, 0, false, false)).to.equal(4)
+		end)
+
+		it("should halve and round with a minimum of 1 on Close", function()
+			expect(Rules.Payout({ coffee(false, false) }, "Close", 0, 0, false, false)).to.equal(1)
+			expect(Rules.Payout({ brownie() }, "Close", 0, 0, false, false)).to.equal(1)
+		end)
+
+		it("should pay Fast x1.5 at half patience left", function()
+			expect(Rules.Payout({ coffee(false, false) }, "Perfect", 0.5, 0, false, false)).to.equal(3)
+			expect(Rules.Payout({ coffee(false, false) }, "Perfect", 0.49, 0, false, false)).to.equal(2)
+		end)
+
+		it("should cap the combo bonus at +50%", function()
+			expect(Rules.Payout({ coffee(false, false) }, "Perfect", 0, 5, false, false)).to.equal(3)
+			expect(Rules.Payout({ coffee(false, false) }, "Perfect", 0, 10, false, false)).to.equal(3)
+			expect(Rules.Payout({ coffee(false, false) }, "Perfect", 0, 2, false, false)).to.equal(2)
+		end)
+
+		it("should pay Rescue x1.5", function()
+			expect(Rules.Payout({ coffee(false, false) }, "Perfect", 0.1, 0, false, true)).to.equal(3)
+		end)
+
+		it("should sum a multi-item order", function()
+			expect(Rules.Payout({ boba(), brownie() }, "Perfect", 0, 0, false, false)).to.equal(4)
+		end)
+
+		it("should never pay below MIN_PAY", function()
+			expect(Rules.Payout({ brownie() }, "Close", 0, 0, false, false)).to.equal(1)
+		end)
+	end)
+
+	describe("Variants (design 4.10)", function()
+		it("should pick no variant below L6", function()
+			expect(Rules.PickVariant(5, 0.05)).to.equal(nil)
+		end)
+
+		it("should pick VIP from L6 and Karen from L10", function()
+			expect(Rules.PickVariant(6, 0.05)).to.equal("VIP")
+			expect(Rules.PickVariant(6, 0.5)).to.equal(nil)
+			expect(Rules.PickVariant(10, 0.05)).to.equal("Karen")
+			expect(Rules.PickVariant(10, 0.15)).to.equal("VIP")
+		end)
+
+		it("should pay VIP double and Karen triple only on Perfect", function()
+			expect(Rules.PayoutVariant(5, "VIP", "Perfect")).to.equal(10)
+			expect(Rules.PayoutVariant(5, "Karen", "Perfect")).to.equal(15)
+			expect(Rules.PayoutVariant(5, "Karen", "Close")).to.equal(5)
+			expect(Rules.PayoutVariant(5, nil, "Perfect")).to.equal(5)
+		end)
+	end)
+
+	describe("NextCombo", function()
+		it("should add one step on Perfect", function()
+			expect(Rules.NextCombo(0, "Perfect")).to.equal(1)
+			expect(Rules.NextCombo(3, "Perfect")).to.equal(4)
+		end)
+
+		it("should reset to 0 on Close", function()
+			expect(Rules.NextCombo(3, "Close")).to.equal(0)
+			expect(Rules.NextCombo(0, "Close")).to.equal(0)
+		end)
+	end)
+
+	describe("CanServe (design 4.3)", function()
+		it("should always let the assignee serve", function()
+			expect(Rules.CanServe(true, 1)).to.equal(true)
+			expect(Rules.CanServe(true, 0)).to.equal(true)
+		end)
+
+		it("should let others serve only below 30% patience", function()
+			expect(Rules.CanServe(false, 0.31)).to.equal(false)
+			expect(Rules.CanServe(false, 0.3)).to.equal(false)
+			expect(Rules.CanServe(false, 0.29)).to.equal(true)
+		end)
+	end)
+
+	describe("PickAssignee (design 4.3)", function()
+		it("should pick the longest idle barista", function()
+			local ana = { UserId = 1 }
+			local bo = { UserId = 2 }
+			local idleSince = { [ana] = 100, [bo] = 50 }
+			expect(Rules.PickAssignee({ ana, bo }, idleSince)).to.equal(bo)
+			expect(Rules.PickAssignee({ bo, ana }, idleSince)).to.equal(bo)
+		end)
+
+		it("should return nil when nobody qualifies", function()
+			expect(Rules.PickAssignee({}, {})).to.equal(nil)
 		end)
 	end)
 end

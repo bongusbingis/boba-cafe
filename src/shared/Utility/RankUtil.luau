@@ -54,7 +54,7 @@ local MAX_RETRIES: number = 3
 local CACHE_TTL_SECONDS: number = 200 --> seconds before a re-fetch
 local PREFETCH_TIMEOUT_SECONDS: number = 10 --> max wait for eager pre-fetch
 
-local STUDIO_SIMULATE_RANK: number = 0
+local STUDIO_SIMULATE_RANK: number = 255
 
 local FALLBACK_RANK_AND_ROLE: RankAndRole = {
 	Rank = 1,
@@ -214,6 +214,7 @@ end)
 --- Yields until rank and role are available. Near-instant if cache is warm.
 function RankUtil:GetRankAndRoleAsync(player: Player): RankAndRole
 	local _, result = ensureCached(player, BOBA_CONFIG, true):await()
+	print("RANK AND ROLE RESULT", result)
 	return result :: RankAndRole
 end
 

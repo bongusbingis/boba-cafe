@@ -5,6 +5,7 @@ local UI = Shared:WaitForChild("UI")
 
 ---> dependencies
 local React = require(Packages.React)
+local Knit = require(Packages.Knit)
 
 ---> styles
 local Styles = require(UI.Styles)
@@ -22,6 +23,26 @@ local TIER_COLORS = InventoryItemDefinitions.Tiers
 
 ---> public
 return function()
+	local restricted, setRestricted = React.useState(false)
+	React.useEffect(function()
+		local alive = true
+		Knit.GetService("CapsuleService")
+			:GetPaidRandomPolicy()
+			:andThen(function(ok, isRestricted)
+				if alive then
+					setRestricted(ok and isRestricted == true)
+				end
+			end)
+			:catch(function()
+				if alive then
+					setRestricted(false)
+				end
+			end)
+		return function()
+			alive = false
+		end
+	end, {})
+
 	local onSaleCount = 0
 	for _, entry in pairs(nametagColors) do
 		if not entry.OffSale then
@@ -63,6 +84,39 @@ return function()
 			Animation = entry.Animation,
 			OffSale = entry.OffSale,
 			LayoutOrder = layoutOrder,
+			OnClick = restricted
+					and function()
+						local Controller = Knit.GetController("DialogController")
+						local prompt = Controller.new("ButtonPrompt", {
+							Title = "Buy Nametag",
+							Text = `Buy |{name}| for {entry.Price} Boba Bucks?`,
+							Buttons = {
+								{ Text = "Buy", Color = Styles.GREEN },
+								{ Text = "Cancel", Color = Styles.RED },
+							},
+						})
+						prompt:Fire():andThen(function(choice)
+							if choice ~= "Buy" then
+								return
+							end
+							Knit.GetService("CapsuleService")
+								:PurchaseDeterministicNametag(name)
+								:andThen(function(ok, reason)
+									local result = Controller.new("ButtonPrompt", {
+										Title = if ok then "Purchase Complete" else "Purchase Unavailable",
+										Text = if ok
+											then `|{name}| was added to your inventory.`
+											elseif
+												reason == "RefundPending"
+											then "Your purchase failed and the refund could not be issued automatically. Please contact support."
+											else "The purchase could not be completed. Please try again.",
+										Buttons = { { Text = "Close", Color = Styles.GREEN } },
+									})
+									result:Fire()
+								end)
+						end)
+					end
+				or nil,
 		})
 	end
 

@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# WSL shim for the Windows stylua.exe. Translates absolute Linux paths. In "--check <file>"
+# mode it checks CR-stripped content, because Windows git (autocrlf=true) checks files out
+# as CRLF and commits them as LF; line endings are not a style finding here.
+exe=/mnt/c/Users/jackc/.rokit/bin/stylua.exe
+if [ "$#" -eq 2 ] && [ "$1" = "--check" ] && [ -f "$2" ]; then
+  tr -d '\r' < "$2" | "$exe" --check --stdin-filepath "$2" -
+  exit "${PIPESTATUS[1]}"
+fi
+args=()
+for a in "$@"; do
+  if [[ "$a" == /* ]]; then
+    if w="$(wslpath -w "$(dirname "$a")" 2>/dev/null)"; then args+=("$w\\$(basename "$a")"); else args+=("$a"); fi
+  else args+=("$a"); fi
+done
+exec "$exe" "${args[@]}"

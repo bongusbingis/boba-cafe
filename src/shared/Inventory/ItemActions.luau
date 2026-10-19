@@ -10,13 +10,10 @@ local function hatchCapsule(ctx)
 	local capsuleId = ctx.item:GetId()
 
 	local CapsuleService = Knit.GetService("CapsuleService")
-	local ok = CapsuleService:StartHatch(ctx.player, capsuleId, capsuleName)
-
+	local ok = CapsuleService:StartHatch(ctx.player, capsuleId, capsuleName, ctx.item:GetProperty("RandomSource"))
 	if not ok then
 		return
 	end
-
-	ctx.inventory:_removeItemById(capsuleId)
 end
 
 return {

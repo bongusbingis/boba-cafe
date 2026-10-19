@@ -1,15 +1,15 @@
 type InventoryItem = {
-    Name: string,
-    Tier: string?,
-    Equipped: boolean?,
-    StackCount: number?,
-    Properties: {
-        [string]: any,
-    }?,
+	Name: string,
+	Tier: string?,
+	Equipped: boolean?,
+	StackCount: number?,
+	Properties: {
+		[string]: any,
+	}?,
 }
 
 type InventoryItemStruct = {
-    [string]: InventoryItem,
+	[string]: InventoryItem,
 }
 
 -- Represents a pet capsule that has been activated and is currently incubating.
@@ -18,101 +18,149 @@ type InventoryItemStruct = {
 -- TimeAccumulated only counts seconds spent actively playing (offline time
 -- does not progress the hatch).
 type PendingHatch = {
-    CapsuleName: string,   -- definition name of the capsule that was used
-    TimeAccumulated: number, -- active-play seconds accumulated so far
+	CapsuleName: string, -- definition name of the capsule that was used
+	TimeAccumulated: number, -- active-play seconds accumulated so far
 }
 
 type Statistics = {
-    TimePlayed: number,        -- accumulated seconds from ended sessions (current session added client-side)
-    ItemsOrdered: number,
-    BobasOrdered: number,
-    BobaBucksEarned: number,
-    BobaBucksSpent: number,
-    CelebritiesMet: number,
-    OrdersCreated: number,
-    OrdersPrepared: number,
-    SpillsCleaned: number,
-    TreasureChestsFound: number,
+	TimePlayed: number, -- accumulated seconds from ended sessions (current session added client-side)
+	ItemsOrdered: number,
+	BobasOrdered: number,
+	BobaBucksEarned: number,
+	BobaBucksSpent: number,
+	CelebritiesMet: number,
+	OrdersCreated: number,
+	OrdersPrepared: number,
+	SpillsCleaned: number,
+	TreasureChestsFound: number,
+	ShiftsCompleted: number,
+	RegularOrders: number,
+	HeartsReceived: number,
+	HeartsCount: number,
 }
 
 export type PlayerSettings = {
-    HeadlessHead: boolean,
-    FasterWalkSpeed: boolean,
-    MusicEnabled: boolean,
-    SFXEnabled: boolean,
-    SyrupHighlighting: boolean,
-    ShiftTimerEnabled: boolean,
+	HeadlessHead: boolean,
+	FasterWalkSpeed: boolean,
+	MusicEnabled: boolean,
+	SFXEnabled: boolean,
+	SyrupHighlighting: boolean,
+	ShiftTimerEnabled: boolean,
+}
+
+export type DailyRewardData = {
+	Streak: number,
+	LastClaimTime: number,
+}
+
+export type QuestEntry = {
+	Id: string,
+	Type: string,
+	Target: number,
+	Progress: number,
+	Completed: boolean,
+	Claimed: boolean,
+	RewardBobaBucks: number,
+	RewardXP: number,
+}
+
+export type QuestData = {
+	AssignedDay: number,
+	ActiveQuests: { QuestEntry },
+	FreeRerollsRemaining: number,
 }
 
 export type ProfileTemplate = {
-    Currency: {
-        Points: number,
-        BobaBucks: number,
-    },
-    Playtime: {
-        FirstJoin: number,
-        MostRecentJoin: number,
-    },
-    Inventory: {
-        Items: {
-            Nametags: InventoryItemStruct,
-            Pets: InventoryItemStruct,
-            Particles: InventoryItemStruct,
-            Capsules: InventoryItemStruct,
-        },
-        FreeItemsRedeemed: { string },
-    },
-    Statistics: Statistics,
-    HatchingPet: PendingHatch | false,
-    Nickname: string,
-    -- Codes the player has already redeemed; keyed by normalised code string for O(1) lookups.
-    RedeemedCodes: { [string]: boolean },
+	Currency: {
+		Points: number,
+		BobaBucks: number,
+	},
+	Playtime: {
+		FirstJoin: number,
+		MostRecentJoin: number,
+	},
+	Inventory: {
+		Items: {
+			Nametags: InventoryItemStruct,
+			Pets: InventoryItemStruct,
+			Particles: InventoryItemStruct,
+			Capsules: InventoryItemStruct,
+		},
+		FreeItemsRedeemed: { string },
+	},
+	Statistics: Statistics,
+	PendingBobaBucksRefund: number,
+	HatchingPet: PendingHatch | false,
+	Nickname: string,
+	-- Codes the player has already redeemed; keyed by normalised code string for O(1) lookups.
+	RedeemedCodes: { [string]: boolean },
 	-- Developer product receipts already granted; keyed by `ReceiptInfo.PurchaseId`, value is the grant time (os.time()).
 	-- Bounded by ProcessReceipt (oldest entries are pruned) so the profile cannot grow without limit.
 	ProcessedReceipts: { [string]: number },
-    Settings: PlayerSettings,
+	Settings: PlayerSettings,
+	Level: number,
+	XP: number,
+	DailyRewards: DailyRewardData,
+	Quests: QuestData,
 }
 
 return {
-    Currency = {
-        Points = 0,
-        BobaBucks = 0,
-    },
-    Playtime = {
-        FirstJoin = 0,
-        MostRecentJoin = 0,
-    },
-    Inventory = {
-        Items = {
-            Pets = {},
-            Nametags = {},
-            Capsules = {},
-            Particles = {},
-        },
-        FreeItemsRedeemed = {},
-    },
-    Statistics = {
-        TimePlayed = 0,
-        ItemsOrdered = 0,
-        BobasOrdered = 0,
-        BobaBucksEarned = 0,
-        BobaBucksSpent = 0,
-        CelebritiesMet = 0,
-        OrdersCreated = 0,
-        OrdersPrepared = 0,
-        SpillsCleaned = 0,
-        TreasureChestsFound = 0,
-    },
-    HatchingPet = false,
-    Nickname = "",
-    RedeemedCodes = {},
+	Currency = {
+		Points = 0,
+		BobaBucks = 0,
+	},
+	Playtime = {
+		FirstJoin = 0,
+		MostRecentJoin = 0,
+	},
+	Inventory = {
+		Items = {
+			Pets = {},
+			Nametags = {},
+			Capsules = {},
+			Particles = {},
+		},
+		FreeItemsRedeemed = {},
+	},
+	Statistics = {
+		TimePlayed = 0,
+		ItemsOrdered = 0,
+		BobasOrdered = 0,
+		BobaBucksEarned = 0,
+		BobaBucksSpent = 0,
+		CelebritiesMet = 0,
+		OrdersCreated = 0,
+		OrdersPrepared = 0,
+		SpillsCleaned = 0,
+		TreasureChestsFound = 0,
+		CustomersServed = 0,
+		ShiftsCompleted = 0,
+		RegularOrders = 0,
+		HeartsReceived = 0,
+		HeartsCount = 0,
+	},
+	PendingBobaBucksRefund = 0,
+	HatchingPet = false,
+	Nickname = "",
+	RedeemedCodes = {},
 	ProcessedReceipts = {},
-    Settings = {
-        HeadlessHead = false,
-        FasterWalkSpeed = false,
-        MusicEnabled = true,
-        SFXEnabled = true,
-        SyrupHighlighting = true,
-        ShiftTimerEnabled = false,
-    },
+	Settings = {
+		HeadlessHead = false,
+		FasterWalkSpeed = false,
+		MusicEnabled = true,
+		SFXEnabled = true,
+		SyrupHighlighting = true,
+		ShiftTimerEnabled = false,
+	},
+	Level = 1,
+	XP = 0,
+	DailyRewards = {
+		Streak = 0,
+		LastClaimTime = 0,
+	},
+	Quests = {
+		AssignedDay = 0,
+		ActiveQuests = {},
+		FreeRerollsRemaining = 0,
+	},
 }

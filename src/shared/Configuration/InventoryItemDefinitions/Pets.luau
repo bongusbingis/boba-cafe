@@ -172,7 +172,7 @@ return setmetatable({
 			},
 			{
 				Name = "Epic Pet Capsule",
-				Price = " 800",
+				Price = " 1200",
 				Image = "rbxassetid://9369156094",
 			},
 		},

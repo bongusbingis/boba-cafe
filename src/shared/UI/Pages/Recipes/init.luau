@@ -18,12 +18,12 @@ local Content = require(script.Content)
 local c = React.createElement
 local usePx = require(UI.Hooks.usePx)
 
-return function (props)
+return function(props)
 	local px = usePx()
 	local page, setPage = React.useState("Recipes")
 
 	local isRecipes = page == "Recipes"
-	local isPromotions = page == "Promotions"
+	local isTips = page == "Tips"
 
 	local function makeToggleState(targetPage)
 		return function()
@@ -57,10 +57,10 @@ return function (props)
 				TextColor3 = Styles.OFFWHITE,
 				TextSize = px(35),
 				TextWrapped = true,
-				Text = Content[page],
+				Text = if isRecipes then Content.build() else Content.Tips,
 				RichText = true,
 			},
-		})
+		}),
 	})
 
 	local pageContent = c(Pane, {
@@ -77,7 +77,7 @@ return function (props)
 			BackgroundTransparency = 0,
 			BackgroundColor3 = Styles.ROSE_MID,
 			Size = UDim2.fromScale(0.65, 0.85),
-		}
+		},
 	}, {
 		TextContent = textContent,
 		Line = c(Pane, {
@@ -113,7 +113,7 @@ return function (props)
 				HorizontalAlignment = Enum.HorizontalAlignment.Center,
 				VerticalAlignment = Enum.VerticalAlignment.Center,
 				Padding = UDim.new(0, 5),
-			}
+			},
 		}, {
 			Title = c(Pane, {
 				ClassName = "TextButton",
@@ -136,11 +136,11 @@ return function (props)
 			}),
 			Test = c(Pane, {
 				ClassName = "TextButton",
-				Stroke = isPromotions and {
+				Stroke = isTips and {
 					Color = Styles.ROSE_DEEP,
 					Thickness = px(5),
 				} or nil,
-				OnClick = makeToggleState("Promotions"),
+				OnClick = makeToggleState("Tips"),
 				Native = {
 					AnchorPoint = Vector2.new(0.5, 0.5),
 					BackgroundTransparency = 1,
@@ -148,19 +148,17 @@ return function (props)
 					Position = UDim2.fromScale(0.5, 0.5),
 					TextColor3 = Styles.OFFWHITE,
 					TextScaled = true,
-					Text = "Promotions",
+					Text = "Tips",
 					Size = UDim2.fromScale(0.55, 0.8),
 					RichText = true,
 					AutomaticSize = Enum.AutomaticSize.X,
 				},
 			}),
-		})
+		}),
 	})
 	return c(Page, {
 		IsVisible = true,
 		PageContent = pageContent,
-		OnClosing = function()
-			
-		end
+		OnClosing = function() end,
 	})
 end

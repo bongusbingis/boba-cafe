@@ -44,6 +44,9 @@ same documents and the same live board. Nothing here replaces those sources.
   `ReplicatedStorage.SelectorModels`, `ReplicatedStorage.Networking`,
   `SoundService.SFX`) is not in the Rojo tree. Changing it needs Studio and a
   Rigger lease; code that depends on it must name the exact instance paths.
+- UI replicates the existing style exactly (DEC-013). `docs/STYLE.md` is the
+  spec: use only its tokens, components and patterns. A new token, component,
+  or visual pattern needs Jack's approval; if nothing fits, stop and ask.
 
 ## Gates
 

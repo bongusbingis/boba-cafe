@@ -70,14 +70,34 @@ return function(props: {
 	local requestedReadyHatchRef = React.useRef(false)
 
 	local rank, setRank = React.useState(0)
-	local shiftTimerEnabled, setShiftTimerEnabled = React.useState(false)
-	local shiftTimerText, setShiftTimerText = React.useState("00:00")
+	local _shiftTimerEnabled, setShiftTimerEnabled = React.useState(false)
+	local _shiftTimerText, setShiftTimerText = React.useState("00:00")
 
 	-- Players start clocked in (ShiftService default), so assume that until the
 	-- attribute replicates.
 	local clockedIn, setClockedIn = React.useState(true)
 
 	local isAdmin = rank > 10
+
+	-- Shift k/N readout from the ShiftCount / ShiftTarget player attributes.
+	local shiftCount, setShiftCount = React.useState(nil :: number?)
+	local shiftTarget, setShiftTarget = React.useState(nil :: number?)
+	if RunService:IsRunning() then
+		React.useEffect(function()
+			local player = game:GetService("Players").LocalPlayer
+			local function refresh()
+				setShiftCount(player:GetAttribute("ShiftCount"))
+				setShiftTarget(player:GetAttribute("ShiftTarget"))
+			end
+			refresh()
+			local countConn = player:GetAttributeChangedSignal("ShiftCount"):Connect(refresh)
+			local targetConn = player:GetAttributeChangedSignal("ShiftTarget"):Connect(refresh)
+			return function()
+				countConn:Disconnect()
+				targetConn:Disconnect()
+			end
+		end, {})
+	end
 
 	local function toggleClockedIn()
 		local wantClockedIn = not clockedIn
@@ -318,11 +338,11 @@ return function(props: {
 			}, {
 				Notification = c(SmallNotification.Component, {}),
 
-				ShiftTimer = isAdmin and shiftTimerEnabled and c(NormalButton, {
+				ShiftTimer = clockedIn and shiftCount ~= nil and shiftTarget ~= nil and c(NormalButton, {
 					Icon = "rbxassetid://8184068342",
 					Size = BUTTON_SIZE,
 					Color = Styles.ROSE_MID,
-					Text = shiftTimerText,
+					Text = `Shift {shiftCount}/{shiftTarget}`,
 					LayoutOrder = 0,
 				}),
 
@@ -338,11 +358,27 @@ return function(props: {
 					Icon = "",
 					Size = BUTTON_SIZE,
 					Color = Styles.ROSE_DEEP,
-					Text = "Staff Guide",
+					Text = "Recipe Book",
 					OnClick = function()
 						props.SetCurrentPage(UI.Pages.Recipes)
 					end,
 					LayoutOrder = 2,
+				}),
+
+				Daily = c(NormalButton, {
+					Icon = "rbxassetid://13382286492",
+					Size = BUTTON_SIZE,
+					Color = Styles.GOLD_MID,
+					Text = "Daily",
+					OnClick = function()
+						local ok, controller = pcall(function()
+							return Knit.GetController("DailyRewardController")
+						end)
+						if ok and controller and controller.OpenDailyRewards then
+							controller:OpenDailyRewards()
+						end
+					end,
+					LayoutOrder = 3,
 				}),
 
 				Points = c(NormalButton, {
@@ -354,7 +390,7 @@ return function(props: {
 					OnClick = function()
 						props.SetCurrentPage(UI.Pages.Shop, "Currency")
 					end,
-					LayoutOrder = 3,
+					LayoutOrder = 4,
 				}),
 
 				Bucks = c(NormalButton, {
@@ -366,7 +402,7 @@ return function(props: {
 					OnClick = function()
 						props.SetCurrentPage(UI.Pages.Shop, "Currency")
 					end,
-					LayoutOrder = 4,
+					LayoutOrder = 5,
 				}),
 			}),
 		}),

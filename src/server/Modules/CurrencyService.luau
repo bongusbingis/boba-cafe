@@ -21,7 +21,7 @@ function CurrencyService:_getService(name: string)
 	return Knit.GetService(name)
 end
 
-function CurrencyService:Modify(player: Player, type: "BobaBucks" | "Points", amount: number)
+function CurrencyService:Modify(player: Player, type: "BobaBucks" | "Points", amount: number, reason: string?)
 	if not ProfileTemplate.Currency[type] then
 		warn(`Invalid currency type: {type}`)
 		return
@@ -46,6 +46,15 @@ function CurrencyService:Modify(player: Player, type: "BobaBucks" | "Points", am
 		end
 
 		playerData:SetValue({ "Currency", type }, current + amount)
+		if type == "BobaBucks" then
+			pcall(function()
+				local a = self:_getService("AnalyticsEvents")
+				a:Economy(player, amount > 0, amount, current + amount, reason or "Shop")
+				if amount > 0 then
+					a:Funnel(player, 5, "FirstPayout")
+				end
+			end)
+		end
 	end)
 end
 

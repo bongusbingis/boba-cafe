@@ -9,7 +9,42 @@ local React = require(Packages.React)
 local Knit = require(Packages.Knit)
 
 local FoodService = require(Shared.Ordering.Menu)
-local FoodTable = FoodService.FoodTable
+-- Only launch items are orderable (server refuses the rest): hide the others.
+local function buildLaunchFoodTable()
+	local filtered = {}
+	for categoryKey, data in FoodService.FoodTable do
+		local items = {}
+		local any = false
+		for itemKey, itemData in data.Items do
+			if FoodService.IsLaunchItem(categoryKey, itemKey) then
+				items[itemKey] = itemData
+				any = true
+			end
+		end
+		if any then
+			local copy = table.clone(data)
+			copy.Items = items
+			filtered[categoryKey] = copy
+		end
+	end
+	return filtered
+end
+
+local function launchOptions(typeName, options)
+	local allowed = FoodService.LaunchChoices[typeName]
+	if not allowed then
+		return options
+	end
+	local keep = {}
+	for optionKey, optionData in options do
+		if table.find(allowed, optionKey) then
+			keep[optionKey] = optionData
+		end
+	end
+	return keep
+end
+
+local FoodTable = buildLaunchFoodTable()
 
 local c = React.createElement
 local localPlayer = Players.LocalPlayer or { UserId = 0 }
@@ -167,7 +202,7 @@ return function(props)
 			for typeName, options in item.RequiredSelection do
 				table.insert(queue, {
 					name = typeName,
-					options = options,
+					options = launchOptions(typeName, options),
 				})
 			end
 		end
@@ -885,7 +920,9 @@ return function(props)
 
 			Button = c("TextButton", {
 				AutoButtonColor = true,
-				BackgroundColor3 = if activeReqStep and not popupRequiredDone then Color3.fromRGB(100, 160, 255) else DEEP_GREEN,
+				BackgroundColor3 = if activeReqStep and not popupRequiredDone
+					then Color3.fromRGB(100, 160, 255)
+					else DEEP_GREEN,
 				BorderSizePixel = 0,
 				Position = UDim2.new(0, 10, 0.86, 0),
 				Size = UDim2.new(1, -20, 0.14, -10),

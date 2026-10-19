@@ -136,6 +136,8 @@ function KitchenService:KnitStart()
 				{ Label = itemName, ActionText = "Interact", HoldDuration = recipeData.HoldDuration },
 				function(player: Player)
 					if not self:_isClockedIn(player) then
+						-- The client shows a Clock In toast (KitchenController).
+						self.Client.InteractionFailed:Fire(player, "ClockedOut")
 						return
 					end
 

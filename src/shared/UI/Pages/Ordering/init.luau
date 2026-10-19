@@ -21,7 +21,42 @@ local SizeOptionsPage = require(script.SizeOptionsPage)
 
 ---> data
 local FoodService = require(Shared.Ordering.Menu)
-local FoodTable = FoodService.FoodTable
+-- Only launch items are orderable (server refuses the rest): hide the others.
+local function buildLaunchFoodTable()
+	local filtered = {}
+	for categoryKey, data in FoodService.FoodTable do
+		local items = {}
+		local any = false
+		for itemKey, itemData in data.Items do
+			if FoodService.IsLaunchItem(categoryKey, itemKey) then
+				items[itemKey] = itemData
+				any = true
+			end
+		end
+		if any then
+			local copy = table.clone(data)
+			copy.Items = items
+			filtered[categoryKey] = copy
+		end
+	end
+	return filtered
+end
+
+local function launchOptions(typeName, options)
+	local allowed = FoodService.LaunchChoices[typeName]
+	if not allowed then
+		return options
+	end
+	local keep = {}
+	for optionKey, optionData in options do
+		if table.find(allowed, optionKey) then
+			keep[optionKey] = optionData
+		end
+	end
+	return keep
+end
+
+local FoodTable = buildLaunchFoodTable()
 
 ---> utility
 local RankUtil = require(Shared.Utility.RankUtil)
@@ -98,9 +133,7 @@ return function(props: {
 
 	---> barista info (local player, loaded async)
 	local staffRole, setStaffRole = React.useState("Staff")
-	local staffAvatarUrl, setStaffAvatarUrl = React.useState(
-		"rbxasset://textures/ui/GuiImagePlaceholder.png"
-	)
+	local staffAvatarUrl, setStaffAvatarUrl = React.useState("rbxasset://textures/ui/GuiImagePlaceholder.png")
 
 	---> load local player info once on mount
 	React.useEffect(function()
@@ -201,7 +234,7 @@ return function(props: {
 		local queue = {}
 		if item.RequiredSelection then
 			for typeName, options in item.RequiredSelection do
-				table.insert(queue, { name = typeName, options = options })
+				table.insert(queue, { name = typeName, options = launchOptions(typeName, options) })
 			end
 		end
 
@@ -225,7 +258,9 @@ return function(props: {
 	end
 
 	local function onAddToOrder()
-		if not selCategory or not selItemKey then return end
+		if not selCategory or not selItemKey then
+			return
+		end
 		local item = FoodTable[selCategory :: string].Items[selItemKey :: string]
 
 		local newOrder = table.clone(orderItems)
@@ -255,7 +290,9 @@ return function(props: {
 	-- Players can only order for themselves. The server replies { Success, Message? }; on failure the order is kept
 	-- so the player can adjust it and try again.
 	local function submitOrder()
-		if isSubmitting.current or #orderItems == 0 then return end
+		if isSubmitting.current or #orderItems == 0 then
+			return
+		end
 
 		if not RunService:IsRunning() then
 			closeMenu()
@@ -312,20 +349,17 @@ return function(props: {
 			CardSize = cardSize,
 			OnCategorySelected = onCategorySelected,
 		})
-		elseif page == "ItemSelect"
-		then c(ItemPage, {
+		elseif page == "ItemSelect" then c(ItemPage, {
 			SelectedCategory = selCategory,
 			FoodTable = FoodTable,
 			OnItemSelected = onItemSelected,
 		})
-		elseif page == "RequiredSelection"
-		then c(RequiredSelectionPage, {
+		elseif page == "RequiredSelection" then c(RequiredSelectionPage, {
 			Step = currentReqStep,
 			CustomInfo = customInfo,
 			OnOptionPicked = onReqSelOptionPicked,
 		})
-		elseif page == "SizeOptions"
-		then c(SizeOptionsPage, {
+		elseif page == "SizeOptions" then c(SizeOptionsPage, {
 			Item = activeItem,
 			CustomInfo = customInfo,
 			OrderItemsCount = #orderItems,

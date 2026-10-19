@@ -6,6 +6,7 @@ local Packages = ReplicatedStorage:WaitForChild("Packages")
 local Knit = require(Packages.Knit)
 local Config = require(Shared.Configuration.Spills) :: { [string]: any }
 
+local GoodSignal = require(Packages.GoodSignal)
 local ReplicaService = require(Packages.ReplicaService)
 local SpillObject = require(script.Spill)
 local TableUtil = require(Packages.TableUtil)
@@ -27,12 +28,14 @@ local SpillService = Knit.CreateService({
 		Queue = {},
 	},
 	Rewards = {},
+	--- Server-side: fires (spill) after a spill is cleaned. spill.CleanedBy is the player who mopped it (nil if cleared by the system).
+	SpillCleanedSignal = GoodSignal.new(),
 	Percent = 0,
 	--- True only after KnitStart found every authored asset spills need. When false nothing spawns.
 	Enabled = false,
 	--- workspace.Assets.Spills, resolved in KnitStart (nil when missing).
 	SpillsFolder = nil :: Instance?,
-	--- ReplicatedStorage.SharedStorage.Spills, resolved in KnitStart (nil when missing).
+	--- ReplicatedStorage.SharedStorage.CleanlinessStorage, resolved in KnitStart (nil when missing).
 	Storage = nil :: Instance?,
 })
 
@@ -63,14 +66,15 @@ function SpillService:_ResolveWorld(): boolean
 		table.insert(Missing, "workspace.Assets.Spills.Areas")
 	end
 
-	local Storage = WorldPath.waitFor(ReplicatedStorage, { "SharedStorage", "Spills" }, Deadline - os.clock())
+	local Storage =
+		WorldPath.waitFor(ReplicatedStorage, { "SharedStorage", "CleanlinessStorage" }, Deadline - os.clock())
 	if not Storage then
-		table.insert(Missing, "ReplicatedStorage.SharedStorage.Spills")
+		table.insert(Missing, "ReplicatedStorage.SharedStorage.CleanlinessStorage")
 	else
 		-- Everything a Mopping spill and its cleaning interaction clone or read.
 		for _, Path in { { "Spills", "Boba" }, { "Tools", "Mop" }, { "Tools", "MopBucket" }, { "Sparkles" } } do
 			if not WorldPath.waitFor(Storage, Path, Deadline - os.clock()) then
-				table.insert(Missing, "ReplicatedStorage.SharedStorage.Spills." .. table.concat(Path, "."))
+				table.insert(Missing, "ReplicatedStorage.SharedStorage.CleanlinessStorage." .. table.concat(Path, "."))
 			end
 		end
 	end
@@ -132,6 +136,17 @@ function SpillService:SpillCleaned(Spill: { Type: string, Region: BasePart })
 			warn(`[SpillService] Failed to create a queued spill: {Err}`)
 		end
 	end
+
+	local cleaner = (Spill :: any).CleanedBy
+	if cleaner then
+		pcall(function()
+			Knit.GetService("QuestService"):AdvanceQuest(cleaner, "SpillsCleaned", 1)
+		end)
+	end
+
+	pcall(function()
+		self.SpillCleanedSignal:Fire(Spill)
+	end)
 end
 
 --- Creates a spill, or queues it when the Mopping cap is reached. Returns false if nothing was created.

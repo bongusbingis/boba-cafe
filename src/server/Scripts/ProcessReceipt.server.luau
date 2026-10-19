@@ -30,6 +30,7 @@ local GetPurchases = getOrCreateRemoteFunction("GetPurchases")
 
 ---> constants
 local SKIP_HATCH_PRODUCT_ID = 1143554452
+local BOBA_PARTY_PRODUCT_ID: number? = nil -- Creator Hub Product ID to be configured by Jack (DEC-029, E18)
 local DATA_TIMEOUT_SECONDS = 30
 local MAX_PROCESSED_RECEIPTS = 200
 
@@ -74,14 +75,27 @@ local ProductActionMap = {
 			if not hatchingPet or hatchingPet == false then
 				return false, "no hatch pending"
 			end
-			playerData:SetValue({ "HatchingPet" }, {
-				CapsuleName = hatchingPet.CapsuleName,
-				TimeAccumulated = HATCH_DURATION_SECONDS - 5,
-			})
+			local updatedHatch: any = table.clone(hatchingPet)
+			updatedHatch.TimeAccumulated = HATCH_DURATION_SECONDS - 5
+			playerData:SetValue({ "HatchingPet" }, updatedHatch)
 			return true
 		end,
 	},
 }
+
+if BOBA_PARTY_PRODUCT_ID then
+	ProductActionMap[BOBA_PARTY_PRODUCT_ID] = {
+		"Boba Party",
+		function(player, _receiptInfo, _playerData)
+			local cafeRatingService = Knit.GetService("CafeRatingService")
+			local ok, err = cafeRatingService:StartOrExtendBobaParty(player)
+			if not ok then
+				return false, err or "failed to start or extend boba party"
+			end
+			return true
+		end,
+	}
+end
 
 -- PurchaseIds currently being handled; guards against a re-entrant call for the same receipt while one yields.
 local inFlight: { [string]: boolean } = {}

@@ -21,7 +21,7 @@ export type NametagColor = {
 return setmetatable({
 	---> static
 
-    ---> basic
+	---> basic
 	["Crimson"] = {
 		Tier = "Basic",
 		Color = Color3.fromRGB(220, 50, 50),
@@ -34,7 +34,7 @@ return setmetatable({
 		Price = " 150",
 		CanBeSold = true,
 	},
-    ["Turquoise"] = {
+	["Turquoise"] = {
 		Tier = "Basic",
 		Color = Color3.fromRGB(50, 220, 200),
 		Price = " 150",
@@ -65,14 +65,14 @@ return setmetatable({
 		CanBeSold = true,
 	},
 
-    ---> uncommon
+	---> uncommon
 	["Gold"] = {
 		Tier = "Uncommon",
 		Color = Color3.fromRGB(255, 200, 50),
 		Price = " 200",
 		CanBeSold = true,
 	},
-    ["Rose"] = {
+	["Rose"] = {
 		Tier = "Uncommon",
 		Color = Color3.fromRGB(220, 80, 120),
 		Price = " 150",
@@ -115,7 +115,7 @@ return setmetatable({
 		},
 	},
 
-    ---> rare
+	---> rare
 	["Sunset"] = {
 		Tier = "Rare",
 		Color = Color3.fromRGB(255, 100, 50),
@@ -170,7 +170,7 @@ return setmetatable({
 		},
 	},
 
-    ---> epic
+	---> epic
 	["Void"] = {
 		Tier = "Epic",
 		Color = Color3.fromRGB(80, 50, 150),
@@ -211,7 +211,7 @@ return setmetatable({
 		},
 	},
 
-    ---> legendary
+	---> legendary
 	["Prism"] = {
 		Tier = "Legendary",
 		Color = Color3.fromRGB(255, 50, 50),
@@ -259,23 +259,23 @@ return setmetatable({
 		},
 	},
 }, {
-    __index = {
-        Capsules = {
-            {
-                Name = "Nametag Capsule",
-                Price = " 150",
-                Image = "rbxassetid://6073658218",
-            },
-            {
-                Name = "10 Nametag Capsules",
-                Price = " 150",
-                Image = "rbxassetid://6073658218",
-            },
-            {
-                Name = "50 Nametag Capsules",
-                Price = " 150",
-                Image = "rbxassetid://6073658218",
-            }
-        }
-    }
+	__index = {
+		Capsules = {
+			{
+				Name = "Nametag Capsule",
+				Price = " 150",
+				Image = "rbxassetid://6073658218",
+			},
+			{
+				Name = "10 Nametag Capsules",
+				Price = " 1,350",
+				Image = "rbxassetid://6073658218",
+			},
+			{
+				Name = "50 Nametag Capsules",
+				Price = " 6,000",
+				Image = "rbxassetid://6073658218",
+			},
+		},
+	},
 })

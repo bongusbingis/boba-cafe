@@ -71,6 +71,11 @@ return function()
 		return with(specB(), { Iced = true, Sugar = true, Label = "Small Regular" })
 	end
 
+	-- Spec B1: Small Regular coffee with sugar, no ice.
+	local function specB1()
+		return with(specB(), { Sugar = true })
+	end
+
 	-- Spec E: Vanilla Ice Cream, a grab item from the Ice Cream Freezer.
 	local function specE()
 		return { Kind = "Grab", Item = "Vanilla Ice Cream", Label = "Vanilla Ice Cream" }
@@ -755,11 +760,21 @@ return function()
 				5,
 			},
 			{
-				"sugar before ice leaves ice current",
+				"sugar before ice is allowed; ice is still current",
 				{ Item = "Regular", Size = "Small", Sugar = true },
 				3,
 			},
 			{ "sugar on a bare cup leaves the coffee current", { Item = "Cup", Size = "Small", Sugar = true }, 2 },
+		})
+
+		-- Spec B1 (coffee with sugar, no ice): rows 1 Cup, 2 Coffee, 3 Sugar; 4 = ready.
+		stateCases("spec B1: sugar without ice", specB1, {
+			{
+				"ice before sugar is allowed; sugar is still current",
+				{ Item = "Regular", Size = "Small", Iced = true },
+				3,
+				{ Step = nil, Severity = "Close", Reason = "Iced" },
+			},
 		})
 
 		-- Spec C (a grab item): row 1 Food Display; 2 = ready to serve.

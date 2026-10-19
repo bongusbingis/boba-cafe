@@ -1,39 +1,54 @@
-return {
-    Promotions = [[How to get promoted?
-<font face="DenkOne">In order to be promoted, you must reach a certain amount of Staff Points.</font>
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-How to get Staff Points?
-<font face="DenkOne">Staff Points are earned by hard work. Specifically, creating orders, completing orders or cleaning spills will grant you points depending on the difficulty of the task.</font>
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local OrderSpec = require(Shared.Ordering.OrderSpec)
+local CustomerConfig = require(Shared.Configuration.CustomerConfig)
 
-I have enough points. How do I get promoted?
-<font face="DenkOne">Boba has an automatic promotion system that will promote you in the group once you reach the required points. You might have to rejoin the game in order for your rank to update.</font>
+local Content = {}
 
-<u>STAFF POINTS MILESTONES</u>
-300 Staff Points → Barista
-600 Staff Points → Senior Barista
-10,000 Staff Points → Kitchen Leader
+Content.Tips = [[Clock in to use the kitchen.
 
-How to get promoted past Kitchen Leader?
-<font face="DenkOne">We carefully pick who we promote past this rank, since Medium Ranks have access to administrative commands. In order to be eligible for a Medium Rank, you must have at least 1000+ Staff Points.</font>
+Match the size and flavor on the ticket.
 
-Want to get promoted faster?
-<font face="DenkOne">Make sure to check out the shop for exclusive offers on Staff Points!</font>
+Perfect drinks pay the most.]]
 
-Want to become a Kitchen Leader immediately and have the top perks?
-<font face="DenkOne">Purchase the Kitchen Leader pass from the shop to be ranked instantly!</font>]],
+-- RichText for every item NPCs can order, generated from OrderSpec.Steps.
+function Content.build(): string
+	local blocks = {}
+	local seen = {}
+	for _, entry in CustomerConfig.ORDER_POOL do
+		local orderItem = entry.OrderItem
+		if seen[orderItem.Item] then
+			continue
+		end
+		seen[orderItem.Item] = true
 
-    Recipes = [[Boba:
-<font face="DenkOne">Clear Cup + Milk + Syrup + Blender + Tapioca + Lid</font>
+		-- Sized entries get their Size when an order is picked; any size shows the same steps.
+		local customInfo = table.clone(orderItem.CustomInfo or {})
+		if entry.Sized and customInfo.Size == nil then
+			customInfo.Size = "Medium"
+		end
+		local spec = OrderSpec.FromOrderItem({
+			Category = orderItem.Category,
+			Item = orderItem.Item,
+			CustomInfo = customInfo,
+		})
+		if spec == nil then
+			continue
+		end
 
-Coffee:
-<font face="DenkOne">Cup + Coffee Machine + <i>(Opt.) Ice </i> + <i>(Opt.) Sugar</i> + Lid</font>
+		local lines = { "<b>" .. orderItem.Item .. "</b>" }
+		local rows = OrderSpec.Steps(spec)
+		if #rows == 0 then
+			table.insert(lines, '<font face="DenkOne">Grab it from the display.</font>')
+		else
+			for index, row in rows do
+				table.insert(lines, `<font face="DenkOne">{index}. {row.Label}</font>`)
+			end
+		end
+		table.insert(blocks, table.concat(lines, "\n"))
+	end
+	return table.concat(blocks, "\n\n")
+end
 
-Tea:
-<font face="DenkOne">Cup + Hot Water + Tea Powder + Lid</font>
-
-Iced Tea:
-<font face="DenkOne">Clear Cup + Cold Water + Tea Powder + Ice Machine + Lid</font>
-
-Hot Chocolate:
-<font face="DenkOne">Mug + Milk + Hot Chocolate Powder</font>]],
-}
+return Content

@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# WSL shim: run the Windows lune.exe, translating absolute Linux path args to Windows paths.
+args=()
+for a in "$@"; do
+  if [[ "$a" == /* ]]; then
+    d="$(dirname "$a")"
+    if w="$(wslpath -w "$d" 2>/dev/null)"; then args+=("$w\\$(basename "$a")"); else args+=("$a"); fi
+  else args+=("$a"); fi
+done
+exec /mnt/c/Users/jackc/.rokit/bin/lune.exe "${args[@]}"

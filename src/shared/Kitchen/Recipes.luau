@@ -111,6 +111,17 @@ Recipes.Syrups = {
 	["Dragon Fruit"] = Color3.fromRGB(255, 5, 47),
 }
 
+-- Q14: the Sugar and Ice Machine gates read attributes, so the coffee Item values
+-- drop the "=" name-pattern prefix getCoffeeNames stores. Evaluated while
+-- Recipes.Items is built, after the Coffee Machine branches register.
+local function coffeeItemList(): string
+	local names: { string } = {}
+	for _, name in RecipeConstructors.getCoffeeNames() do
+		table.insert(names, (name:gsub("^=", "")))
+	end
+	return table.concat(names, "|")
+end
+
 Recipes.Items = {
 	["Clear Cup"] = makeCupGiver("Clear Cup"),
 	["Cup"] = makeCupGiver("Cup"),
@@ -189,7 +200,7 @@ Recipes.Items = {
 
 	["Coffee Machine"] = {
 		Sound = "Machine",
-		HoldDuration = 7,
+		HoldDuration = 4, -- TUNING (Q14)
 		Actions = {
 			{ "ToolNameValidityCheck", { "#Cup", "!Clear" } },
 			{
@@ -234,7 +245,7 @@ Recipes.Items = {
 		Sound = "Powder",
 		HoldDuration = 1,
 		Actions = {
-			{ "ToolNameValidityCheck", { "!Sugar" } },
+			{ "ToolAttributeCheck", { Item = coffeeItemList(), Sugar = false } },
 			{
 				"RenameToolHolding",
 				function(old: string)
@@ -247,9 +258,9 @@ Recipes.Items = {
 
 	["Ice Machine"] = {
 		Sound = "IceCubes",
-		HoldDuration = 5,
+		HoldDuration = 3, -- TUNING (Q14)
 		Actions = {
-			{ "ToolNameValidityCheck", { table.concat(RecipeConstructors.getCoffeeNames(), "|") .. "|#Tea|#Water", "!Cup", "!Iced" } },
+			{ "ToolAttributeCheck", { Item = coffeeItemList(), Iced = false } },
 			{
 				"RenameToolHolding",
 				function(old: string)
@@ -289,12 +300,12 @@ Recipes.Items = {
 		},
 	},
 
-    ---> hot chocolate
+	---> hot chocolate
 	["Hot Chocolate Powder"] = makeHotChocolateVariant("", Color3.fromRGB(176, 119, 86)),
 	["Caramel Hot Chocolate Powder"] = makeHotChocolateVariant("Caramel", Color3.fromRGB(227, 151, 104)),
 	["Vanilla Hot Chocolate Powder"] = makeHotChocolateVariant("Vanilla", Color3.fromRGB(248, 211, 189)),
 
-    ---> tea
+	---> tea
 	["Caramel Chai Tea Powder"] = makeTeaVariant("Caramel Chai Tea", Color3.fromRGB(204, 161, 135)),
 	["Lemon Tea Powder"] = makeTeaVariant("Lemon Tea", Color3.fromRGB(255, 194, 140)),
 	["Green Tea Powder"] = makeTeaVariant("Green Tea", Color3.fromRGB(212, 151, 97)),

@@ -32,7 +32,7 @@ return setmetatable({
 		CanBeSold = true,
 	} :: Capsule,
 	["Epic Pet Capsule"] = {
-		Price = " 800",
+		Price = " 1200",
 		Image = "rbxassetid://9369156094",
 		ItemType = "Pets",
 		MinTier = "Epic",
@@ -43,5 +43,5 @@ return setmetatable({
 		-- "Sell" is omitted here; InventoryComponent appends it automatically
 		-- for any item with CanBeSold = true.
 		ActionOverride = { { Text = "Hatch" } },
-	}
+	},
 })

@@ -19,6 +19,7 @@ local Styles = require(UI.Styles)
 ---> private
 local c = React.createElement
 local nametagColors = InventoryItemDefinitions.Nametags
+local CapsuleService = require(Packages.Knit).GetService("CapsuleService")
 
 ---> constants
 local TIER_COLORS = InventoryItemDefinitions.Tiers
@@ -28,6 +29,39 @@ local NAMETAG_CELL_SIZE = 90
 ---> public
 return function()
 	local px = usePx()
+	local policyState, setPolicyState = React.useState("loading")
+	React.useEffect(function()
+		local alive = true
+		CapsuleService:GetPaidRandomPolicy()
+			:andThen(function(ok, restricted)
+				if alive then
+					setPolicyState(
+						if ok and restricted == false then "allowed" elseif ok then "restricted" else "unavailable"
+					)
+				end
+			end)
+			:catch(function()
+				if alive then
+					setPolicyState("unavailable")
+				end
+			end)
+		return function()
+			alive = false
+		end
+	end, {})
+	if policyState == "restricted" then
+		return c(require(script.Parent.DirectCosmeticsPurchase))
+	end
+
+	local totalWeight = 0
+	local tierCounts = {}
+	for _, entry in pairs(nametagColors) do
+		local tier = TIER_COLORS[entry.Tier]
+		if tier and tier.Weight > 0 then
+			totalWeight += tier.Weight
+			tierCounts[entry.Tier] = (tierCounts[entry.Tier] or 0) + 1
+		end
+	end
 
 	local heroCards = {}
 	for i, tierName in ipairs(TIER_ORDER) do
@@ -50,7 +84,10 @@ return function()
 			end
 
 			items[name] = c(NametagCard, {
-				Name = name,
+				Name = `{name}\n{string.format(
+					"%.2f%%",
+					TIER_COLORS[tierName].Weight / totalWeight / tierCounts[tierName] * 100
+				)}`,
 				Price = entry.Price,
 				Tier = entry.Tier,
 				TierColor = TIER_COLORS[tierName].Color,
@@ -83,7 +120,7 @@ return function()
 	local capsules = {}
 
 	for k, capsule in ipairs(nametagColors.Capsules) do
-		local isMiddle = k == 2
+		local isBestValue = k == 3
 		table.insert(
 			capsules,
 			c(require(UI.Components.Buttons.ShopCard), {
@@ -91,12 +128,44 @@ return function()
 				Price = capsule.Price,
 				Image = capsule.Image,
 				ImageSize = UDim2.fromScale(1, 1),
-				Size = isMiddle and UDim2.fromScale(1, 1) or UDim2.fromScale(0.875, 0.875),
-				TopBanner = isMiddle and {
+				Size = isBestValue and UDim2.fromScale(1, 1) or UDim2.fromScale(0.875, 0.875),
+				TopBanner = isBestValue and {
 					Color = Styles.GREEN_BADGE,
 					Text = "Best Value",
 					Size = UDim2.fromScale(1, 0.2),
 				} or nil,
+				OnClick = policyState == "allowed"
+						and function()
+							local Controller = require(Packages.Knit).GetController("DialogController")
+							local prompt = Controller.new("ButtonPrompt", {
+								Title = "Buy Nametag Capsules",
+								Text = `Buy {capsule.Name} for {capsule.Price} Boba Bucks?`,
+								Buttons = {
+									{ Text = "Buy", Color = Styles.GREEN },
+									{ Text = "Cancel", Color = Styles.RED },
+								},
+							})
+							prompt:Fire():andThen(function(choice)
+								if choice ~= "Buy" then
+									return
+								end
+								local amount = if k == 1 then 1 elseif k == 2 then 10 else 50
+								CapsuleService:PurchaseNametagCapsules(amount):andThen(function(ok, reason)
+									local result = Controller.new("ButtonPrompt", {
+										Title = if ok then "Purchase Complete" else "Purchase Unavailable",
+										Text = if ok
+											then "Your capsules were added to your inventory."
+											elseif
+												reason == "RefundPending"
+											then "Your purchase failed and the refund could not be issued automatically. Please contact support."
+											else "The purchase could not be completed. Please try again.",
+										Buttons = { { Text = "Close", Color = Styles.GREEN } },
+									})
+									result:Fire()
+								end)
+							end)
+						end
+					or nil,
 			})
 		)
 	end
@@ -129,7 +198,7 @@ return function()
 			TextScaled = true,
 		}),
 
-		CapsulePurchaseRow = c(Pane, {
+		CapsulePurchaseRow = policyState == "allowed" and c(Pane, {
 			ClassName = "Frame",
 			Native = {
 				BackgroundTransparency = 1,
@@ -144,7 +213,22 @@ return function()
 				HorizontalFlex = Enum.UIFlexAlignment.SpaceBetween,
 				Padding = UDim.new(0, 20),
 			},
-		}, capsules),
+		}, capsules) or nil,
+
+		PolicyNotice = policyState ~= "allowed" and c("TextLabel", {
+			BackgroundTransparency = 1,
+			FontFace = Styles.FONT_FREDOKA,
+			Position = UDim2.fromScale(0.04, 0.2),
+			Size = UDim2.fromScale(0.92, 0.12),
+			Text = if policyState == "restricted"
+				then "Random capsule purchases are unavailable for this account."
+				elseif
+					policyState == "unavailable"
+				then "Purchase availability could not be checked. Please try again later."
+				else "Checking purchase availability...",
+			TextColor3 = Styles.GRAY,
+			TextScaled = true,
+		}) or nil,
 
 		Grid = c(Pane, {
 			ClassName = "Frame",

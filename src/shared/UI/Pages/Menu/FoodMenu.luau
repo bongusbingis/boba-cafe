@@ -108,10 +108,23 @@ return function()
 	-- FoodTable categories sorted by LayoutOrder
 	local foodCategories = {}
 	for categoryName, categoryData in pairs(Menu["FoodTable"]) do
-		table.insert(foodCategories, {
-			Name = categoryName,
-			Data = categoryData,
-		})
+		-- Only launch items are orderable; hide the rest (and empty categories).
+		local launchItems = {}
+		local any = false
+		for itemKey, itemData in pairs(categoryData.Items) do
+			if Menu.IsLaunchItem(categoryName, itemKey) then
+				launchItems[itemKey] = itemData
+				any = true
+			end
+		end
+		if any then
+			local data = table.clone(categoryData)
+			data.Items = launchItems
+			table.insert(foodCategories, {
+				Name = categoryName,
+				Data = data,
+			})
+		end
 	end
 	table.sort(foodCategories, function(a, b)
 		return a.Data.LayoutOrder < b.Data.LayoutOrder

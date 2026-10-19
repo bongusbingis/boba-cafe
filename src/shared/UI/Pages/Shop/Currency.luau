@@ -18,11 +18,11 @@ local c = React.createElement
 ---> mock data (replace with server-provided data)
 local SHOP_DATA: { BobaBucks: { ShopCategory.Item }, Points: { ShopCategory.Item } } = {
 	BobaBucks = {
-		{ Label = "50 Boba Bucks", Price = "500" },
-		{ Label = "150 Boba Bucks", Price = "1,300" },
-		{ Label = "500 Boba Bucks", Price = "3,500" },
-		{ Label = "1,000 Boba Bucks", Price = "6,000" },
-		{ Label = "5,000 Boba Bucks", Price = "20,000" },
+		{ Label = "50 Boba Bucks", Price = "500" }, -- MOCK value; Jack-approved Creator Hub default: 25 R$. Display live Marketplace price; never hardcode it.
+		{ Label = "150 Boba Bucks", Price = "1,300" }, -- MOCK value; Jack-approved Creator Hub default: 59 R$. Display live Marketplace price; never hardcode it.
+		{ Label = "500 Boba Bucks", Price = "3,500" }, -- MOCK value; Jack-approved Creator Hub default: 149 R$. Display live Marketplace price; never hardcode it.
+		{ Label = "1,000 Boba Bucks", Price = "6,000" }, -- MOCK value; Jack-approved Creator Hub default: 249 R$. Display live Marketplace price; never hardcode it.
+		{ Label = "5,000 Boba Bucks", Price = "20,000" }, -- MOCK value; Jack-approved Creator Hub default: 999 R$. Display live Marketplace price; never hardcode it.
 	},
 	Points = {
 		{ Label = "100 Points", Price = "500" },
