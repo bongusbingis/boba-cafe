@@ -15,7 +15,6 @@ local OrderTicket = require(script.OrderTicket)
 local OrderQueue = require(script.OrderQueue)
 local ShiftCard = require(script.ShiftCard)
 local CafeRating = require(script.CafeRating)
-local QuestCard = require(script.QuestCard)
 ---> private
 local c = React.createElement
 
@@ -65,6 +64,5 @@ return function(props: {
 		OrderQueue = c(OrderQueue, {}),
 		ShiftCard = c(ShiftCard, {}),
 		CafeRating = c(CafeRating, {}),
-		QuestCard = c(QuestCard, {}),
 	})
 end

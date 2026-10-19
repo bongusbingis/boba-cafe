@@ -14,17 +14,15 @@ local Styles = require(UI.Styles)
 local WorldPath = require(Shared.Utility.WorldPath)
 local DailyRewardConfig = require(Shared.Configuration.DailyRewardConfig)
 
-local Banner = require(UI.Components.Buttons.Banner)
-local CloseButton = require(UI.Components.Buttons.CloseButton)
 local Page = require(UI.Components.Core.Page)
-local Pane = require(UI.Components.Pane)
+local OpenableMenu = require(UI.Components.Core.OpenableMenu)
 local PromptButton = require(UI.Components.Buttons.PromptButton)
+local ShopItem = require(UI.Components.Buttons.ShopItem)
+local usePx = require(UI.Hooks.usePx)
 
 local c = React.createElement
 
-local BUCKS_ICON = "rbxassetid://13382286492"
-local REGULAR_CAPSULE_ICON = "rbxassetid://6073658218"
-local RARE_CAPSULE_ICON = "rbxassetid://7621095542"
+local BUTTON_HEIGHT = 50
 
 export type DailyRewardsDialogProps = {
 	Status: { [string]: any }?,
@@ -57,8 +55,8 @@ local function formatCountdown(totalSeconds: number): string
 	end
 end
 
-return function(props: DailyRewardsDialogProps)
-	local closeFnRef = React.useRef(nil)
+local function DailyRewardsMenu(props: { Status: { [string]: any }?, OnCloseRequested: () -> () })
+	local px = usePx()
 	local status, setStatus = React.useState(props.Status)
 	local isClaiming, setIsClaiming = React.useState(false)
 
@@ -154,18 +152,6 @@ return function(props: DailyRewardsDialogProps)
 			running = false
 		end
 	end, { currentStatus.CanClaim, secondsLeft > 0 })
-
-	local function handleClose()
-		if closeFnRef.current then
-			closeFnRef.current()
-		end
-		if props.OnResolution then
-			props.OnResolution("Close")
-		end
-		if props.OnClose then
-			props.OnClose()
-		end
-	end
 
 	local function handleClaim()
 		if isClaiming or not currentStatus.CanClaim then
@@ -273,8 +259,8 @@ return function(props: DailyRewardsDialogProps)
 		subtitleText = `Streak: {streak} {if streak == 1 then "Day" else "Days"} • 7-Day Cycle Complete!`
 	end
 
-	-- Render 7 Day Cards
-	local dayCards: { [string]: any } = {}
+	-- Build the seven reward rows (one ShopItem per day)
+	local rows: { [string]: any } = {}
 	for day = 1, 7 do
 		local reward = DailyRewardConfig.REWARDS[day]
 		local bucksAmount = if reward then reward.BobaBucks * vipMultiplier else 0
@@ -283,269 +269,85 @@ return function(props: DailyRewardsDialogProps)
 		-- Status logic
 		local isClaimed = false
 		local isCurrent = false
-		local isLocked = false
 
 		if canClaim then
 			if day < dayToClaim then
 				isClaimed = true
 			elseif day == dayToClaim then
 				isCurrent = true
-			else
-				isLocked = true
 			end
-		else
-			if (streak > 0 and (streak % 7 == 0)) or day <= (streak % 7) then
-				isClaimed = true
-			else
-				isLocked = true
-			end
+		elseif (streak > 0 and (streak % 7 == 0)) or day <= (streak % 7) then
+			isClaimed = true
 		end
 
-		local cardStrokeColor = Styles.GRAY
-		local cardStrokeThickness = 1
-		local dayLabelColor = Styles.GRAY
-
-		if isCurrent then
-			cardStrokeColor = Styles.GOLD
-			cardStrokeThickness = 3.5
-			dayLabelColor = Styles.GOLD_DEEP
-		elseif isClaimed then
-			cardStrokeColor = Styles.GRAY
-			cardStrokeThickness = 1.5
-			dayLabelColor = Styles.GREEN_DEEP
+		local label = `Day {day}: {bucksAmount} Boba Bucks`
+		if capsuleName then
+			label ..= ` + {if day == 4 then "Regular Capsule" else "Rare Capsule"}`
+		end
+		if isClaimed then
+			label = `✓ {label}`
+		elseif isCurrent then
+			label ..= " - Claim now!"
 		end
 
-		local capsuleImage = if day == 4 then REGULAR_CAPSULE_ICON else RARE_CAPSULE_ICON
-
-		dayCards[`DayCard_{day}`] = c(Pane, {
-			ClassName = if isCurrent and canClaim then "ImageButton" else "Frame",
-			CornerRadius = Styles.CORNER_CARD,
-			Stroke = {
-				Color = cardStrokeColor,
-				Thickness = cardStrokeThickness,
-			},
-			Native = {
-				BackgroundColor3 = if isCurrent then Styles.OFFWHITE else Color3.fromRGB(246, 246, 246),
-				BackgroundTransparency = 0,
-				LayoutOrder = day,
-				Size = UDim2.fromScale(0.13, 0.98),
-			},
+		rows[`Day_{day}`] = c(ShopItem, {
+			Label = label,
+			Color = if isClaimed then Styles.GREEN_LIGHT elseif isCurrent then Styles.GOLD_MID else Styles.GRAY,
+			LayoutOrder = day,
 			OnClick = if isCurrent and canClaim then handleClaim else nil,
-			ListLayout = {
-				FillDirection = Enum.FillDirection.Vertical,
-				HorizontalAlignment = Enum.HorizontalAlignment.Center,
-				VerticalAlignment = Enum.VerticalAlignment.Center,
-				Padding = UDim.new(0.015, 0),
-				SortOrder = Enum.SortOrder.LayoutOrder,
-			},
-		}, {
-			-- Day Header
-			DayHeader = c(Pane, {
-				ClassName = "TextLabel",
-				Native = {
-					BackgroundTransparency = 1,
-					FontFace = Styles.FONT_FREDOKA,
-					LayoutOrder = 1,
-					Size = UDim2.fromScale(0.9, 0.14),
-					Text = `Day {day}`,
-					TextColor3 = dayLabelColor,
-					TextScaled = true,
-				},
-			}),
-
-			-- Main Graphic (Capsule for Day 4/7, Bucks icon for others)
-			MainGraphic = c(Pane, {
-				ClassName = "ImageLabel",
-				AspectRatio = 1,
-				Native = {
-					BackgroundTransparency = 1,
-					Image = if capsuleName then capsuleImage else BUCKS_ICON,
-					ImageTransparency = if isLocked then 0.35 else 0,
-					LayoutOrder = 2,
-					Size = UDim2.fromScale(0.65, 0.30),
-				},
-			}),
-
-			-- Capsule Label (if day has capsule)
-			CapsuleLabel = capsuleName and c(Pane, {
-				ClassName = "TextLabel",
-				Native = {
-					BackgroundTransparency = 1,
-					FontFace = Styles.FONT_FREDOKA,
-					LayoutOrder = 3,
-					Size = UDim2.fromScale(0.95, 0.11),
-					Text = if day == 4 then "Regular Capsule" else "Rare Capsule",
-					TextColor3 = if isCurrent
-						then Styles.GOLD_DEEP
-						elseif isClaimed then Styles.GREEN_DEEP
-						else Styles.GRAY,
-					TextScaled = true,
-				},
-			}) or nil,
-
-			-- BobaBucks Amount Row
-			BucksRow = c(Pane, {
-				ClassName = "Frame",
-				Native = {
-					BackgroundTransparency = 1,
-					LayoutOrder = 4,
-					Size = UDim2.fromScale(0.9, 0.13),
-				},
-				ListLayout = {
-					FillDirection = Enum.FillDirection.Horizontal,
-					HorizontalAlignment = Enum.HorizontalAlignment.Center,
-					VerticalAlignment = Enum.VerticalAlignment.Center,
-					Padding = UDim.new(0.05, 0),
-					SortOrder = Enum.SortOrder.LayoutOrder,
-				},
-			}, {
-				Icon = c(Pane, {
-					ClassName = "ImageLabel",
-					AspectRatio = 1,
-					Native = {
-						BackgroundTransparency = 1,
-						Image = BUCKS_ICON,
-						LayoutOrder = 1,
-						Size = UDim2.fromScale(0.35, 0.85),
-					},
-				}),
-				Amount = c(Pane, {
-					ClassName = "TextLabel",
-					Native = {
-						BackgroundTransparency = 1,
-						FontFace = Styles.FONT_FREDOKA,
-						LayoutOrder = 2,
-						Size = UDim2.fromScale(0.6, 0.9),
-						Text = `+{bucksAmount}`,
-						TextColor3 = if isCurrent
-							then Styles.GOLD_DEEP
-							elseif isClaimed then Styles.GREEN_DEEP
-							else Styles.GRAY,
-						TextScaled = true,
-					},
-				}),
-			}),
-
-			-- VIP 2x Multiplier Badge (if player has VIP)
-			VipBadge = isVIP and c(Pane, {
-				ClassName = "Frame",
-				CornerRadius = Styles.CORNER_FULL,
-				Native = {
-					BackgroundColor3 = Styles.GOLD,
-					BackgroundTransparency = 0,
-					LayoutOrder = 5,
-					Size = UDim2.fromScale(0.85, 0.1),
-				},
-			}, {
-				VipText = c(Pane, {
-					ClassName = "TextLabel",
-					Native = {
-						AnchorPoint = Vector2.new(0.5, 0.5),
-						BackgroundTransparency = 1,
-						FontFace = Styles.FONT_FREDOKA,
-						Position = UDim2.fromScale(0.5, 0.5),
-						Size = UDim2.fromScale(0.95, 0.85),
-						Text = "2x VIP",
-						TextColor3 = Styles.OFFWHITE,
-						TextScaled = true,
-					},
-				}),
-			}) or nil,
-
-			-- Status Footer (Claimed checkmark, Claim active, or Locked)
-			StatusFooter = c(Pane, {
-				ClassName = "TextLabel",
-				Native = {
-					BackgroundTransparency = 1,
-					FontFace = Styles.FONT_FREDOKA,
-					LayoutOrder = 6,
-					Size = UDim2.fromScale(0.9, 0.13),
-					Text = if isClaimed then "✓ Claimed" elseif isCurrent then "Claim!" else "Locked",
-					TextColor3 = if isClaimed then Styles.GREEN elseif isCurrent then Styles.GOLD_DEEP else Styles.GRAY,
-					TextScaled = true,
-				},
-			}),
 		})
 	end
 
-	-- Dialog modal container
-	local modalContent = c(Pane, {
-		ClassName = "Frame",
-		AspectRatio = 1.7,
-		CornerRadius = Styles.CORNER_CARD,
-		Stroke = {
-			Color = Styles.GREEN_DIM,
-			Thickness = 4,
-		},
-		Native = {
-			AnchorPoint = Vector2.new(0.5, 0.5),
-			BackgroundColor3 = Styles.OFFWHITE,
-			BackgroundTransparency = 0,
-			Position = UDim2.fromScale(0.5 + (props.OffsetX or 0), 0.5),
-			Size = UDim2.fromScale(0.85, 0.72),
-			ZIndex = 60,
-		},
+	rows.UIListLayout = c("UIListLayout", {
+		Padding = UDim.new(0, px(3)),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+	})
+
+	local hintText = if isVIP then `{subtitleText} • 2x VIP` else subtitleText
+
+	local rewardsTab = c("Frame", {
+		BackgroundTransparency = 1,
+		Size = UDim2.fromScale(1, 1),
 	}, {
-		UISizeConstraint = c("UISizeConstraint", {
-			MaxSize = Vector2.new(880, 520),
-			MinSize = Vector2.new(520, 320),
+		Title = c("TextLabel", {
+			AnchorPoint = Vector2.new(0.5, 0),
+			BackgroundTransparency = 1,
+			FontFace = Styles.FONT_FREDOKA,
+			Position = UDim2.fromScale(0.470149, 0),
+			Size = UDim2.fromScale(0.94, 0.09),
+			Text = "7-Day Rewards",
+			TextColor3 = Styles.GREEN,
+			TextScaled = true,
 		}),
 
-		-- Header Banner with GREEN banner and OFFWHITE Fredoka text
-		Header = c(Banner, {
-			Text = "Daily Login Rewards",
-			Color = Styles.GREEN,
-			Position = UDim2.fromScale(0.5, 0.04),
-			Size = UDim2.fromScale(0.65, 0.16),
+		Hint = c("TextLabel", {
+			AnchorPoint = Vector2.new(0.5, 0),
+			BackgroundTransparency = 1,
+			FontFace = Styles.FONT_FREDOKA,
+			Position = UDim2.fromScale(0.5, 0.095),
+			Size = UDim2.fromScale(0.94, 0.085),
+			Text = hintText,
+			TextColor3 = Styles.GRAY,
+			TextScaled = true,
 		}),
 
-		-- Close Button at top-right
-		Close = c(CloseButton, {
-			OnClick = handleClose,
-		}),
+		Rewards = c("ScrollingFrame", {
+			Active = true,
+			AutomaticCanvasSize = Enum.AutomaticSize.Y,
+			BackgroundTransparency = 1,
+			CanvasSize = UDim2.new(),
+			Position = UDim2.fromScale(0, 0.2),
+			ScrollBarImageColor3 = Color3.new(),
+			ScrollBarThickness = 5,
+			ScrollingDirection = Enum.ScrollingDirection.Y,
+			Size = UDim2.fromScale(1, 0.64),
+		}, rows),
 
-		-- Subtitle indicating streak and claim status
-		Subtitle = c(Pane, {
-			ClassName = "TextLabel",
-			Native = {
-				AnchorPoint = Vector2.new(0.5, 0.5),
-				BackgroundTransparency = 1,
-				FontFace = Styles.FONT_FREDOKA,
-				Position = UDim2.fromScale(0.5, 0.17),
-				Size = UDim2.fromScale(0.9, 0.055),
-				Text = subtitleText,
-				TextColor3 = Styles.GREEN_DEEP,
-				TextScaled = true,
-			},
-		}),
-
-		-- 7-Day Calendar Cards Row
-		CardsContainer = c(Pane, {
-			ClassName = "Frame",
-			Native = {
-				AnchorPoint = Vector2.new(0.5, 0.5),
-				BackgroundTransparency = 1,
-				Position = UDim2.fromScale(0.5, 0.53),
-				Size = UDim2.fromScale(0.96, 0.56),
-			},
-			ListLayout = {
-				FillDirection = Enum.FillDirection.Horizontal,
-				HorizontalAlignment = Enum.HorizontalAlignment.Center,
-				VerticalAlignment = Enum.VerticalAlignment.Center,
-				Padding = UDim.new(0.012, 0),
-				SortOrder = Enum.SortOrder.LayoutOrder,
-			},
-		}, dayCards),
-
-		-- Bottom Action Area with Claim button
-		BottomBar = c(Pane, {
-			ClassName = "Frame",
-			Native = {
-				AnchorPoint = Vector2.new(0.5, 0.5),
-				BackgroundTransparency = 1,
-				Position = UDim2.fromScale(0.5, 0.88),
-				Size = UDim2.fromScale(0.42, 0.13),
-			},
+		BottomBar = c("Frame", {
+			AnchorPoint = Vector2.new(0.5, 1),
+			BackgroundTransparency = 1,
+			Position = UDim2.fromScale(0.5, 0.98),
+			Size = UDim2.new(0.6, 0, 0, px(BUTTON_HEIGHT)),
 		}, {
 			ClaimButton = if canClaim
 				then c(PromptButton, {
@@ -563,32 +365,39 @@ return function(props: DailyRewardsDialogProps)
 		}),
 	})
 
-	return c("Frame", {
-		BackgroundTransparency = 1,
-		Size = UDim2.fromScale(1, 1),
-	}, {
-		-- Darkened backdrop overlay
-		Backdrop = c(Pane, {
-			ClassName = "TextButton",
-			OnClick = handleClose,
-			Native = {
-				AutoButtonColor = false,
-				BackgroundColor3 = Color3.new(0, 0, 0),
-				BackgroundTransparency = 0.5,
-				Position = UDim2.fromOffset(0, -36),
-				Size = UDim2.fromScale(5, 5),
-				Text = "",
-				ZIndex = 50,
-			},
-		}),
+	return c(OpenableMenu, {
+		TitleText = "Daily Rewards",
+		TitleColor = Styles.GREEN,
+		Pages = {
+			{ Key = "Rewards", Label = "Rewards", Content = rewardsTab },
+		},
+		OnClose = props.OnCloseRequested,
+	})
+end
 
-		-- Modal container wrapped in Page for spring physics
-		ModalPage = c(Page, {
-			IsVisible = true,
-			PageContent = modalContent,
-			OnClosing = function(cb)
-				closeFnRef.current = cb
-			end,
+return function(props: DailyRewardsDialogProps)
+	local closeFnRef = React.useRef(nil)
+
+	local function handleClose()
+		if closeFnRef.current then
+			closeFnRef.current()
+		end
+		if props.OnResolution then
+			props.OnResolution("Close")
+		end
+		if props.OnClose then
+			props.OnClose()
+		end
+	end
+
+	return c(Page, {
+		IsVisible = true,
+		PageContent = c(DailyRewardsMenu, {
+			Status = props.Status,
+			OnCloseRequested = handleClose,
 		}),
+		OnClosing = function(cb)
+			closeFnRef.current = cb
+		end,
 	})
 end

@@ -1,8 +1,8 @@
 --[[
-    Component: QuestCard
-    Description: Daily Quests HUD card (REVIVAL-001 M4-UI-QUESTS, DEC-013, DEC-032).
-                 Displays 3–4 daily quests with progress bar, reward pills,
-                 Claim button for completed quests, and Reroll button.
+    Component: DailyQuests
+    Description: Daily Quests tab content for the Quests menu (REVIVAL-001 M4-UI-DAILY-REDO,
+                 DEC-013, DEC-032, DEC-041). Displays 3–4 daily quests with progress bar,
+                 reward pills, Claim button for completed quests, and Reroll button.
 --]]
 
 --!nonstrict
@@ -27,6 +27,7 @@ local Styles = require(UI.Styles)
 local Pane = require(UI.Components.Pane)
 local QuestConfig = require(Shared.Configuration.QuestConfig)
 local GamepassUtil = require(Shared.Utility.GamepassUtil)
+local usePx = require(UI.Hooks.usePx)
 
 export type QuestEntry = QuestConfig.QuestEntry
 
@@ -96,6 +97,7 @@ local function QuestActionButton(props: {
 	Disabled: boolean?,
 	OnClick: (() -> ())?,
 })
+	local px = usePx()
 	local isHovering, setIsHovering = React.useState(false)
 	local isPressing, setIsPressing = React.useState(false)
 	local isDisabled = props.Disabled == true
@@ -144,13 +146,13 @@ local function QuestActionButton(props: {
 			BackgroundTransparency = if isDisabled then 0.5 else 0,
 			LayoutOrder = props.LayoutOrder,
 			Position = UDim2.fromScale(1, 0.5),
-			Size = props.Size or UDim2.fromOffset(72, 20),
+			Size = props.Size or UDim2.fromOffset(px(100), px(30)),
 			Text = "",
 		},
 	}, {
 		Label = c(Pane, {
 			ClassName = "TextLabel",
-			MaxTextSize = 12,
+			MaxTextSize = px(18),
 			Native = {
 				AnchorPoint = Vector2.new(0.5, 0.5),
 				BackgroundTransparency = 1,
@@ -175,7 +177,11 @@ local function QuestRow(props: {
 	onClaim: (index: number) -> (),
 	onReroll: (index: number) -> (),
 })
+	local px = usePx()
 	local quest = props.quest
+	local actionWidth = px(100)
+	local actionHeight = px(30)
+	local sideWidth = actionWidth + px(8)
 	local title = QuestConfig.GetQuestTitle(quest)
 	local progress = math.clamp(quest.Progress or 0, 0, quest.Target or 1)
 	local target = math.max(1, quest.Target or 1)
@@ -193,10 +199,10 @@ local function QuestRow(props: {
 			BackgroundTransparency = 1,
 			FontFace = Styles.FONT_FREDOKA,
 			Position = UDim2.fromScale(0, 0),
-			Size = UDim2.new(1, -78, 0, 0),
+			Size = UDim2.new(1, -(px(110) + px(8)), 0, 0),
 			Text = title,
 			TextColor3 = Styles.GREEN_DEEP,
-			TextSize = 12,
+			TextSize = px(18),
 			TextWrapped = true,
 			TextXAlignment = Enum.TextXAlignment.Left,
 		}),
@@ -207,7 +213,7 @@ local function QuestRow(props: {
 			BackgroundTransparency = 0.2,
 			BorderSizePixel = 0,
 			Position = UDim2.fromScale(1, 0),
-			Size = UDim2.fromOffset(72, 16),
+			Size = UDim2.fromOffset(px(110), px(24)),
 		}, {
 			Corner = c("UICorner", { CornerRadius = UDim.new(0.5, 0) }),
 			Stroke = c("UIStroke", {
@@ -226,7 +232,7 @@ local function QuestRow(props: {
 				TextScaled = true,
 				TextXAlignment = Enum.TextXAlignment.Center,
 			}, {
-				TextSizeConstraint = c("UITextSizeConstraint", { MaxTextSize = 10 }),
+				TextSizeConstraint = c("UITextSizeConstraint", { MaxTextSize = px(14) }),
 			}),
 		}),
 	})
@@ -238,17 +244,17 @@ local function QuestRow(props: {
 			BackgroundTransparency = 1,
 			FontFace = Styles.FONT_FREDOKA,
 			Position = UDim2.fromScale(1, 0.5),
-			Size = UDim2.fromOffset(72, 20),
+			Size = UDim2.fromOffset(actionWidth, actionHeight),
 			Text = "Claimed",
 			TextColor3 = Styles.GRAY,
-			TextSize = 12,
+			TextSize = px(18),
 			TextXAlignment = Enum.TextXAlignment.Center,
 		})
 	elseif quest.Completed then
 		actionElement = c(QuestActionButton, {
 			Text = "Claim",
 			Color = Styles.GREEN,
-			Size = UDim2.fromOffset(72, 20),
+			Size = UDim2.fromOffset(actionWidth, actionHeight),
 			Disabled = props.isActing,
 			OnClick = function()
 				props.onClaim(props.index)
@@ -259,7 +265,7 @@ local function QuestRow(props: {
 			Text = if props.hasFreeReroll then "Free" else `{QuestConfig.REROLL_COST_BOBABUCKS} BB`,
 			Color = if props.hasFreeReroll then Styles.GREEN_LIGHT else Styles.GOLD_MID,
 			TextColor = if props.hasFreeReroll then Color3.new(1, 1, 1) else Styles.GOLD_DEEP,
-			Size = UDim2.fromOffset(72, 20),
+			Size = UDim2.fromOffset(actionWidth, actionHeight),
 			Disabled = props.isActing,
 			OnClick = function()
 				props.onReroll(props.index)
@@ -270,14 +276,14 @@ local function QuestRow(props: {
 	local bottomRow = c("Frame", {
 		LayoutOrder = 2,
 		BackgroundTransparency = 1,
-		Size = UDim2.new(1, 0, 0, 20),
+		Size = UDim2.new(1, 0, 0, actionHeight),
 	}, {
 		ProgressBar = c("Frame", {
 			AnchorPoint = Vector2.new(0, 0.5),
 			BackgroundColor3 = Styles.GRAY,
 			BorderSizePixel = 0,
 			Position = UDim2.fromScale(0, 0.5),
-			Size = UDim2.new(1, -78, 0, 16),
+			Size = UDim2.new(1, -sideWidth, 0, px(24)),
 		}, {
 			Corner = c("UICorner", { CornerRadius = UDim.new(0.5, 0) }),
 			Fill = c("Frame", {
@@ -295,8 +301,8 @@ local function QuestRow(props: {
 				Size = UDim2.fromScale(1, 1),
 				Text = string.format("%d / %d", progress, target),
 				TextColor3 = Styles.OFFWHITE,
-				TextSize = 11,
-				TextStrokeColor3 = Color3.fromRGB(40, 40, 40),
+				TextSize = px(15),
+				TextStrokeColor3 = Color3.new(0, 0, 0),
 				TextStrokeTransparency = 0.5,
 				ZIndex = 2,
 			}),
@@ -313,7 +319,7 @@ local function QuestRow(props: {
 	}, {
 		Layout = c("UIListLayout", {
 			FillDirection = Enum.FillDirection.Vertical,
-			Padding = UDim.new(0, 4),
+			Padding = UDim.new(0, px(4)),
 			SortOrder = Enum.SortOrder.LayoutOrder,
 		}),
 		Top = topRow,
@@ -327,9 +333,9 @@ return function(props: {
 	Quests: { QuestEntry }?,
 	Preview: boolean?,
 })
+	local px = usePx()
 	local initialQuests = props.Quests or (if not RunService:IsRunning() then PREVIEW_QUESTS else {})
 	local quests, setQuests = React.useState(initialQuests :: { QuestEntry })
-	local isExpanded, setIsExpanded = React.useState(true)
 	local freeRerolls, setFreeRerolls = React.useState(0)
 	local isActing, setIsActing = React.useState(false)
 
@@ -387,7 +393,7 @@ return function(props: {
 			end)
 			setIsActing(false)
 			if not ok or success == false then
-				warn("[QuestCard] Claim failed:", err)
+				warn("[DailyQuests] Claim failed:", err)
 			end
 		end)
 	end, { isActing })
@@ -420,66 +426,7 @@ return function(props: {
 		end)
 	end, { isActing })
 
-	if RunService:IsRunning() and #quests == 0 then
-		return nil
-	end
-
 	local hasFreeReroll = freeRerolls > 0
-
-	local header = c(Pane, {
-		ClassName = "TextButton",
-		LayoutOrder = 1,
-		OnClick = function()
-			setIsExpanded(function(prev)
-				return not prev
-			end)
-		end,
-		Native = {
-			AutoButtonColor = false,
-			BackgroundColor3 = Styles.GREEN,
-			BackgroundTransparency = 0,
-			BorderSizePixel = 0,
-			Size = UDim2.new(1, 0, 0, 28),
-			Text = "",
-		},
-	}, {
-		Corner = c("UICorner", { CornerRadius = UDim.new(0, 6) }),
-		BottomSquare = if isExpanded
-			then c("Frame", {
-				AnchorPoint = Vector2.new(0, 1),
-				BackgroundColor3 = Styles.GREEN,
-				BorderSizePixel = 0,
-				Position = UDim2.fromScale(0, 1),
-				Size = UDim2.new(1, 0, 0, 6),
-			})
-			else nil,
-		Title = c("TextLabel", {
-			AnchorPoint = Vector2.new(0, 0.5),
-			BackgroundTransparency = 1,
-			FontFace = Styles.FONT_FREDOKA,
-			Position = UDim2.new(0, 10, 0.5, 0),
-			Size = UDim2.new(1, -40, 0.7, 0),
-			Text = "Daily Quests",
-			TextColor3 = Styles.OFFWHITE,
-			TextScaled = true,
-			TextXAlignment = Enum.TextXAlignment.Left,
-		}, {
-			TextSizeConstraint = c("UITextSizeConstraint", { MaxTextSize = 15 }),
-		}),
-		Toggle = c("TextLabel", {
-			AnchorPoint = Vector2.new(1, 0.5),
-			BackgroundTransparency = 1,
-			FontFace = Styles.FONT_FREDOKA,
-			Position = UDim2.new(1, -10, 0.5, 0),
-			Size = UDim2.new(0, 20, 0.7, 0),
-			Text = if isExpanded then "▲" else "▼",
-			TextColor3 = Styles.OFFWHITE,
-			TextScaled = true,
-			TextXAlignment = Enum.TextXAlignment.Center,
-		}, {
-			TextSizeConstraint = c("UITextSizeConstraint", { MaxTextSize = 14 }),
-		}),
-	})
 
 	local questItems = {}
 	for index, quest in quests do
@@ -502,47 +449,61 @@ return function(props: {
 		})
 	end
 
-	local listChildren = table.clone(questItems)
-	listChildren.Padding = c("UIPadding", {
-		PaddingTop = UDim.new(0, 6),
-		PaddingBottom = UDim.new(0, 8),
-		PaddingLeft = UDim.new(0, 8),
-		PaddingRight = UDim.new(0, 8),
+	questItems.Padding = c("UIPadding", {
+		PaddingTop = UDim.new(0, px(6)),
+		PaddingBottom = UDim.new(0, px(8)),
+		PaddingLeft = UDim.new(0, px(8)),
+		PaddingRight = UDim.new(0, px(16)),
 	})
-	listChildren.Layout = c("UIListLayout", {
+	questItems.Layout = c("UIListLayout", {
 		FillDirection = Enum.FillDirection.Vertical,
-		Padding = UDim.new(0, 6),
+		Padding = UDim.new(0, px(6)),
 		SortOrder = Enum.SortOrder.LayoutOrder,
 	})
 
-	local listContainer = if isExpanded
-		then c("Frame", {
-			LayoutOrder = 2,
-			AutomaticSize = Enum.AutomaticSize.Y,
-			BackgroundTransparency = 1,
-			Size = UDim2.fromScale(1, 0),
-		}, listChildren)
-		else nil
+	local isEmpty = RunService:IsRunning() and #quests == 0
 
 	return c("Frame", {
-		AnchorPoint = Vector2.new(0, 0),
-		AutomaticSize = Enum.AutomaticSize.Y,
-		BackgroundColor3 = Styles.OFFWHITE,
-		BorderSizePixel = 0,
-		Position = UDim2.fromOffset(10, 48),
-		Size = UDim2.fromOffset(230, 0),
-		ZIndex = 10,
+		BackgroundTransparency = 1,
+		Size = UDim2.fromScale(1, 1),
 	}, {
-		Corner = c("UICorner", { CornerRadius = UDim.new(0, 6) }),
-		Stroke = c("UIStroke", {
-			Color = Styles.GREEN_DIM,
-			Thickness = 1,
+		Title = c("TextLabel", {
+			AnchorPoint = Vector2.new(0.5, 0),
+			BackgroundTransparency = 1,
+			FontFace = Styles.FONT_FREDOKA,
+			Position = UDim2.fromScale(0.470149, 0),
+			Size = UDim2.fromScale(0.94, 0.09),
+			Text = "Daily Quests",
+			TextColor3 = Styles.GREEN,
+			TextScaled = true,
 		}),
-		Layout = c("UIListLayout", {
-			FillDirection = Enum.FillDirection.Vertical,
-			SortOrder = Enum.SortOrder.LayoutOrder,
-		}),
-		Header = header,
-		List = listContainer,
+
+		Quests = if isEmpty
+			then nil
+			else c("ScrollingFrame", {
+				Active = true,
+				AutomaticCanvasSize = Enum.AutomaticSize.Y,
+				BackgroundTransparency = 1,
+				CanvasSize = UDim2.new(),
+				Position = UDim2.fromScale(0, 0.112),
+				ScrollBarImageColor3 = Color3.new(),
+				ScrollBarThickness = 5,
+				ScrollingDirection = Enum.ScrollingDirection.Y,
+				Size = UDim2.fromScale(1, 0.888),
+			}, questItems),
+
+		EmptyLabel = if isEmpty
+			then c("TextLabel", {
+				AnchorPoint = Vector2.new(0.5, 0),
+				BackgroundTransparency = 1,
+				FontFace = Styles.FONT_FREDOKA,
+				Position = UDim2.fromScale(0.475, 0.112),
+				Size = UDim2.fromScale(0.9, 0.075),
+				Text = "You don't have any quests!",
+				TextColor3 = Styles.GREEN,
+				TextScaled = true,
+				TextTransparency = 0.4,
+			})
+			else nil,
 	})
 end

@@ -2,6 +2,32 @@
 
 Newest first. Each entry is `## <GOAL> / DEC-###: <title>` with Date, Source, and Decision. Prime is the only writer. Numbering continues; never reuse a number.
 
+## REVIVAL-001 / DEC-045: M4 UI redo review: Daily approved; Quests placement again
+
+- **Date:** 2026-10-19.
+- **Source:** Jack in session, after viewing the redo captures (artifact G98eDhF1Rz8dPusf5es5k4 v2): "UI Review: A. Daily rewards approved; B. Revert quests to how you had it originally, but somewhere less annoying/intrusive that doesn't interfere with mobile (and is easy to use on mobile). No more hud card".
+- **Decision:**
+  - **A, Daily Rewards (one-tab OpenableMenu, no backdrop): approved.**
+  - **B, Quests menu: not approved.** Quests return to the original quest card design (the QuestCard rows, header and buttons Jack approved in DEC-038), shown somewhere less intrusive that doesn't interfere with mobile and is easy to use on mobile. No always-on HUD card. The exact placement is PENDING JACK (Q23).
+  - **C, bottom-left buttons:** no comment.
+
+## REVIVAL-001 / DEC-044: Boba Phone port deferred
+
+- **Date:** 2026-10-19.
+- **Source:** Jack in session: "I'd rather defer it so that we can focus on the task as a whole (gameplay especially) rather than a faithful port of something that's already proven in legacy code. If you don't already have it planned for later, document it explicitly so that another agent can pick it up down the line (since it's a relatively easy port)".
+- **Decision:**
+  - BOBA-PHONE is deferred. DEC-040 and DEC-043 stand unchanged. The pick-up document is `tasks/REVIVAL-001/BOBA-PHONE/brief.md`, and the board task BOBA-PHONE is `deferred`.
+  - The counter register prompt is removed together with the phone, never before it. Until then, real players keep ordering at the registers.
+
+## REVIVAL-001 / DEC-043: Boba Phone order feedback; raw port re-done in chunks (Q21)
+
+- **Date:** 2026-10-19.
+- **Source:** Jack in session: "Q20: I just tried redoing the port in separate chunks. See BobaPhone/Frame/__REACT_……(name here) Q21: A for now".
+- **Decision:**
+  - **Q21 = A (for now):** after "Place Order" the phone shows the result through the existing notification toast: success, or the server's refusal reason. The unwired Home and History tabs are hidden. An order-status screen may come later as its own ask.
+  - **Raw port:** Jack re-ran the plugin in chunks under `StarterGui.UIArchive.OldUI.BobaPhone.Frame`, in modules named `__REACT_…`. These replace the empty `__REACT_PHONE`.
+  - **Q20 = A:** Jack confirmed: "Yes, port faithfully". The phone keeps the legacy BobaPhone look, ported faithfully. This is existing UI, so it satisfies DEC-013 without restyling it to the STYLE.md tokens.
+
 ## REVIVAL-001 / DEC-042: Double Storage scope; Team Combo on throttled serves (Q-D1, Q-D2, Q-P3)
 
 - **Date:** 2026-10-19.
