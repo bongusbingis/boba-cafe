@@ -254,7 +254,7 @@ local function QuestRow(props: {
 		})
 	else
 		actionElement = c(QuestActionButton, {
-			Text = if props.hasFreeReroll then "Free" else "50 BB",
+			Text = if props.hasFreeReroll then "Free" else `{QuestConfig.REROLL_COST_BOBABUCKS} BB`,
 			Color = if props.hasFreeReroll then Styles.GREEN_LIGHT else Styles.GOLD_MID,
 			TextColor = if props.hasFreeReroll then Color3.new(1, 1, 1) else Styles.GOLD_DEEP,
 			Size = UDim2.fromOffset(72, 20),

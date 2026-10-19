@@ -44,11 +44,11 @@ return function()
 	local fakeData: any
 	local currencyCalls: { { player: any, type: string, amount: number, reason: string? } }
 	local inventoryCalls: { { player: any, category: string, itemName: string } }
+	local capsuleSpace: boolean
 
 	local originalGetService = service._getService
 	local originalNow = service._now
 	local originalHasPass = service._hasPass
-	local originalGetInventoryServer = service._getInventoryServer
 
 	beforeEach(function()
 		currentTime = 1000000
@@ -56,6 +56,7 @@ return function()
 		fakeData = makePlayerData(0, 0)
 		currencyCalls = {}
 		inventoryCalls = {}
+		capsuleSpace = true
 
 		local dataService = {
 			GetDataAsync = function(_, _player)
@@ -74,13 +75,20 @@ return function()
 			end,
 		}
 
-		local fakeInventoryServer = {
-			AddItem = function(_, player, category, itemName)
+		local capsuleService = {
+			HasCapsuleSpace = function(_, _player)
+				return capsuleSpace
+			end,
+			GrantEarnedCapsule = function(_, player, capsuleName)
+				if not capsuleSpace then
+					return false, "InventoryFull"
+				end
 				table.insert(inventoryCalls, {
 					player = player,
-					category = category,
-					itemName = itemName,
+					category = "Capsules",
+					itemName = capsuleName,
 				})
+				return true, nil
 			end,
 		}
 
@@ -89,6 +97,8 @@ return function()
 				return dataService
 			elseif name == "CurrencyService" then
 				return currencyService
+			elseif name == "CapsuleService" then
+				return capsuleService
 			end
 			error("unexpected service: " .. tostring(name))
 		end
@@ -103,17 +113,12 @@ return function()
 			end
 			return false
 		end
-
-		service._getInventoryServer = function(_)
-			return fakeInventoryServer
-		end
 	end)
 
 	afterEach(function()
 		service._getService = originalGetService
 		service._now = originalNow
 		service._hasPass = originalHasPass
-		service._getInventoryServer = originalGetInventoryServer
 	end)
 
 	-- ══════════════════════════════════════════════════════════════════════
@@ -196,14 +201,14 @@ return function()
 			expect(ok).to.equal(true)
 			expect(err).to.equal(nil)
 			expect(result.Streak).to.equal(1)
-			expect(result.BobaBucks).to.equal(50)
+			expect(result.BobaBucks).to.equal(30)
 			expect(result.Capsule).to.equal(nil)
 
 			expect(fakeData.DailyRewards.Streak).to.equal(1)
 			expect(fakeData.DailyRewards.LastClaimTime).to.equal(currentTime)
 			expect(#currencyCalls).to.equal(1)
 			expect(currencyCalls[1].type).to.equal("BobaBucks")
-			expect(currencyCalls[1].amount).to.equal(50)
+			expect(currencyCalls[1].amount).to.equal(30)
 			expect(currencyCalls[1].reason).to.equal("DailyReward")
 			expect(#inventoryCalls).to.equal(0)
 		end)
@@ -244,12 +249,12 @@ return function()
 			expect(ok).to.equal(true)
 			expect(err).to.equal(nil)
 			expect(result.Streak).to.equal(2)
-			expect(result.BobaBucks).to.equal(75)
+			expect(result.BobaBucks).to.equal(45)
 			expect(result.Capsule).to.equal(nil)
 			expect(fakeData.DailyRewards.Streak).to.equal(2)
 			expect(fakeData.DailyRewards.LastClaimTime).to.equal(currentTime)
 			expect(#currencyCalls).to.equal(2)
-			expect(currencyCalls[2].amount).to.equal(75)
+			expect(currencyCalls[2].amount).to.equal(45)
 		end)
 
 		it("resets streak to 1 after 50 hours of inactivity (expiration)", function()
@@ -268,12 +273,12 @@ return function()
 			expect(ok).to.equal(true)
 			expect(err).to.equal(nil)
 			expect(result.Streak).to.equal(1)
-			expect(result.BobaBucks).to.equal(50)
+			expect(result.BobaBucks).to.equal(30)
 			expect(result.Capsule).to.equal(nil)
 			expect(fakeData.DailyRewards.Streak).to.equal(1)
 			expect(fakeData.DailyRewards.LastClaimTime).to.equal(currentTime)
 			expect(#currencyCalls).to.equal(1)
-			expect(currencyCalls[1].amount).to.equal(50)
+			expect(currencyCalls[1].amount).to.equal(30)
 		end)
 
 		it("grants Day 7 reward with Rare Pet Capsule and wraps streak to Day 1", function()
@@ -289,7 +294,7 @@ return function()
 			local ok7, _, result7 = service:ClaimReward(player)
 			expect(ok7).to.equal(true)
 			expect(result7.Streak).to.equal(7)
-			expect(result7.BobaBucks).to.equal(300)
+			expect(result7.BobaBucks).to.equal(180)
 			expect(result7.Capsule).to.equal("Rare Pet Capsule")
 			expect(fakeData.DailyRewards.Streak).to.equal(7)
 			expect(#inventoryCalls).to.equal(1)
@@ -306,7 +311,7 @@ return function()
 			local okWrap, _, resultWrap = service:ClaimReward(player)
 			expect(okWrap).to.equal(true)
 			expect(resultWrap.Streak).to.equal(1)
-			expect(resultWrap.BobaBucks).to.equal(50)
+			expect(resultWrap.BobaBucks).to.equal(30)
 			expect(resultWrap.Capsule).to.equal(nil)
 			expect(fakeData.DailyRewards.Streak).to.equal(1)
 		end)
@@ -320,12 +325,33 @@ return function()
 			local ok, _, result = service:ClaimReward(player)
 			expect(ok).to.equal(true)
 			expect(result.Streak).to.equal(4)
-			expect(result.BobaBucks).to.equal(125)
+			expect(result.BobaBucks).to.equal(60)
 			expect(result.Capsule).to.equal("Regular Pet Capsule")
 			expect(fakeData.DailyRewards.Streak).to.equal(4)
 			expect(#inventoryCalls).to.equal(1)
 			expect(inventoryCalls[1].category).to.equal("Capsules")
 			expect(inventoryCalls[1].itemName).to.equal("Regular Pet Capsule")
+		end)
+
+		it("refuses a capsule-day claim with a full inventory and does not consume the streak", function()
+			local player = makePlayer(1)
+			fakeData = makePlayerData(3, currentTime)
+			currentTime += 22 * 3600
+			capsuleSpace = false
+
+			local ok, reason = service:ClaimReward(player)
+			expect(ok).to.equal(false)
+			expect(reason).to.equal("InventoryFull")
+			expect(fakeData.DailyRewards.Streak).to.equal(3)
+			expect(fakeData.SetValueCalls).to.equal(0)
+			expect(#currencyCalls).to.equal(0)
+			expect(#inventoryCalls).to.equal(0)
+
+			-- Space freed: the same claim now succeeds.
+			capsuleSpace = true
+			local okRetry, _, result = service:ClaimReward(player)
+			expect(okRetry).to.equal(true)
+			expect(result.Streak).to.equal(4)
 		end)
 
 		it("applies 2x multiplier to BobaBucks payout for VIP gamepass owners", function()
@@ -338,9 +364,9 @@ return function()
 			local ok, _, result = service:ClaimReward(player)
 			expect(ok).to.equal(true)
 			expect(result.Streak).to.equal(1)
-			expect(result.BobaBucks).to.equal(100)
+			expect(result.BobaBucks).to.equal(60)
 			expect(#currencyCalls).to.equal(1)
-			expect(currencyCalls[1].amount).to.equal(100)
+			expect(currencyCalls[1].amount).to.equal(60)
 		end)
 
 		it("exposes Client table functions that forward to Server", function()
@@ -353,7 +379,7 @@ return function()
 			expect(ok).to.equal(true)
 			expect(err).to.equal(nil)
 			expect(result.Streak).to.equal(1)
-			expect(result.BobaBucks).to.equal(50)
+			expect(result.BobaBucks).to.equal(30)
 		end)
 	end)
 end

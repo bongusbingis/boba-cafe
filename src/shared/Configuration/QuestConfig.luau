@@ -7,8 +7,8 @@ export type QuestEntry = ProfileTemplate.QuestEntry
 export type QuestTemplate = {
 	Title: string,
 	Targets: { number },
-	BobaBucks: number,
-	XP: number,
+	BobaBucks: { number }, -- aligned with Targets
+	XP: { number }, -- aligned with Targets
 }
 
 local QuestConfig = {}
@@ -16,7 +16,7 @@ local QuestConfig = {}
 QuestConfig.BASE_SLOTS = 3
 QuestConfig.BONUS_SLOT_PASSES = { 219650999, 12385834 }
 QuestConfig.FREE_REROLL_PASS = 219650999
-QuestConfig.REROLL_COST_BOBABUCKS = 50
+QuestConfig.REROLL_COST_BOBABUCKS = 20 -- DEC-037 Q11b
 
 QuestConfig.TYPE_ORDER = {
 	"BobaOrdered",
@@ -30,32 +30,32 @@ local TEMPLATES: { [string]: QuestTemplate } = {
 	BobaOrdered = {
 		Title = "Prepare %d Boba Drinks",
 		Targets = { 3, 5, 8 },
-		BobaBucks = 50,
-		XP = 25,
+		BobaBucks = { 25, 40, 60 }, -- DEC-036
+		XP = { 15, 25, 35 }, -- DEC-036
 	},
 	CustomersServed = {
 		Title = "Serve %d Customers",
 		Targets = { 5, 10, 15 },
-		BobaBucks = 60,
-		XP = 30,
+		BobaBucks = { 25, 40, 60 }, -- DEC-036
+		XP = { 15, 25, 35 }, -- DEC-036
 	},
 	SpillsCleaned = {
 		Title = "Clean %d Spills",
 		Targets = { 2, 4, 6 },
-		BobaBucks = 40,
-		XP = 20,
+		BobaBucks = { 20, 30, 45 }, -- DEC-036
+		XP = { 10, 20, 30 }, -- DEC-036
 	},
 	RegularOrders = {
 		Title = "Serve %d Real Players",
 		Targets = { 1, 2 },
-		BobaBucks = 75,
-		XP = 40,
+		BobaBucks = { 40, 75 }, -- DEC-036
+		XP = { 25, 40 }, -- DEC-036
 	},
 	ShiftsCompleted = {
 		Title = "Complete %d Shifts",
 		Targets = { 1, 2 },
-		BobaBucks = 50,
-		XP = 25,
+		BobaBucks = { 40, 75 }, -- DEC-036
+		XP = { 25, 40 }, -- DEC-036
 	},
 }
 QuestConfig.TEMPLATES = TEMPLATES
@@ -97,7 +97,8 @@ function QuestConfig.GenerateDailyQuests(
 	for i = 1, count do
 		local questType = pool[i]
 		local template = QuestConfig.TEMPLATES[questType]
-		local target = template.Targets[actualRng:NextInteger(1, #template.Targets)]
+		local targetIndex = actualRng:NextInteger(1, #template.Targets)
+		local target = template.Targets[targetIndex]
 		table.insert(quests, {
 			Id = string.format("%d_%s_%d", dayNumber, questType, target),
 			Type = questType,
@@ -105,8 +106,8 @@ function QuestConfig.GenerateDailyQuests(
 			Progress = 0,
 			Completed = false,
 			Claimed = false,
-			RewardBobaBucks = template.BobaBucks,
-			RewardXP = template.XP,
+			RewardBobaBucks = template.BobaBucks[targetIndex],
+			RewardXP = template.XP[targetIndex],
 		})
 	end
 	return quests
@@ -127,7 +128,8 @@ function QuestConfig.RollQuest(dayNumber: number, excludeTypes: { [string]: bool
 	end
 	local pickedType = candidateTypes[actualRng:NextInteger(1, #candidateTypes)]
 	local template = QuestConfig.TEMPLATES[pickedType]
-	local target = template.Targets[actualRng:NextInteger(1, #template.Targets)]
+	local targetIndex = actualRng:NextInteger(1, #template.Targets)
+	local target = template.Targets[targetIndex]
 	return {
 		Id = string.format("%d_%s_%d_%d", dayNumber, pickedType, target, actualRng:NextInteger(1000, 9999)),
 		Type = pickedType,
@@ -135,8 +137,8 @@ function QuestConfig.RollQuest(dayNumber: number, excludeTypes: { [string]: bool
 		Progress = 0,
 		Completed = false,
 		Claimed = false,
-		RewardBobaBucks = template.BobaBucks,
-		RewardXP = template.XP,
+		RewardBobaBucks = template.BobaBucks[targetIndex],
+		RewardXP = template.XP[targetIndex],
 	}
 end
 

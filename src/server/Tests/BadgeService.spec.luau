@@ -11,22 +11,15 @@ return function()
 
 	local BadgeService = require(ServerScriptService.Server.Modules.BadgeService) :: any
 
+	-- DEC-035 Q3, DEC-037 Q12: FirstStaff is not a Veteran badge.
 	local EXPECTED_LEGACY_BADGES = {
-		Welcome = 2124469255,
-		MetTheOwner = 2124491880,
-		MetTheCoOwner = 2124640228,
-		MetADeveloper = 2124640227,
 		FirstQuest = 2124640229,
-		FirstStaff = 2124640230,
 		Celebrity = 2124640231,
 		SakuraIsland = 2124640232,
-		TreasureChest = 2124774045,
 		ShinyPet = 2124774046,
 		HalloweenEvent = 2124837610,
-		Slipped = 2150110926,
-		FirstPaycheck = 2150110897,
-		LevelUp = 2150110948,
 	}
+	local FIRST_STAFF_BADGE_ID = 2124640230
 
 	local function createMockPlayer(userId: number, initialAttributes: { [string]: any }?)
 		local attributes: { [string]: any } = initialAttributes or {}
@@ -44,9 +37,13 @@ return function()
 	end
 
 	describe("LEGACY_BADGES array", function()
-		it("contains exactly 14 pre-revival badge IDs", function()
+		it("contains exactly the five approved Veteran badge IDs", function()
 			expect(BadgeService.LEGACY_BADGES).to.be.ok()
-			expect(#BadgeService.LEGACY_BADGES).to.equal(14)
+			expect(#BadgeService.LEGACY_BADGES).to.equal(5)
+		end)
+
+		it("does not include FirstStaff", function()
+			expect(table.find(BadgeService.LEGACY_BADGES, FIRST_STAFF_BADGE_ID)).to.equal(nil)
 		end)
 
 		it("contains all approved legacy badge IDs", function()
@@ -70,7 +67,7 @@ return function()
 
 		it("returns true and sets IsVeteran attribute when player owns a legacy badge", function()
 			local ownedBadges: { [number]: boolean } = {
-				[2124469255] = true, -- Welcome badge
+				[2124640229] = true, -- FirstQuest badge
 			}
 			BadgeService._badgeService = {
 				UserHasBadgeAsync = function(_self, _userId: number, badgeId: number): boolean
@@ -84,6 +81,19 @@ return function()
 			local result = BadgeService:CheckVeteranStatusAsync(player)
 			expect(result).to.equal(true)
 			expect(player:GetAttribute("IsVeteran")).to.equal(true)
+		end)
+
+		it("does not grant Veteran when FirstStaff is the only badge owned", function()
+			BadgeService._badgeService = {
+				UserHasBadgeAsync = function(_self, _userId: number, badgeId: number): boolean
+					return badgeId == FIRST_STAFF_BADGE_ID
+				end,
+			}
+
+			local player = createMockPlayer(1006)
+			local result = BadgeService:CheckVeteranStatusAsync(player)
+			expect(result).to.equal(false)
+			expect(player:GetAttribute("IsVeteran")).to.never.be.ok()
 		end)
 
 		it("returns false and leaves IsVeteran unset when player owns no legacy badges", function()
@@ -131,9 +141,9 @@ return function()
 			expect(callCount).to.equal(0)
 		end)
 
-		it("detects veteran status on the last badge in the list (LevelUp)", function()
+		it("detects veteran status on the last badge in the list (HalloweenEvent)", function()
 			local ownedBadges: { [number]: boolean } = {
-				[2150110948] = true, -- LevelUp badge
+				[2124837610] = true, -- HalloweenEvent badge
 			}
 			BadgeService._badgeService = {
 				UserHasBadgeAsync = function(_self, _userId: number, badgeId: number): boolean

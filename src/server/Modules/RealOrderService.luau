@@ -238,6 +238,10 @@ function RealOrderService:_onOrderPickedUp(
 		return
 	end
 
+	pcall(function()
+		Knit.GetService("LeaderboardService"):IncrementStat(barista, "OrdersServed", 1)
+	end)
+
 	local now = os.clock()
 	local multiplier = RealOrderService.PayMultiplier(self._history, barista.UserId, customerId, now)
 	RealOrderService.Record(self._history, barista.UserId, customerId, now)

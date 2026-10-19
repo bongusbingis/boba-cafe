@@ -345,7 +345,7 @@ return function()
 			expect(#currencyCalls).to.equal(0)
 		end)
 
-		it("should charge 50 BobaBucks for reroll when player has no free rerolls", function()
+		it("should charge REROLL_COST_BOBABUCKS (20) for reroll when player has no free rerolls", function()
 			local player = makePlayer(1007)
 			fakeData.Quests.AssignedDay = currentDay
 			fakeData.Quests.FreeRerollsRemaining = 0
@@ -368,16 +368,16 @@ return function()
 			expect(err).to.equal(nil)
 			expect(#currencyCalls).to.equal(1)
 			expect(currencyCalls[1].type).to.equal("BobaBucks")
-			expect(currencyCalls[1].amount).to.equal(-50)
+			expect(currencyCalls[1].amount).to.equal(-QuestConfig.REROLL_COST_BOBABUCKS)
 			expect(currencyCalls[1].reason).to.equal("QuestReroll")
-			expect(fakeData.Currency.BobaBucks).to.equal(50)
+			expect(fakeData.Currency.BobaBucks).to.equal(100 - QuestConfig.REROLL_COST_BOBABUCKS)
 		end)
 
 		it("should reject reroll if player has no free rerolls and insufficient BobaBucks", function()
 			local player = makePlayer(1008)
 			fakeData.Quests.AssignedDay = currentDay
 			fakeData.Quests.FreeRerollsRemaining = 0
-			fakeData.Currency.BobaBucks = 30
+			fakeData.Currency.BobaBucks = 10
 			fakeData.Quests.ActiveQuests = {
 				{
 					Id = "100_CustomersServed_5",
@@ -395,7 +395,7 @@ return function()
 			expect(ok).to.equal(false)
 			expect(err).to.equal("InsufficientFunds")
 			expect(#currencyCalls).to.equal(0)
-			expect(fakeData.Currency.BobaBucks).to.equal(30)
+			expect(fakeData.Currency.BobaBucks).to.equal(10)
 		end)
 	end)
 end

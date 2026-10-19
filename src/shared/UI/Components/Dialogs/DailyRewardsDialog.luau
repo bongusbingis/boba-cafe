@@ -203,10 +203,11 @@ return function(props: DailyRewardsDialogProps)
 				return
 			end
 
-			local claimOk, reason, grantResult = service:ClaimReward():await()
+			-- Knit promise :await() yields (promiseOk, claimOk, reason, grantResult).
+			local promiseOk, claimOk, reason, grantResult = service:ClaimReward():await()
 			setIsClaiming(false)
 
-			if claimOk then
+			if promiseOk and claimOk then
 				playUiSound("Success")
 
 				setStatus(function(prev)
@@ -238,7 +239,18 @@ return function(props: DailyRewardsDialogProps)
 					dialogController:Toast(toastText)
 				end
 			else
-				warn("[DailyRewardsDialog] Claim failed:", reason)
+				warn("[DailyRewardsDialog] Claim failed:", if promiseOk then reason else claimOk)
+				-- The claim stays available: status is untouched on a refused claim.
+				local toastText = "Couldn't claim right now - try again in a moment."
+				if promiseOk and reason == "InventoryFull" then
+					toastText = "Your capsule inventory is full - make room to claim today's reward!"
+				end
+				local okController, dialogController = pcall(function()
+					return Knit.GetController("DialogController")
+				end)
+				if okController and dialogController and dialogController.Toast then
+					dialogController:Toast(toastText)
+				end
 			end
 		end)
 	end

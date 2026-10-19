@@ -2,6 +2,16 @@
 
 Newest first. Each entry is `## <GOAL> / DEC-###: <title>` with Date, Source, and Decision. Prime is the only writer. Numbering continues; never reuse a number.
 
+## REVIVAL-001 / DEC-037: Reroll price, Veteran badge list, statue 2
+
+- **Date:** 2026-10-19.
+- **Source:** Jack in session: "Q11b=B. Q12=A, Q13=A" (Prime's recommended options).
+- **Decision:**
+  - **Q11b = B:** the paid quest reroll costs 20 BB (`QuestConfig.REROLL_COST_BOBABUCKS`). The free reroll for Star Employee is unchanged.
+  - **Q12 = A:** FirstStaff is dropped from `LEGACY_BADGES`. Veteran comes from FirstQuest, Celebrity, SakuraIsland, ShinyPet and HalloweenEvent. Staff-rank players still get FirstStaff on join.
+  - **Q13 = A:** the statue that showed Most Tips (statue 2) shows the #1 Most Boba Bucks player. Hidden boards (Most Tips, Top Donators) feed no statue. Place content isn't edited; any "Most Tips" sign on the statue is a Studio follow-up for Jack.
+  - Closes the DEC-036 open list.
+
 ## REVIVAL-001 / DEC-036: M4 reward amounts and M3 perk/Team Combo rules approved
 
 - **Date:** 2026-10-19.

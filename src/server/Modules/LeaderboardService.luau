@@ -21,6 +21,8 @@ local WorldPath = require(Shared.Utility.WorldPath)
 
 ---> constants
 local WORLD_WAIT_SECONDS = 10
+local ACTIVE_MINUTE_SECONDS = 60
+local FLUSH_ON_CLOSE_WAIT_SECONDS = 25
 
 ---> service declaration
 local LeaderboardService = Knit.CreateService({
@@ -33,6 +35,11 @@ LeaderboardService._nameCache = {} :: { [number]: string }
 LeaderboardService._mockOrderedDataStore = nil :: ((name: string) -> any)?
 LeaderboardService._mockPlayers = nil :: any?
 LeaderboardService._loopRunning = false
+LeaderboardService._flushLoopRunning = false
+LeaderboardService._activeLoopRunning = false
+-- Batched score deltas awaiting one DataStore write per (user, board) per flush.
+LeaderboardService._pending = {} :: { [number]: { [string]: number } }
+LeaderboardService._inflight = 0
 
 ---> private helpers
 function LeaderboardService:_getOrderedDataStore(name: string): any
@@ -101,15 +108,41 @@ function LeaderboardService:_formatEntriesText(entries: { { UserId: number, Name
 	return table.concat(lines, "\n")
 end
 
+function LeaderboardService:_findSurfaceGui(boardModel: Model): SurfaceGui?
+	local part = boardModel:FindFirstChild("Part")
+	return if part
+		then part:FindFirstChildOfClass("SurfaceGui")
+		else boardModel:FindFirstChildWhichIsA("SurfaceGui", true)
+end
+
+--- Writes pending deltas (all users, or one user) with one _updatePlayerStat per (user, board).
+--- Returns immediately; writes run in spawned tasks tracked by _inflight.
+function LeaderboardService:_flushPending(onlyUserId: number?)
+	local snapshot: { [number]: { [string]: number } } = {}
+	for userId, boards in self._pending do
+		if onlyUserId == nil or onlyUserId == userId then
+			snapshot[userId] = boards
+			self._pending[userId] = nil
+		end
+	end
+
+	for userId, boards in snapshot do
+		for boardType, delta in boards do
+			self._inflight += 1
+			task.spawn(function()
+				self:_updatePlayerStat(userId, boardType, delta)
+				self._inflight -= 1
+			end)
+		end
+	end
+end
+
 function LeaderboardService:_updateBoardGui(
 	boardModel: Model,
 	boardDef: LeaderboardConfig.BoardDefinition,
 	entries: { { UserId: number, Name: string, Value: number } }
 )
-	local part = boardModel:FindFirstChild("Part")
-	local surfaceGui = if part
-		then part:FindFirstChildOfClass("SurfaceGui")
-		else boardModel:FindFirstChildWhichIsA("SurfaceGui", true)
+	local surfaceGui = self:_findSurfaceGui(boardModel)
 	if not surfaceGui then
 		return
 	end
@@ -142,7 +175,8 @@ end
 
 ---> public methods
 
---- Enqueues an asynchronous score increment for player in the monthly OrderedDataStore.
+--- Adds a score increment for player to the in-memory batch; flushed to the monthly
+--- OrderedDataStore every REFRESH_INTERVAL_SECONDS, on PlayerRemoving and on server close.
 function LeaderboardService:IncrementStat(player: Player, boardType: string, delta: number)
 	if not player or typeof(player.UserId) ~= "number" or player.UserId <= 0 then
 		return
@@ -150,14 +184,26 @@ function LeaderboardService:IncrementStat(player: Player, boardType: string, del
 	if typeof(delta) ~= "number" or delta <= 0 then
 		return
 	end
-	if not LeaderboardConfig.BOARDS[boardType] then
+	local boardDef = LeaderboardConfig.BOARDS[boardType]
+	if not boardDef then
 		warn(`[LeaderboardService] Unknown board type: {boardType}`)
 		return
 	end
+	if boardDef.Hidden then
+		return
+	end
 
-	task.spawn(function()
-		self:_updatePlayerStat(player.UserId, boardType, delta)
-	end)
+	local userBoards = self._pending[player.UserId]
+	if not userBoards then
+		userBoards = {}
+		self._pending[player.UserId] = userBoards
+	end
+	userBoards[boardType] = (userBoards[boardType] or 0) + delta
+end
+
+--- Flushes all batched increments now. Used on shutdown and by tests.
+function LeaderboardService:FlushAll()
+	self:_flushPending(nil)
 end
 
 --- Queries the current month's OrderedDataStore and returns the top entries with cached usernames.
@@ -205,10 +251,18 @@ function LeaderboardService:RefreshBoards()
 	end
 
 	for boardType, boardDef in LeaderboardConfig.BOARDS do
-		local entries = self:GetTopEntries(boardType, LeaderboardConfig.TOP_LIMIT)
+		-- Hidden boards (DEC-035 Q4) are never queried; their SurfaceGui is disabled at runtime.
+		local entries = if boardDef.Hidden then {} else self:GetTopEntries(boardType, LeaderboardConfig.TOP_LIMIT)
 
 		for _, child in monthlyFolder:GetChildren() do
 			if child:IsA("Model") and (child.Name == boardDef.BoardName or child.Name == boardDef.ModelName) then
+				if boardDef.Hidden then
+					local hiddenGui = self:_findSurfaceGui(child)
+					if hiddenGui then
+						hiddenGui.Enabled = false
+					end
+					continue
+				end
 				if child.Name ~= boardDef.BoardName then
 					child.Name = boardDef.BoardName
 				end
@@ -218,8 +272,10 @@ function LeaderboardService:RefreshBoards()
 	end
 end
 
---- Queries the #1 player in OrdersServed and MostTips, resolves LeaderboardsFolder.Statues,
---- and applies their HumanoidDescription.
+--- Queries the #1 player in OrdersServed and MostBobaBucks, resolves LeaderboardsFolder.Statues,
+--- and applies their HumanoidDescription. Statue 1 (Orders/Staff/Barista) shows OrdersServed;
+--- statue 2 (formerly Most Tips) shows MostBobaBucks (DEC-037 Q13). Hidden boards feed no
+--- statue: a Top Donators statue gets no winner and is left as it is.
 function LeaderboardService:RefreshStatues()
 	local statuesFolder = WorldPath.find(Workspace, { "OldScriptables", "LeaderboardsFolder", "Statues" })
 	if not statuesFolder then
@@ -228,8 +284,7 @@ function LeaderboardService:RefreshStatues()
 
 	local topWinners: { [string]: { UserId: number, Name: string, Value: number }? } = {
 		OrdersServed = self:GetTopEntries("OrdersServed", 1)[1],
-		MostTips = self:GetTopEntries("MostTips", 1)[1],
-		TopDonators = self:GetTopEntries("TopDonators", 1)[1],
+		MostBobaBucks = self:GetTopEntries("MostBobaBucks", 1)[1],
 	}
 
 	local playersService = self:_getPlayersService()
@@ -241,6 +296,7 @@ function LeaderboardService:RefreshStatues()
 		end
 
 		local winner: { UserId: number, Name: string, Value: number }? = nil
+		local isDonatorStatue = false
 		local config = child:FindFirstChild("Configuration")
 
 		if config then
@@ -249,21 +305,21 @@ function LeaderboardService:RefreshStatues()
 				local targetName = lbObj.Value.Name
 				if targetName == "Most Staff Points" or targetName == "Most Orders Served" then
 					winner = topWinners.OrdersServed
-				elseif targetName == "Most Tips" then
-					winner = topWinners.MostTips
+				elseif targetName == "Most Tips" or targetName == "Most Boba Bucks" then
+					winner = topWinners.MostBobaBucks
 				elseif targetName == "Top Donators" then
-					winner = topWinners.TopDonators
+					isDonatorStatue = true
 				end
 			end
 
-			if not winner then
+			if not winner and not isDonatorStatue then
 				local roleObj = config:FindFirstChild("Role")
 				if roleObj and roleObj:IsA("StringValue") then
 					local roleVal = roleObj.Value
 					if string.find(roleVal, "Donator") then
-						winner = topWinners.TopDonators
-					elseif string.find(roleVal, "Tip") then
-						winner = topWinners.MostTips
+						isDonatorStatue = true
+					elseif string.find(roleVal, "Tip") or string.find(roleVal, "Boba Bucks") then
+						winner = topWinners.MostBobaBucks
 					elseif
 						string.find(roleVal, "Order")
 						or string.find(roleVal, "Staff")
@@ -275,12 +331,12 @@ function LeaderboardService:RefreshStatues()
 			end
 		end
 
-		-- Fallback by index: statue 1 = OrdersServed / TopDonators, statue 2 = MostTips
-		if not winner then
+		-- Fallback by index: statue 1 = OrdersServed, statue 2 = MostBobaBucks (was MostTips)
+		if not winner and not isDonatorStatue then
 			if index == 1 then
-				winner = topWinners.OrdersServed or topWinners.TopDonators
+				winner = topWinners.OrdersServed
 			elseif index == 2 then
-				winner = topWinners.MostTips
+				winner = topWinners.MostBobaBucks
 			end
 		end
 
@@ -303,6 +359,42 @@ end
 
 ---> lifecycle
 function LeaderboardService:KnitStart()
+	-- Batch flush + MostActive tick run even if the in-world boards are missing.
+	Players.PlayerRemoving:Connect(function(player)
+		self:_flushPending(player.UserId)
+	end)
+
+	game:BindToClose(function()
+		self:FlushAll()
+		local deadline = os.clock() + FLUSH_ON_CLOSE_WAIT_SECONDS
+		while self._inflight > 0 and os.clock() < deadline do
+			task.wait()
+		end
+	end)
+
+	if not self._flushLoopRunning then
+		self._flushLoopRunning = true
+		task.spawn(function()
+			while true do
+				task.wait(LeaderboardConfig.REFRESH_INTERVAL_SECONDS)
+				self:FlushAll()
+			end
+		end)
+	end
+
+	-- MostActive: +1 per player per minute.
+	if not self._activeLoopRunning then
+		self._activeLoopRunning = true
+		task.spawn(function()
+			while true do
+				task.wait(ACTIVE_MINUTE_SECONDS)
+				for _, player in self:_getPlayersService():GetPlayers() do
+					self:IncrementStat(player, "MostActive", 1)
+				end
+			end
+		end)
+	end
+
 	local leaderboardsFolder =
 		WorldPath.waitFor(Workspace, { "OldScriptables", "LeaderboardsFolder" }, WORLD_WAIT_SECONDS)
 	if not leaderboardsFolder then

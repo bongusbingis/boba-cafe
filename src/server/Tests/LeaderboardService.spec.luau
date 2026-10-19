@@ -27,6 +27,15 @@ return function()
 			expect(boards.OrdersServed.Metric).to.equal("Orders")
 		end)
 
+		it("hides Most Tips and Top Donators only (DEC-035 Q4)", function()
+			local boards = LeaderboardConfig.BOARDS
+			expect(boards.MostTips.Hidden).to.equal(true)
+			expect(boards.TopDonators.Hidden).to.equal(true)
+			expect(boards.OrdersServed.Hidden).to.never.be.ok()
+			expect(boards.MostBobaBucks.Hidden).to.never.be.ok()
+			expect(boards.MostActive.Hidden).to.never.be.ok()
+		end)
+
 		it("has correct refresh interval and top limit", function()
 			expect(LeaderboardConfig.REFRESH_INTERVAL_SECONDS).to.equal(120)
 			expect(LeaderboardConfig.TOP_LIMIT).to.equal(10)
@@ -96,6 +105,7 @@ return function()
 
 		beforeEach(function()
 			mockStores = {}
+			LeaderboardService._pending = {}
 			LeaderboardService._mockOrderedDataStore = function(name: string)
 				if not mockStores[name] then
 					mockStores[name] = createMockStore()
@@ -121,6 +131,7 @@ return function()
 		end)
 
 		afterEach(function()
+			LeaderboardService._pending = {}
 			LeaderboardService._mockOrderedDataStore = nil
 			LeaderboardService._mockPlayers = nil
 			LeaderboardService._nameCache = {}
@@ -179,6 +190,43 @@ return function()
 			mockPlayersService._names[101] = "ChangedName"
 			local top = LeaderboardService:GetTopEntries("MostBobaBucks", 1)
 			expect(top[1].Name).to.equal("BaristaAlice")
+		end)
+
+		it("batches increments into one write per (user, board) per flush", function()
+			local fakePlayer: any = { UserId = 101, Name = "BaristaAlice" }
+			local updateCalls = 0
+			local store = LeaderboardService:_getOrderedDataStore(LeaderboardConfig.GetMonthKey("OrdersServed"))
+			local originalUpdate = store.UpdateAsync
+			store.UpdateAsync = function(self, key, transform)
+				updateCalls += 1
+				return originalUpdate(self, key, transform)
+			end
+
+			for _ = 1, 5 do
+				LeaderboardService:IncrementStat(fakePlayer, "OrdersServed", 1)
+			end
+			LeaderboardService:IncrementStat(fakePlayer, "MostBobaBucks", 30)
+			LeaderboardService:IncrementStat(fakePlayer, "MostBobaBucks", 12)
+			expect(updateCalls).to.equal(0)
+
+			LeaderboardService:FlushAll()
+			expect(updateCalls).to.equal(1)
+			expect(LeaderboardService:GetTopEntries("OrdersServed", 1)[1].Value).to.equal(5)
+			expect(LeaderboardService:GetTopEntries("MostBobaBucks", 1)[1].Value).to.equal(42)
+
+			-- Nothing left pending, so a second flush writes nothing.
+			LeaderboardService:FlushAll()
+			expect(updateCalls).to.equal(1)
+		end)
+
+		it("ignores increments to hidden boards", function()
+			local fakePlayer: any = { UserId = 102, Name = "BaristaBob" }
+			LeaderboardService:IncrementStat(fakePlayer, "MostTips", 50)
+			LeaderboardService:IncrementStat(fakePlayer, "TopDonators", 100)
+			expect(LeaderboardService._pending[102]).to.equal(nil)
+			LeaderboardService:FlushAll()
+			expect(LeaderboardService:GetTopEntries("MostTips", 10)[1]).to.equal(nil)
+			expect(LeaderboardService:GetTopEntries("TopDonators", 10)[1]).to.equal(nil)
 		end)
 
 		it("formats leaderboard text lines with top entries and placeholders", function()

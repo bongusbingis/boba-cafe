@@ -90,6 +90,7 @@ export type ProfileTemplate = {
 	},
 	Statistics: Statistics,
 	PendingBobaBucksRefund: number,
+	LastTreasureChestTime: number,
 	HatchingPet: PendingHatch | false,
 	Nickname: string,
 	-- Codes the player has already redeemed; keyed by normalised code string for O(1) lookups.
@@ -140,6 +141,7 @@ return {
 		HeartsCount = 0,
 	},
 	PendingBobaBucksRefund = 0,
+	LastTreasureChestTime = 0,
 	HatchingPet = false,
 	Nickname = "",
 	RedeemedCodes = {},

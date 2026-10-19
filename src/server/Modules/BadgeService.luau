@@ -37,21 +37,12 @@ Service.Badges = {
 	LevelUp = 2150110948,
 }
 
-local LEGACY_BADGES = {
-	2124469255, -- Welcome
-	2124491880, -- MetTheOwner
-	2124640228, -- MetTheCoOwner
-	2124640227, -- MetADeveloper
+local LEGACY_BADGES = { -- DEC-035 Q3, DEC-037 Q12
 	2124640229, -- FirstQuest
-	2124640230, -- FirstStaff
 	2124640231, -- Celebrity
 	2124640232, -- SakuraIsland
-	2124774045, -- TreasureChest
 	2124774046, -- ShinyPet
 	2124837610, -- HalloweenEvent
-	2150110926, -- Slipped
-	2150110897, -- FirstPaycheck
-	2150110948, -- LevelUp
 }
 Service.LEGACY_BADGES = LEGACY_BADGES
 

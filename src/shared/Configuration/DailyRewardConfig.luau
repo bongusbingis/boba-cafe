@@ -20,13 +20,13 @@ DailyRewardConfig.VIP_GAMEPASS_ID = 12385781
 DailyRewardConfig.VIP_MULTIPLIER = 2
 
 DailyRewardConfig.REWARDS = {
-	[1] = { BobaBucks = 50 },
-	[2] = { BobaBucks = 75 },
-	[3] = { BobaBucks = 100 },
-	[4] = { BobaBucks = 125, Capsule = "Regular Pet Capsule" },
-	[5] = { BobaBucks = 150 },
-	[6] = { BobaBucks = 200 },
-	[7] = { BobaBucks = 300, Capsule = "Rare Pet Capsule" },
+	[1] = { BobaBucks = 30 }, -- DEC-036
+	[2] = { BobaBucks = 45 }, -- DEC-036
+	[3] = { BobaBucks = 60 }, -- DEC-036
+	[4] = { BobaBucks = 60, Capsule = "Regular Pet Capsule" }, -- DEC-036
+	[5] = { BobaBucks = 90 }, -- DEC-036
+	[6] = { BobaBucks = 120 }, -- DEC-036
+	[7] = { BobaBucks = 180, Capsule = "Rare Pet Capsule" }, -- DEC-036
 } :: { [number]: RewardEntry }
 
 function DailyRewardConfig.GetStreakStatus(streak: number, lastClaimTime: number, now: number): StreakStatus

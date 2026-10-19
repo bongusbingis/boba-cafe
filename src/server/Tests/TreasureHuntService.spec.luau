@@ -9,6 +9,7 @@ return function()
 	local ReplicatedStorage = game:GetService("ReplicatedStorage")
 	local ServerScriptService = game:GetService("ServerScriptService")
 
+	local Promise = require(ReplicatedStorage.Packages.Promise)
 	local TreasureHuntConfig = require(ReplicatedStorage.Shared.Configuration.TreasureHuntConfig)
 	local TreasureHuntService = require(ServerScriptService.Server.Modules.TreasureHuntService) :: any
 
@@ -43,7 +44,7 @@ return function()
 					return min
 				end,
 				NextNumber = function(_self)
-					return 0.05 -- <= CAPSULE_CHANCE (0.15)
+					return 0.05 -- <= CAPSULE_CHANCE (0.10)
 				end,
 			} :: any
 
@@ -139,13 +140,20 @@ return function()
 		local mockCurrencyCalls: { { player: any, currencyType: string, amount: number, reason: string? } } = {}
 		local mockStatCalls: { { player: any, stat: string, amount: number? } } = {}
 		local mockBadgeCalls: { { player: any, badgeId: number } } = {}
-		local mockInventoryCalls: { { player: any, itemType: string, itemName: string } } = {}
+		local mockCapsuleCalls: { { player: any, capsuleName: string } } = {}
+		local mockNotifyCalls: { { player: any, payload: any } } = {}
+		local fakeData: any
 
 		beforeEach(function()
 			mockCurrencyCalls = {}
 			mockStatCalls = {}
 			mockBadgeCalls = {}
-			mockInventoryCalls = {}
+			mockCapsuleCalls = {}
+			mockNotifyCalls = {}
+			fakeData = { LastTreasureChestTime = 0 }
+			function fakeData:SetValue(path: { string }, value: any)
+				self[path[#path]] = value
+			end
 
 			TreasureHuntService._getService = function(_self, name: string)
 				if name == "CurrencyService" then
@@ -163,6 +171,25 @@ return function()
 							table.insert(mockStatCalls, { player = p, stat = stat, amount = amt })
 						end,
 					}
+				elseif name == "DataService" then
+					return {
+						GetDataAsync = function(_s, _p)
+							return Promise.resolve(fakeData)
+						end,
+					}
+				elseif name == "DialogService" then
+					return {
+						Notify = function(_s, p, payload)
+							table.insert(mockNotifyCalls, { player = p, payload = payload })
+						end,
+					}
+				elseif name == "CapsuleService" then
+					return {
+						GrantEarnedCapsule = function(_s, p, capsuleName)
+							table.insert(mockCapsuleCalls, { player = p, capsuleName = capsuleName })
+							return true, nil
+						end,
+					}
 				elseif name == "BadgeService" then
 					return {
 						AwardBadge = function(_s, p, bid)
@@ -172,12 +199,6 @@ return function()
 				end
 				return nil
 			end
-
-			TreasureHuntService._inventoryServer = {
-				AddItem = function(_s, p, itype, iname)
-					table.insert(mockInventoryCalls, { player = p, itemType = itype, itemName = iname })
-				end,
-			}
 
 			node = Instance.new("Part")
 			node.Position = Vector3.new(0, 0, 0)
@@ -218,7 +239,6 @@ return function()
 			TreasureHuntService._getService = function(_self, name: string)
 				return require(ServerScriptService.Server.Modules[name])
 			end
-			TreasureHuntService._inventoryServer = nil
 			TreasureHuntService._randomSource = Random.new()
 		end)
 
@@ -267,10 +287,38 @@ return function()
 			rootPart.Position = Vector3.new(0, 0, 0)
 			local success = TreasureHuntService:ClaimChest(fakePlayer, chest)
 			expect(success).to.equal(true)
-			expect(#mockInventoryCalls).to.equal(1)
-			expect(mockInventoryCalls[1].player).to.equal(fakePlayer)
-			expect(mockInventoryCalls[1].itemType).to.equal("Capsules")
-			expect(mockInventoryCalls[1].itemName ~= nil).to.equal(true)
+			expect(#mockCapsuleCalls).to.equal(1)
+			expect(mockCapsuleCalls[1].player).to.equal(fakePlayer)
+			expect(mockCapsuleCalls[1].capsuleName ~= nil).to.equal(true)
+		end)
+
+		it("refuses a second chest within the player cooldown and grants nothing", function()
+			rootPart.Position = Vector3.new(0, 0, 2)
+
+			local first = TreasureHuntService:ClaimChest(fakePlayer, chest)
+			expect(first).to.equal(true)
+			expect(fakeData.LastTreasureChestTime > 0).to.equal(true)
+			expect(#mockCurrencyCalls).to.equal(1)
+
+			-- A different chest right away is refused; the chest stays for others.
+			local secondNode = Instance.new("Part")
+			secondNode.Position = Vector3.new(0, 0, 0)
+			local secondChest = TreasureHuntService:SpawnChestAtNode(secondNode)
+			local second = TreasureHuntService:ClaimChest(fakePlayer, secondChest :: Instance)
+			expect(second).to.equal(false)
+			expect(#mockCurrencyCalls).to.equal(1)
+			expect(#mockStatCalls).to.equal(1)
+			expect(#mockBadgeCalls).to.equal(1)
+			expect(#mockNotifyCalls).to.equal(1)
+			expect((secondChest :: Instance).Parent ~= nil).to.equal(true)
+
+			-- After the cooldown has passed, a chest opens again.
+			fakeData.LastTreasureChestTime = os.time() - TreasureHuntConfig.PLAYER_COOLDOWN_SECONDS - 1
+			local third = TreasureHuntService:ClaimChest(fakePlayer, secondChest :: Instance)
+			expect(third).to.equal(true)
+			expect(#mockCurrencyCalls).to.equal(2)
+
+			secondNode:Destroy()
 		end)
 
 		it("prevents duplicate claims on the same chest", function()

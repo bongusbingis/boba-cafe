@@ -8,6 +8,7 @@ export type BoardDefinition = {
 	BoardName: string,
 	ModelName: string,
 	Metric: string,
+	Hidden: boolean?,
 }
 
 local LeaderboardConfig = {
@@ -18,6 +19,7 @@ local LeaderboardConfig = {
 			BoardName = "Most Tips",
 			ModelName = "Most Tips",
 			Metric = "BobaBucks",
+			Hidden = true, -- DEC-035 Q4
 		},
 		MostBobaBucks = {
 			BoardName = "Most Boba Bucks",
@@ -38,6 +40,7 @@ local LeaderboardConfig = {
 			BoardName = "Top Donators",
 			ModelName = "Top Donators",
 			Metric = "Robux",
+			Hidden = true, -- DEC-035 Q4
 		},
 	} :: { [string]: BoardDefinition },
 }

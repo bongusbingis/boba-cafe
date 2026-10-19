@@ -11,6 +11,12 @@ local ProfileTemplate = require(Config.ProfileTemplate)
 ---> constants
 local DATA_TIMEOUT_SECONDS = 10
 
+-- BB credits that are not play-earned and so never count toward the MostBobaBucks board (DEC-035 Q4).
+-- Robux pack receipts are not wired yet (DEC-035 Q8); add their reason here when they are.
+local LEADERBOARD_EXCLUDED_REASONS: { [string]: boolean } = {
+	QuestRerollRefund = true,
+}
+
 ---> module declaration
 local CurrencyService = Knit.CreateService({
 	Name = "CurrencyService",
@@ -46,6 +52,12 @@ function CurrencyService:Modify(player: Player, type: "BobaBucks" | "Points", am
 		end
 
 		playerData:SetValue({ "Currency", type }, current + amount)
+		if type == "BobaBucks" and amount > 0 and not LEADERBOARD_EXCLUDED_REASONS[reason or ""] then
+			-- Lazy lookup: a leaderboard failure must never break a payment.
+			pcall(function()
+				self:_getService("LeaderboardService"):IncrementStat(player, "MostBobaBucks", amount)
+			end)
+		end
 		if type == "BobaBucks" then
 			pcall(function()
 				local a = self:_getService("AnalyticsEvents")

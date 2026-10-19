@@ -15,6 +15,7 @@ local WorldPath = require(Shared.Utility.WorldPath)
 local CHEST_SIZE = Vector3.new(3.5, 2.5, 2.5)
 local CHEST_COLOR = Color3.fromRGB(165, 110, 40)
 local BUILT_BY = "REVIVAL-001-CHESTS"
+local DATA_TIMEOUT_SECONDS = 10
 
 ---> types
 export type TreasureHuntService = typeof(Knit.CreateService({
@@ -90,6 +91,27 @@ function TreasureHuntService:_clearChestNode(chest: Instance)
 	end
 	self._activeChests[chest] = nil
 	self._chestToNode[chest] = nil
+end
+
+function TreasureHuntService:_notifyPlayer(player: Player, title: string, message: string)
+	local ok, dialogService = pcall(function()
+		return self:_getService("DialogService")
+	end)
+	if not ok or not dialogService or typeof(dialogService.Notify) ~= "function" then
+		warn(`[TreasureHuntService] {title} for {player.Name}: {message}`)
+		return
+	end
+	pcall(function()
+		dialogService:Notify(
+			player,
+			{
+				Title = title,
+				Description = message,
+				Text = title .. ": " .. message,
+				Image = "",
+			} :: any
+		)
+	end)
 end
 
 function TreasureHuntService:_getMaxChests(): number
@@ -243,7 +265,31 @@ function TreasureHuntService:ClaimChest(player: Player, chest: Instance): boolea
 		return false
 	end
 
+	-- Per-player cooldown (DEC-035 Q2). Treasure Frenzy shortens respawn only, never this.
+	-- The check and the timestamp write run back to back after the data yield, so two
+	-- simultaneous triggers cannot both pass.
+	local okData, playerData =
+		self:_getService("DataService"):GetDataAsync(player):timeout(DATA_TIMEOUT_SECONDS):await()
+	if not okData or not playerData then
+		warn(`[TreasureHuntService] Player data not loaded for {player.Name}; chest not opened`)
+		return false
+	end
+	if self._claimedChests[chest] then
+		return false
+	end
+
+	local now = os.time()
+	local lastChestTime = if typeof(playerData.LastTreasureChestTime) == "number"
+		then playerData.LastTreasureChestTime
+		else 0
+	local remaining = TreasureHuntConfig.PLAYER_COOLDOWN_SECONDS - (now - lastChestTime)
+	if remaining > 0 then
+		self:_notifyPlayer(player, "Treasure Chest", `Next treasure chest in {math.ceil(remaining / 60)} min`)
+		return false
+	end
+
 	self._claimedChests[chest] = true
+	playerData:SetValue({ "LastTreasureChestTime" }, now)
 
 	local reward = TreasureHuntConfig.RollReward(self._randomSource)
 
