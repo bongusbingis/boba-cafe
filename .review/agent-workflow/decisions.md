@@ -2,6 +2,16 @@
 
 Newest first. Each entry is `## <GOAL> / DEC-###: <title>` with Date, Source, and Decision. Prime is the only writer. Numbering continues; never reuse a number.
 
+## REVIVAL-001 / DEC-039: Quests get their own button and menu (Q15)
+
+- **Date:** 2026-10-19.
+- **Source:** Jack in session: "Q15: A" (Prime had recommended B).
+- **Decision:**
+  - **Q15 = A:** quests move off the HUD into their own menu, opened by a separate Quests button next to the existing Daily button. The daily rewards dialog stays its own screen behind the Daily button.
+  - Both are built only from existing components and patterns (DEC-013): the Quests button copies the Daily button, and the Quests menu uses an existing menu shell. Approved quest content (DEC-038) is reused unchanged.
+  - The always-on HUD quest card is removed. If no existing icon fits the Quests button, Prime asks Jack (DEC-008); agents don't make one.
+  - The quests work is part of M4-UI-DAILY-REDO: one packet, with one round of captures for Jack.
+
 ## REVIVAL-001 / DEC-038: M4 UI review results; Q14 leaderboard exclusions
 
 - **Date:** 2026-10-19.

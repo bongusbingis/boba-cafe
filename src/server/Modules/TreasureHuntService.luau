@@ -35,6 +35,7 @@ TreasureHuntService._activeChests = {} :: { [Instance]: boolean }
 TreasureHuntService._chestToNode = {} :: { [Instance]: BasePart }
 TreasureHuntService._nodeToChest = {} :: { [BasePart]: Instance }
 TreasureHuntService._claimedChests = {} :: { [Instance]: boolean }
+TreasureHuntService._lastCooldownNotice = {} :: { [Player]: number }
 TreasureHuntService._randomSource = Random.new()
 TreasureHuntService._started = false
 
@@ -284,7 +285,12 @@ function TreasureHuntService:ClaimChest(player: Player, chest: Instance): boolea
 		else 0
 	local remaining = TreasureHuntConfig.PLAYER_COOLDOWN_SECONDS - (now - lastChestTime)
 	if remaining > 0 then
-		self:_notifyPlayer(player, "Treasure Chest", `Next treasure chest in {math.ceil(remaining / 60)} min`)
+		-- Throttle the toast only; every refused trigger still returns false.
+		local lastNotice = self._lastCooldownNotice[player] or -math.huge
+		if os.clock() - lastNotice >= TreasureHuntConfig.COOLDOWN_NOTICE_SECONDS then
+			self._lastCooldownNotice[player] = os.clock()
+			self:_notifyPlayer(player, "Treasure Chest", `Next treasure chest in {math.ceil(remaining / 60)} min`)
+		end
 		return false
 	end
 
@@ -335,6 +341,10 @@ function TreasureHuntService:ClaimChest(player: Player, chest: Instance): boolea
 end
 
 ---> lifecycle
+function TreasureHuntService:PlayerRemoving(player: Player)
+	self._lastCooldownNotice[player] = nil
+end
+
 function TreasureHuntService:KnitStart()
 	self._started = true
 

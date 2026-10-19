@@ -40,6 +40,10 @@ LeaderboardService._activeLoopRunning = false
 -- Batched score deltas awaiting one DataStore write per (user, board) per flush.
 LeaderboardService._pending = {} :: { [number]: { [string]: number } }
 LeaderboardService._inflight = 0
+-- Set when BindToClose starts: failed writes are dropped instead of re-queued.
+LeaderboardService._closing = false
+-- Failed write attempts per (user, board) for the delta currently being retried.
+LeaderboardService._flushFailures = {} :: { [number]: { [string]: number } }
 
 ---> private helpers
 function LeaderboardService:_getOrderedDataStore(name: string): any
@@ -115,6 +119,46 @@ function LeaderboardService:_findSurfaceGui(boardModel: Model): SurfaceGui?
 		else boardModel:FindFirstChildWhichIsA("SurfaceGui", true)
 end
 
+--- Handles the result of one flush write. A failed delta goes back into _pending (retried by the next
+--- flush) up to FLUSH_MAX_ATTEMPTS total attempts, and is dropped once shutdown has begun. A delta lives in
+--- exactly one place at a time (pending or in flight), so a re-queue cannot double-count; the queue is
+--- bounded by users x boards. Residual case: if UpdateAsync throws after Roblox already committed the
+--- write, a retry could add the delta twice; accepted (rare, monthly board).
+function LeaderboardService:_settleFlush(userId: number, boardType: string, delta: number, ok: boolean)
+	local failures = self._flushFailures[userId]
+	if ok then
+		if failures then
+			failures[boardType] = nil
+			if next(failures) == nil then
+				self._flushFailures[userId] = nil
+			end
+		end
+		return
+	end
+
+	if not failures then
+		failures = {}
+		self._flushFailures[userId] = failures
+	end
+	local attempts = (failures[boardType] or 0) + 1
+	if self._closing or attempts >= LeaderboardConfig.FLUSH_MAX_ATTEMPTS then
+		warn(`[LeaderboardService] Dropping {delta} for {userId} on {boardType} after {attempts} attempts`)
+		failures[boardType] = nil
+		if next(failures) == nil then
+			self._flushFailures[userId] = nil
+		end
+		return
+	end
+
+	failures[boardType] = attempts
+	local userBoards = self._pending[userId]
+	if not userBoards then
+		userBoards = {}
+		self._pending[userId] = userBoards
+	end
+	userBoards[boardType] = (userBoards[boardType] or 0) + delta
+end
+
 --- Writes pending deltas (all users, or one user) with one _updatePlayerStat per (user, board).
 --- Returns immediately; writes run in spawned tasks tracked by _inflight.
 function LeaderboardService:_flushPending(onlyUserId: number?)
@@ -130,7 +174,8 @@ function LeaderboardService:_flushPending(onlyUserId: number?)
 		for boardType, delta in boards do
 			self._inflight += 1
 			task.spawn(function()
-				self:_updatePlayerStat(userId, boardType, delta)
+				local ok = self:_updatePlayerStat(userId, boardType, delta)
+				self:_settleFlush(userId, boardType, delta, ok)
 				self._inflight -= 1
 			end)
 		end
@@ -365,6 +410,7 @@ function LeaderboardService:KnitStart()
 	end)
 
 	game:BindToClose(function()
+		self._closing = true
 		self:FlushAll()
 		local deadline = os.clock() + FLUSH_ON_CLOSE_WAIT_SECONDS
 		while self._inflight > 0 and os.clock() < deadline do

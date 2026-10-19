@@ -86,7 +86,7 @@ local function applyRewards(player: Player, rewards: { any })
 
     for _, reward in ipairs(rewards) do
         if reward.Type == "Currency" then
-            CurrencyService:Modify(player, reward.Currency, reward.Amount)
+            CurrencyService:Modify(player, reward.Currency, reward.Amount, "PromoCode")
         elseif reward.Type == "InventoryItem" then
             Inventory:GetPlayerInventoryAsync(player, reward.ItemType)
                 :andThen(function(inv)

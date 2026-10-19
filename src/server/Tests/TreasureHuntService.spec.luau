@@ -150,6 +150,7 @@ return function()
 			mockBadgeCalls = {}
 			mockCapsuleCalls = {}
 			mockNotifyCalls = {}
+			TreasureHuntService._lastCooldownNotice = {}
 			fakeData = { LastTreasureChestTime = 0 }
 			function fakeData:SetValue(path: { string }, value: any)
 				self[path[#path]] = value
@@ -319,6 +320,36 @@ return function()
 			expect(#mockCurrencyCalls).to.equal(2)
 
 			secondNode:Destroy()
+		end)
+
+		it("throttles the cooldown notice but still refuses every trigger", function()
+			rootPart.Position = Vector3.new(0, 0, 2)
+			expect(TreasureHuntService:ClaimChest(fakePlayer, chest)).to.equal(true)
+
+			local secondNode = Instance.new("Part")
+			secondNode.Position = Vector3.new(0, 0, 0)
+			local secondChest = TreasureHuntService:SpawnChestAtNode(secondNode) :: Instance
+
+			expect(TreasureHuntService:ClaimChest(fakePlayer, secondChest)).to.equal(false)
+			expect(#mockNotifyCalls).to.equal(1)
+
+			-- Second refusal inside the window: no new toast, still refused, nothing granted.
+			expect(TreasureHuntService:ClaimChest(fakePlayer, secondChest)).to.equal(false)
+			expect(#mockNotifyCalls).to.equal(1)
+			expect(#mockCurrencyCalls).to.equal(1)
+
+			-- Once the window has passed the next refusal notifies again.
+			TreasureHuntService._lastCooldownNotice[fakePlayer] = os.clock() - 6
+			expect(TreasureHuntService:ClaimChest(fakePlayer, secondChest)).to.equal(false)
+			expect(#mockNotifyCalls).to.equal(2)
+
+			secondNode:Destroy()
+		end)
+
+		it("clears the notice stamp on PlayerRemoving", function()
+			TreasureHuntService._lastCooldownNotice[fakePlayer] = os.clock()
+			TreasureHuntService:PlayerRemoving(fakePlayer)
+			expect(TreasureHuntService._lastCooldownNotice[fakePlayer]).to.equal(nil)
 		end)
 
 		it("prevents duplicate claims on the same chest", function()

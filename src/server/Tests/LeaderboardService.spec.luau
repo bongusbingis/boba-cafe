@@ -106,6 +106,8 @@ return function()
 		beforeEach(function()
 			mockStores = {}
 			LeaderboardService._pending = {}
+			LeaderboardService._flushFailures = {}
+			LeaderboardService._closing = false
 			LeaderboardService._mockOrderedDataStore = function(name: string)
 				if not mockStores[name] then
 					mockStores[name] = createMockStore()
@@ -132,6 +134,8 @@ return function()
 
 		afterEach(function()
 			LeaderboardService._pending = {}
+			LeaderboardService._flushFailures = {}
+			LeaderboardService._closing = false
 			LeaderboardService._mockOrderedDataStore = nil
 			LeaderboardService._mockPlayers = nil
 			LeaderboardService._nameCache = {}
@@ -217,6 +221,74 @@ return function()
 			-- Nothing left pending, so a second flush writes nothing.
 			LeaderboardService:FlushAll()
 			expect(updateCalls).to.equal(1)
+		end)
+
+		describe("failed flush re-queue", function()
+			local fakePlayer: any = { UserId = 101, Name = "BaristaAlice" }
+
+			-- Makes the first `failures` UpdateAsync calls throw; later calls use the real mock.
+			local function failFirst(failures: number)
+				local store = LeaderboardService:_getOrderedDataStore(LeaderboardConfig.GetMonthKey("OrdersServed"))
+				local originalUpdate = store.UpdateAsync
+				local calls = 0
+				store.UpdateAsync = function(self, key, transform)
+					calls += 1
+					if calls <= failures then
+						error("simulated DataStore failure")
+					end
+					return originalUpdate(self, key, transform)
+				end
+				return store
+			end
+
+			it("re-queues a failed write and writes it once on the next flush", function()
+				local store = failFirst(1)
+				LeaderboardService:IncrementStat(fakePlayer, "OrdersServed", 4)
+
+				LeaderboardService:FlushAll()
+				expect(LeaderboardService._pending[101].OrdersServed).to.equal(4)
+				expect(store._data["101"]).to.equal(nil)
+				expect(LeaderboardService._flushFailures[101].OrdersServed).to.equal(1)
+
+				LeaderboardService:FlushAll()
+				expect(store._data["101"]).to.equal(4)
+				expect(LeaderboardService._pending[101]).to.equal(nil)
+				expect(LeaderboardService._flushFailures[101]).to.equal(nil)
+			end)
+
+			it("drops the delta after FLUSH_MAX_ATTEMPTS failed flushes", function()
+				local store = failFirst(math.huge)
+				LeaderboardService:IncrementStat(fakePlayer, "OrdersServed", 4)
+
+				for _ = 1, LeaderboardConfig.FLUSH_MAX_ATTEMPTS do
+					LeaderboardService:FlushAll()
+				end
+				expect(LeaderboardService._pending[101]).to.equal(nil)
+				expect(LeaderboardService._flushFailures[101]).to.equal(nil)
+				expect(store._data["101"]).to.equal(nil)
+			end)
+
+			it("does not re-queue once shutdown has begun", function()
+				failFirst(math.huge)
+				LeaderboardService._closing = true
+				LeaderboardService:IncrementStat(fakePlayer, "OrdersServed", 4)
+
+				LeaderboardService:FlushAll()
+				expect(LeaderboardService._pending[101]).to.equal(nil)
+				expect(LeaderboardService._flushFailures[101]).to.equal(nil)
+			end)
+
+			it("sums an increment that arrives between the failure and the retry", function()
+				local store = failFirst(1)
+				LeaderboardService:IncrementStat(fakePlayer, "OrdersServed", 4)
+				LeaderboardService:FlushAll()
+
+				LeaderboardService:IncrementStat(fakePlayer, "OrdersServed", 3)
+				expect(LeaderboardService._pending[101].OrdersServed).to.equal(7)
+
+				LeaderboardService:FlushAll()
+				expect(store._data["101"]).to.equal(7)
+			end)
 		end)
 
 		it("ignores increments to hidden boards", function()

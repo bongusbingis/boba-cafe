@@ -45,11 +45,13 @@ return function()
 
 	local fakeData
 	local statCalls
+	local leaderboardCalls
 	local originalGetService = service._getService
 
 	beforeEach(function()
 		fakeData = makePlayerData(100, 10)
 		statCalls = {}
+		leaderboardCalls = {}
 
 		local dataService = {
 			GetDataAsync = function(_, _player)
@@ -62,9 +64,23 @@ return function()
 			end,
 		}
 
+		local leaderboardService = {
+			IncrementStat = function(_, player, board, amount)
+				table.insert(leaderboardCalls, { player = player, board = board, amount = amount })
+			end,
+		}
+		local analyticsEvents = {
+			Economy = function() end,
+			Funnel = function() end,
+		}
+
 		service._getService = function(_, name)
 			if name == "DataService" then
 				return dataService
+			elseif name == "LeaderboardService" then
+				return leaderboardService
+			elseif name == "AnalyticsEvents" then
+				return analyticsEvents
 			elseif name == "StatisticsService" then
 				return statisticsService
 			end
@@ -74,6 +90,52 @@ return function()
 
 	afterEach(function()
 		service._getService = originalGetService
+	end)
+
+	-- ══════════════════════════════════════════════════════════════════════
+	-- Modify leaderboard feed (DEC-038 Q14)
+	-- ══════════════════════════════════════════════════════════════════════
+
+	describe("Modify leaderboard feed", function()
+		-- Modify applies through a resolved Promise's andThen; yield once before asserting.
+		local function modifyAndSettle(currency: string, amount: number, reason: string?)
+			service:Modify(makePlayer(1), currency, amount, reason)
+			task.wait()
+		end
+
+		for _, reason in { "PromoCode", "ItemSell", "QuestRerollRefund" } do
+			it("does not feed MostBobaBucks for reason " .. reason, function()
+				modifyAndSettle("BobaBucks", 50, reason)
+				expect(fakeData.Currency.BobaBucks).to.equal(150)
+				expect(#leaderboardCalls).to.equal(0)
+			end)
+		end
+
+		for _, reason in { "Gameplay", "TreasureChest", "DailyReward" } do
+			it("feeds MostBobaBucks for reason " .. reason, function()
+				modifyAndSettle("BobaBucks", 50, reason)
+				expect(#leaderboardCalls).to.equal(1)
+				expect(leaderboardCalls[1].board).to.equal("MostBobaBucks")
+				expect(leaderboardCalls[1].amount).to.equal(50)
+			end)
+		end
+
+		it("feeds MostBobaBucks when no reason is given", function()
+			modifyAndSettle("BobaBucks", 25, nil)
+			expect(#leaderboardCalls).to.equal(1)
+			expect(leaderboardCalls[1].amount).to.equal(25)
+		end)
+
+		it("never feeds for Points", function()
+			modifyAndSettle("Points", 5, "Gameplay")
+			expect(#leaderboardCalls).to.equal(0)
+		end)
+
+		it("never feeds for negative amounts", function()
+			modifyAndSettle("BobaBucks", -30, "Gameplay")
+			expect(fakeData.Currency.BobaBucks).to.equal(70)
+			expect(#leaderboardCalls).to.equal(0)
+		end)
 	end)
 
 	-- ══════════════════════════════════════════════════════════════════════

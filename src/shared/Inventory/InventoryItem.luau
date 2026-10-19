@@ -162,7 +162,7 @@ function InventoryItem.Prototype:Sell(): ()
 
 		local sellValue = InventoryItemDefinitions.Tiers[itemDef.Tier].SellPrice or 0
 		local currencyService = Knit.GetService("CurrencyService")
-		currencyService:Modify(self._player, "BobaBucks", sellValue)
+		currencyService:Modify(self._player, "BobaBucks", sellValue, "ItemSell")
 		self._inventory:_removeItemById(self._id)
 	else
 		InventoryEvent:FireServer({

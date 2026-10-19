@@ -72,6 +72,12 @@ function RealOrderService.PayMultiplier(history: History, baristaId: number, cus
 	return 1
 end
 
+-- A pair already throttled by the repeat-pair rule (multiplier 1) is not a fresh serve, so it
+-- neither advances nor resets the Team Combo chain.
+function RealOrderService.CountsForTeamChain(multiplier: number): boolean
+	return multiplier > 1
+end
+
 -- Records a serve and drops timestamps outside the window.
 function RealOrderService.Record(history: History, baristaId: number, customerId: number, now: number)
 	local key = pairKey(baristaId, customerId)
@@ -262,7 +268,9 @@ function RealOrderService:_onOrderPickedUp(
 		pay = customerService:ApplyTeamCombo(pay)
 	end
 	-- Pass/pet tip boost multiplies the serve pay (DEC-036 B1).
-	if tipBonus > 0 then
+	-- barista.Parent is nil once they left during the tip-bonus yield; skip so TakeTipExtra
+	-- does not re-create a _tipRemainder entry that PlayerRemoving already cleared.
+	if tipBonus > 0 and barista.Parent ~= nil then
 		local okExtra, extra = pcall(function()
 			return Knit.GetService("PerkService"):TakeTipExtra(barista, pay, tipBonus)
 		end)
@@ -276,7 +284,7 @@ function RealOrderService:_onOrderPickedUp(
 	pcall(function()
 		self._currency:Modify(barista, "BobaBucks", pay)
 	end)
-	if okCombo then
+	if okCombo and RealOrderService.CountsForTeamChain(multiplier) then
 		pcall(function()
 			customerService:RecordTeamServe(grade or "Close")
 		end)

@@ -13,8 +13,11 @@ local DATA_TIMEOUT_SECONDS = 10
 
 -- BB credits that are not play-earned and so never count toward the MostBobaBucks board (DEC-035 Q4).
 -- Robux pack receipts are not wired yet (DEC-035 Q8); add their reason here when they are.
+-- PromoCode and ItemSell grants are excluded too (DEC-038 Q14): codes and item sales are not play-earned.
 local LEADERBOARD_EXCLUDED_REASONS: { [string]: boolean } = {
 	QuestRerollRefund = true,
+	PromoCode = true,
+	ItemSell = true,
 }
 
 ---> module declaration

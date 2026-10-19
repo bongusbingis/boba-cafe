@@ -18,6 +18,7 @@ local TreasureHuntConfig = {
 	CAPSULE_CHANCE = 0.10, -- DEC-036
 	PROMPT_HOLD_DURATION = 1.0,
 	PROMPT_MAX_DISTANCE = 10,
+	COOLDOWN_NOTICE_SECONDS = 5, -- UI throttle for the cooldown toast, not an economy value
 	BADGE_ID = 2124774045,
 }
 

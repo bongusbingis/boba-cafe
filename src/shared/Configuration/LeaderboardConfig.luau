@@ -13,6 +13,7 @@ export type BoardDefinition = {
 
 local LeaderboardConfig = {
 	REFRESH_INTERVAL_SECONDS = 120,
+	FLUSH_MAX_ATTEMPTS = 3, -- total write attempts per delta, one per flush cycle
 	TOP_LIMIT = 10,
 	BOARDS = {
 		MostTips = {
