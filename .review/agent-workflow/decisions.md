@@ -2,6 +2,22 @@
 
 Newest first. Each entry is `## <GOAL> / DEC-###: <title>` with Date, Source, and Decision. Prime is the only writer. Numbering continues; never reuse a number.
 
+## REVIVAL-001 / DEC-035: Jack's answers to audit Q1-Q10
+
+- **Date:** 2026-10-19.
+- **Source:** Jack's direct answers in session to the Q1-Q10 list in `AUDIT-2026-10-19/evidence.md`. Jack also chose to keep all agent work on Claude: Opus Prime, Sonnet/Haiku subagents.
+- **Decision:**
+  - **Q1 = A:** Prime proposes daily, chest and quest reward amounts sized against the E2 anchor of 9 BB/min. The amounts stay PENDING JACK (DEC-034) until Jack approves the proposal.
+  - **Q2 = A:** per-player treasure-chest cooldown of one chest every 15 minutes.
+  - **Q3 = B:** Veteran is earned only through the retired badges: FirstQuest, Celebrity, SakuraIsland, ShinyPet, HalloweenEvent, FirstStaff.
+  - **Q4 = B:** wire Most Orders Served (serves), Most Active (minutes played) and Most Boba Bucks (BB earned). Hide Most Tips and Top Donators.
+  - **Q5 = A:** a daily claim whose reward includes a capsule is refused with "Inventory full" until there is space, and the streak isn't consumed. A chest gives BB only when the Capsules inventory is full. This is folded into R2-FIX.
+  - **Q6 = A:** the M4 UI (daily dialog on join, quest HUD card, Daily button) is approved after Jack sees Studio screenshots.
+  - **Q7 = A:** build the approved but unbuilt M3 items (E1, E7, E13, E20, E21, E23) right after R2-FIX. E14 (live Robux price display) waits on product IDs.
+  - **Q8:** no Creator Hub product IDs yet (Boba Party, BB packs, capsule Robux products). Purchase wiring stays deferred.
+  - **Q9 = C:** revisit Jack's Oct-16 per-register NPC queue / PathfindingService direction after the M1-M4 playtest.
+  - **Q10:** Jack confirms "jacks project" was saved after FIX-SOUNDGROUPS and RIG-1.
+
 ## REVIVAL-001 / DEC-034: DEC-032 reward amounts are not approved
 
 - **Date:** 2026-10-19.

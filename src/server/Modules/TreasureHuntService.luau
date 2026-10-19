@@ -10,24 +10,6 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Knit = require(Packages.Knit)
 local TreasureHuntConfig = require(Shared.Configuration.TreasureHuntConfig)
 local WorldPath = require(Shared.Utility.WorldPath)
-local InventoryServer = require(Shared.Inventory.InventoryServer)
-
--- Provide AddItem fallback on InventoryServer if not natively present.
-if typeof((InventoryServer :: any).AddItem) ~= "function" then
-	(InventoryServer :: any).AddItem = function(_self: any, player: Player, itemType: any, itemName: string)
-		return InventoryServer:GetPlayerInventoryAsync(player, itemType)
-			:andThen(function(inv: any)
-				return inv:Insert({
-					Name = itemName,
-					StackCount = 1,
-					Properties = { RandomSource = "Free" },
-				})
-			end)
-			:catch(function(err: any)
-				warn(`[TreasureHuntService] Failed to insert item {itemName} for {player.Name}: {err}`)
-			end)
-	end
-end
 
 ---> constants
 local CHEST_SIZE = Vector3.new(3.5, 2.5, 2.5)
@@ -58,10 +40,6 @@ TreasureHuntService._started = false
 ---> private
 function TreasureHuntService:_getService(name: string): any
 	return Knit.GetService(name)
-end
-
-function TreasureHuntService:_getInventoryServer(): any
-	return self._inventoryServer or InventoryServer
 end
 
 function TreasureHuntService:_createChestInstance(node: BasePart): (BasePart, ProximityPrompt)
@@ -277,11 +255,14 @@ function TreasureHuntService:ClaimChest(player: Player, chest: Instance): boolea
 	end
 
 	if reward.Capsule then
-		local okInv, inventoryServer = pcall(function()
-			return self:_getInventoryServer()
+		-- Player keeps the BobaBucks already granted if the capsule can't be given.
+		local okCaps, granted, reason = pcall(function()
+			return self:_getService("CapsuleService"):GrantEarnedCapsule(player, reward.Capsule)
 		end)
-		if okInv and inventoryServer and typeof(inventoryServer.AddItem) == "function" then
-			inventoryServer:AddItem(player, "Capsules", reward.Capsule)
+		if not okCaps then
+			warn(`[TreasureHuntService] Capsule grant error for {player.Name}: {granted}`)
+		elseif not granted and reason == "InternalError" then
+			warn(`[TreasureHuntService] Capsule grant failed for {player.Name}: {reason}`)
 		end
 	end
 

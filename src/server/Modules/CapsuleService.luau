@@ -559,6 +559,69 @@ end
 -- Public API
 --------------------------------------------------------------------------------
 
+local function countCapsules(capsulesInventory: any): number
+	local count = 0
+	for _ in capsulesInventory.Inventory do
+		count += 1
+	end
+	return count
+end
+
+local function getCapsulesInventory(player: Player): any?
+	local ok, fetched, inv = pcall(function()
+		return require(Shared.Inventory):GetPlayerInventoryAsync(player, "Capsules"):await()
+	end)
+	if ok and fetched and inv then
+		return inv
+	end
+	return nil
+end
+
+-- True when the player's Capsules inventory can take one more capsule.
+-- Fails closed (false) if the inventory cannot be read.
+function CapsuleService:HasCapsuleSpace(player: Player): boolean
+	local inv = getCapsulesInventory(player)
+	if not inv then
+		return false
+	end
+	local ok, hasSpace = pcall(function()
+		local limits = require(Shared.Configuration.InventoryLimits)
+		return countCapsules(inv) < limits.Storage.Capsules
+	end)
+	return ok and hasSpace == true
+end
+
+-- Grants one earned (free) capsule tagged FreeEarned so restricted players can hatch it.
+-- Never throws. Returns false, "InventoryFull" | "InternalError" on failure.
+function CapsuleService:GrantEarnedCapsule(player: Player, capsuleName: string): (boolean, string?)
+	local inv = getCapsulesInventory(player)
+	if not inv then
+		return false, "InternalError"
+	end
+	local ok, result = pcall(function()
+		local limits = require(Shared.Configuration.InventoryLimits)
+		if countCapsules(inv) >= limits.Storage.Capsules then
+			return "InventoryFull"
+		end
+		local itemId = inv:Insert({
+			Name = capsuleName,
+			Properties = { RandomSource = "FreeEarned" },
+		})
+		if itemId == nil then
+			return "InternalError"
+		end
+		return true
+	end)
+	if not ok then
+		warn("[CapsuleService]: GrantEarnedCapsule threw", player.Name, capsuleName, result)
+		return false, "InternalError"
+	end
+	if result == true then
+		return true
+	end
+	return false, result
+end
+
 -- Called by ItemActions when a pet capsule is hatched.
 -- capsuleId is the server-owned inventory ID; this method consumes it after a successful grant/start.
 -- capsuleName is the item definition name (e.g. "Regular Pet Capsule").

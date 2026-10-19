@@ -9,34 +9,9 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Knit = require(Packages.Knit)
 local DailyRewardConfig = require(Shared.Configuration.DailyRewardConfig)
 local GamepassUtil = require(Shared.Utility.GamepassUtil)
-local InventoryServer = require(Shared.Inventory.InventoryServer)
 
 local DATA_TIMEOUT_SECONDS = 10
 local claimsInProgress: { [number]: boolean } = {}
-
--- Ensure hasPass exists on GamepassUtil if not present
-if typeof((GamepassUtil :: any).hasPass) ~= "function" then
-	(GamepassUtil :: any).hasPass = function(player: Player, passId: number): boolean
-		if typeof((GamepassUtil :: any).PlayerOwnsPassAsync) == "function" then
-			return (GamepassUtil :: any):PlayerOwnsPassAsync(player, passId)
-		end
-		return false
-	end
-end
-
--- Ensure AddItem exists on InventoryServer if not present
-if typeof((InventoryServer :: any).AddItem) ~= "function" then
-	(InventoryServer :: any).AddItem = function(self: any, player: Player, itemType: any, itemName: string)
-		local ok, inv = self:GetPlayerInventoryAsync(player, itemType):await()
-		if ok and inv then
-			return inv:Insert({
-				Name = itemName,
-				Properties = { RandomSource = "DailyReward" },
-			})
-		end
-		return nil
-	end
-end
 
 local DailyRewardService = Knit.CreateService({
 	Name = "DailyRewardService",
@@ -71,12 +46,10 @@ end
 
 --- Resolves gamepass ownership. Indirection exists so specs can mock VIP pass ownership.
 function DailyRewardService:_hasPass(player: Player, passId: number): boolean
-	return (GamepassUtil :: any).hasPass(player, passId)
-end
-
---- Resolves inventory server instance. Indirection exists so specs can mock item granting.
-function DailyRewardService:_getInventoryServer()
-	return InventoryServer
+	local ok, owns = pcall(function()
+		return (GamepassUtil :: any):PlayerOwnsPassAsync(player, passId)
+	end)
+	return ok and owns == true
 end
 
 function DailyRewardService:PlayerRemoving(player: Player)
@@ -164,6 +137,19 @@ function DailyRewardService:ClaimReward(player: Player): (boolean, string?, { [s
 			return false, "InvalidRewardDay", nil
 		end
 
+		-- Capsule days: grant the capsule first. A full inventory (or failure) changes nothing,
+		-- so the streak is not consumed and the player can claim again once there is space.
+		if reward.Capsule then
+			local capsuleService = self:_getService("CapsuleService")
+			if not capsuleService:HasCapsuleSpace(player) then
+				return false, "InventoryFull", nil
+			end
+			local granted, reason = capsuleService:GrantEarnedCapsule(player, reward.Capsule)
+			if not granted then
+				return false, reason or "InternalError", nil
+			end
+		end
+
 		if playerData.DailyRewards == nil then
 			playerData:SetValue({ "DailyRewards" }, { Streak = 0, LastClaimTime = 0 })
 		end
@@ -177,11 +163,6 @@ function DailyRewardService:ClaimReward(player: Player): (boolean, string?, { [s
 		local currencyService = self:_getService("CurrencyService")
 		if currencyService and typeof(currencyService.Modify) == "function" then
 			currencyService:Modify(player, "BobaBucks", grantAmount, "DailyReward")
-		end
-
-		if reward.Capsule then
-			local inventoryServer = self:_getInventoryServer()
-			inventoryServer:AddItem(player, "Capsules", reward.Capsule)
 		end
 
 		return true, nil, {

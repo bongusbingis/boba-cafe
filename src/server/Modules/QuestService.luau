@@ -13,8 +13,7 @@ local GamepassUtil = require(Shared.Utility.GamepassUtil)
 export type QuestEntry = QuestConfig.QuestEntry
 
 local DATA_TIMEOUT_SECONDS = 10
-local claimsInProgress: { [number]: boolean } = {}
-local rerollsInProgress: { [number]: boolean } = {}
+local questLocks: { [number]: boolean } = {}
 
 -- Ensure legacy / off-sale More Quests pass is registered on GamepassUtil
 if (GamepassUtil :: any).Gamepasses and not (GamepassUtil :: any).Gamepasses[12385834] then
@@ -166,10 +165,10 @@ function QuestService:ClaimQuest(player: Player, questIndex: number): (boolean, 
 		return false, "InvalidQuestIndex"
 	end
 
-	if claimsInProgress[player.UserId] then
+	if questLocks[player.UserId] then
 		return false, "ClaimInProgress"
 	end
-	claimsInProgress[player.UserId] = true
+	questLocks[player.UserId] = true
 
 	local ok, success, errReason = pcall(function()
 		local playerData = self:_getPlayerData(player)
@@ -223,7 +222,7 @@ function QuestService:ClaimQuest(player: Player, questIndex: number): (boolean, 
 		return true, nil
 	end)
 
-	claimsInProgress[player.UserId] = nil
+	questLocks[player.UserId] = nil
 
 	if not ok then
 		warn(`[QuestService] ClaimQuest error for {player.Name}: {success}`)
@@ -238,10 +237,10 @@ function QuestService:RerollQuest(player: Player, questIndex: number): (boolean,
 		return false, "InvalidQuestIndex"
 	end
 
-	if rerollsInProgress[player.UserId] then
+	if questLocks[player.UserId] then
 		return false, "RerollInProgress"
 	end
-	rerollsInProgress[player.UserId] = true
+	questLocks[player.UserId] = true
 
 	local ok, success, errReason = pcall(function()
 		local playerData = self:_getPlayerData(player)
@@ -267,6 +266,7 @@ function QuestService:RerollQuest(player: Player, questIndex: number): (boolean,
 			return false, "QuestAlreadyCompleted"
 		end
 
+		local charged = false
 		local freeRerolls = playerData.Quests.FreeRerollsRemaining or 0
 		if freeRerolls > 0 then
 			playerData:SetValue({ "Quests", "FreeRerollsRemaining" }, freeRerolls - 1)
@@ -286,8 +286,23 @@ function QuestService:RerollQuest(player: Player, questIndex: number): (boolean,
 				else
 					currencyService:Modify(player, "BobaBucks", -QuestConfig.REROLL_COST_BOBABUCKS, "QuestReroll")
 				end
+				charged = true
 			end
 		end
+
+		-- TrySpendAsync can yield; progress may have completed the quest meanwhile.
+		local latestQuests = playerData.Quests and playerData.Quests.ActiveQuests
+		local latest = if typeof(latestQuests) == "table" then latestQuests[questIndex] else nil
+		if latest == nil or latest.Completed or latest.Claimed then
+			if charged then
+				local refundService = self:_getService("CurrencyService")
+				if refundService then
+					refundService:Modify(player, "BobaBucks", QuestConfig.REROLL_COST_BOBABUCKS, "QuestRerollRefund")
+				end
+			end
+			return false, "QuestAlreadyCompleted"
+		end
+		activeQuests = latestQuests
 
 		local currentDay = self:_getCurrentDay()
 		local excludeTypes: { [string]: boolean } = {}
@@ -308,7 +323,7 @@ function QuestService:RerollQuest(player: Player, questIndex: number): (boolean,
 		return true, nil
 	end)
 
-	rerollsInProgress[player.UserId] = nil
+	questLocks[player.UserId] = nil
 
 	if not ok then
 		warn(`[QuestService] RerollQuest error for {player.Name}: {success}`)
@@ -321,8 +336,7 @@ end
 QuestService.Progress = QuestService.AdvanceQuest
 
 function QuestService:PlayerRemoving(player: Player)
-	claimsInProgress[player.UserId] = nil
-	rerollsInProgress[player.UserId] = nil
+	questLocks[player.UserId] = nil
 end
 
 function QuestService:KnitStart()

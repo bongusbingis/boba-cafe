@@ -206,6 +206,15 @@ function RealOrderService:_onOrderPickedUp(
 	tools: { Instance },
 	items: { any }
 )
+	-- Self-serve earns nothing: no pay, XP or quest progress for your own order.
+	if barista and barista.UserId == customerId then
+		local selfCustomer = Players:GetPlayerByUserId(customerId)
+		if selfCustomer then
+			removeBubble(selfCustomer)
+		end
+		return
+	end
+
 	local customer = Players:GetPlayerByUserId(customerId)
 	if customer then
 		removeBubble(customer)

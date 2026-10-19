@@ -364,11 +364,12 @@ function OrderService:_canClaimOrder(player: Player): boolean
 	return self:_isClockedIn(player) and self:_getPlayerOrder(player.UserId, "Being Prepared") == nil
 end
 
--- Returns the oldest pending order, or nil if none exist.
-function OrderService:_getNextOrder(): Order?
+-- Returns the oldest pending order, or nil if none exist. When excludeCustomerId is
+-- given, that player's own orders are skipped (nobody prepares their own order).
+function OrderService:_getNextOrder(excludeCustomerId: number?): Order?
 	local next: Order? = nil
 	for _, order in self._orders do
-		if order.status == "Pending Preparation" then
+		if order.status == "Pending Preparation" and order.customer ~= excludeCustomerId then
 			if next == nil or order.orderNum < next.orderNum then
 				next = order
 			end
@@ -558,7 +559,7 @@ function OrderService:_claimNextOrder(player: Player)
 	if not self:_canClaimOrder(player) then
 		return
 	end
-	local nextOrder = self:_getNextOrder()
+	local nextOrder = self:_getNextOrder(player.UserId)
 	if not nextOrder then
 		return
 	end
@@ -629,33 +630,42 @@ end
 -- Dequeues the first waiting barista and assigns the next pending order to them.
 -- Called whenever a new order is placed and the queue is non-empty.
 function OrderService:_tryDispatchFromQueue()
-	local nextOrder = self:_getNextOrder()
-	if not nextOrder then
+	if not self:_getNextOrder() then
 		return
 	end
 
-	-- Walk the queue front-to-back, skipping any baristas who have since left
-	while #self._queue > 0 do
-		local staffId = table.remove(self._queue, 1)
+	-- Walk the queue front-to-back, dropping baristas who have since left. A barista
+	-- whose only pending order is their own stays queued for the next one.
+	local queueIndex = 1
+	while queueIndex <= #self._queue do
+		local staffId = self._queue[queueIndex]
 		local staff = Players:GetPlayerByUserId(staffId)
 
-		if staff and self:_isClockedIn(staff) and self:_getPlayerOrder(staffId, "Being Prepared") == nil then
-			-- Assign the order
-			nextOrder.status = "Being Prepared"
-			nextOrder.preparedBy = staffId
-			nextOrder.statusColor = COLOR_PREPARING
+		if not (staff and self:_isClockedIn(staff) and self:_getPlayerOrder(staffId, "Being Prepared") == nil) then
+			table.remove(self._queue, queueIndex)
+		else
+			local nextOrder = self:_getNextOrder(staffId)
+			if not nextOrder then
+				queueIndex += 1
+			else
+				table.remove(self._queue, queueIndex)
+				-- Assign the order
+				nextOrder.status = "Being Prepared"
+				nextOrder.preparedBy = staffId
+				nextOrder.statusColor = COLOR_PREPARING
 
-			self.Client.NotepadUpdated:Fire(staff, "SetNewOrder", nextOrder.order)
-			self.Client.QueueUpdated:Fire(staff, nil) -- they've been dispatched, no longer queued
+				self.Client.NotepadUpdated:Fire(staff, "SetNewOrder", nextOrder.order)
+				self.Client.QueueUpdated:Fire(staff, nil) -- they've been dispatched, no longer queued
 
-			for _, node in self._pickUpAreas do
-				if node.OrderOwner.Value == 0 then
-					self.Client.PickUpNodeVisibilityChanged:Fire(staff, node, true)
+				for _, node in self._pickUpAreas do
+					if node.OrderOwner.Value == 0 then
+						self.Client.PickUpNodeVisibilityChanged:Fire(staff, node, true)
+					end
 				end
-			end
 
-			self:_broadcastQueuePositions()
-			return
+				self:_broadcastQueuePositions()
+				return
+			end
 		end
 	end
 
@@ -664,7 +674,7 @@ function OrderService:_tryDispatchFromQueue()
 	local best: Player? = nil
 	local bestSince = math.huge
 	for _, staff in Players:GetPlayers() do
-		if self:_canClaimOrder(staff) then
+		if self:_canClaimOrder(staff) and self:_getNextOrder(staff.UserId) then
 			local since = self._freeSince[staff.UserId] or 0
 			if since < bestSince then
 				best, bestSince = staff, since
@@ -692,7 +702,7 @@ function OrderService:_handleClaimOrQueue(player: Player)
 		return -- already waiting
 	end
 
-	local nextOrder = self:_getNextOrder()
+	local nextOrder = self:_getNextOrder(player.UserId)
 	if nextOrder and #self._queue == 0 then
 		self:_claimNextOrder(player)
 	else
