@@ -44,6 +44,7 @@ local Knit = require(Packages.Knit)
 local GoodSignal = require(Packages.GoodSignal)
 local CustomerConfig = require(Shared.Configuration.CustomerConfig)
 local RatingConfig = require(Shared.Configuration.RatingConfig)
+local TeamComboConfig = require(Shared.Configuration.TeamComboConfig)
 local Progression = require(Shared.Configuration.Progression)
 local OrderSpec = require(Shared.Ordering.OrderSpec)
 local WorldPath = require(Shared.Utility.WorldPath)
@@ -158,6 +159,8 @@ local CustomerService = Knit.CreateService({
 	_idleSince = {} :: { [Player]: number }, -- os.clock() at clock-in and at ticket clear
 	_combo = {} :: { [Player]: number }, -- consecutive Perfect serves (session memory only)
 	_lastOrder = {} :: { [Player]: Rules.OrderItem }, -- last order per barista (no repeats)
+	_teamChain = 0, -- consecutive successful serves server-wide (session memory only)
+	_teamComboUntil = 0, -- os.clock() deadline of the active Team Combo (0 = none)
 	_npcSeq = 0, -- makes ticket Ids unique per NPC
 	_order = nil :: any,
 	_currency = nil :: any,
@@ -386,6 +389,52 @@ function CustomerService:_pacingTarget(): number
 		)
 	end
 	return target
+end
+
+-- True while a Team Combo window is open (DEC-028 E23). A plain clock read: safe on the serve path.
+function CustomerService:IsTeamComboActive(): boolean
+	return os.clock() < self._teamComboUntil
+end
+
+-- `pay` with the Team Combo bonus applied while the window is open (x1.10 rounded).
+function CustomerService:ApplyTeamCombo(pay: number): number
+	return Rules.TeamComboPay(pay, self:IsTeamComboActive(), TeamComboConfig.PAY_BONUS)
+end
+
+-- Tells every player something about the combo, through the same Notify path as Rush Hour.
+-- Deferred so a serve never waits on it.
+function CustomerService:_notifyTeamCombo(text: string)
+	task.defer(function()
+		for _, player in Players:GetPlayers() do
+			pcall(function()
+				self._dialog:Notify(player, { Title = "Team Combo", Description = text, Text = text } :: any)
+			end)
+		end
+	end)
+end
+
+-- One more successful serve (NPC or real-player) or, with `grade` nil, a walkout. Completing a chain
+-- opens the window, or refreshes it to a full window when one is already open (DEC-036 C4).
+-- No yield: the end timer and the announcement are deferred.
+function CustomerService:RecordTeamServe(grade: Rules.ServeGrade?)
+	local chain, triggered = Rules.NextTeamChain(self._teamChain, grade, TeamComboConfig.CHAIN_TARGET)
+	self._teamChain = chain
+	if not triggered then
+		return
+	end
+
+	local deadline = os.clock() + TeamComboConfig.DURATION_SECONDS
+	self._teamComboUntil = deadline
+	self:_notifyTeamCombo(
+		`Team Combo! +{math.round(TeamComboConfig.PAY_BONUS * 100)}% pay for {TeamComboConfig.DURATION_SECONDS} seconds!`
+	)
+	task.delay(TeamComboConfig.DURATION_SECONDS, function()
+		if self._teamComboUntil ~= deadline then
+			return -- refreshed by a newer chain, whose own timer ends it
+		end
+		self._teamComboUntil = 0
+		self:_notifyTeamCombo("Team Combo is over.")
+	end)
 end
 
 -- The variant for a new NPC: Rules.PickVariant at the highest clocked-in level. Contained:
@@ -737,6 +786,8 @@ function CustomerService:_onServeTriggered(npc: Npc.Npc, player: Player)
 	if self:IsRushHour() then
 		pay = math.round(pay * RatingConfig.RUSH_PAY_MULT)
 	end
+	-- Team Combo stacks on Rush Hour (DEC-036 C2); the tip boost below is applied on the result.
+	pay = self:ApplyTeamCombo(pay)
 	-- Pass/pet tip boost (DEC-036 B1): base pay stays, the whole-BB extra is added on top.
 	local tip = 0
 	if tipBonus > 0 then
@@ -764,6 +815,7 @@ function CustomerService:_onServeTriggered(npc: Npc.Npc, player: Player)
 	end)
 	local newCombo = Rules.NextCombo(combo, grade)
 	self._combo[player] = newCombo
+	self:RecordTeamServe(grade)
 
 	local text = `+{pay} · {grade}`
 	if npc.Variant ~= nil then
@@ -889,6 +941,7 @@ function CustomerService:_onCustomerLeft(npc: Npc.Npc, reason: string)
 		self:_clearTicket(npc)
 		return
 	end
+	self:RecordTeamServe(nil) -- any walkout breaks the server-wide chain, assigned or not
 	local holder = self._assignee[npc]
 	self:_clearTicket(npc)
 	if holder == nil then

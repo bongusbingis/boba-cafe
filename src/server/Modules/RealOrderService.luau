@@ -256,6 +256,11 @@ function RealOrderService:_onOrderPickedUp(
 	RealOrderService.Record(self._history, barista.UserId, customerId, now)
 
 	local pay = Rules.Payout(items, grade, 0, 0, false, false) * multiplier
+	-- Team Combo (DEC-036 C3): a synchronous service lookup and clock read, no yield before the payout.
+	local okCombo, customerService = pcall(Knit.GetService, "CustomerService")
+	if okCombo then
+		pay = customerService:ApplyTeamCombo(pay)
+	end
 	-- Pass/pet tip boost multiplies the serve pay (DEC-036 B1).
 	if tipBonus > 0 then
 		local okExtra, extra = pcall(function()
@@ -271,6 +276,11 @@ function RealOrderService:_onOrderPickedUp(
 	pcall(function()
 		self._currency:Modify(barista, "BobaBucks", pay)
 	end)
+	if okCombo then
+		pcall(function()
+			customerService:RecordTeamServe(grade or "Close")
+		end)
+	end
 	pcall(function()
 		local text = `+{pay} · Real customer ×{multiplier}`
 		self._dialog:Notify(barista, { Title = "Real customer", Description = text, Text = text } :: any)

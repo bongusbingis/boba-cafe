@@ -2,6 +2,16 @@
 
 Newest first. Each entry is `## <GOAL> / DEC-###: <title>` with Date, Source, and Decision. Prime is the only writer. Numbering continues; never reuse a number.
 
+## REVIVAL-001 / DEC-038: M4 UI review results; Q14 leaderboard exclusions
+
+- **Date:** 2026-10-19.
+- **Source:** Jack in session, after viewing the M4-UI-APPROVAL captures: "Daily quests is approved; but i dont like that it presents as an on-screen hud and it would be too small on mobile. Daily rewards looks sloppy and doesn't match the existing UI well enough for approval. Also the darken background effect for modals is rendering over the daily rewards UI itself. Q14; A."
+- **Decision:**
+  - **Quest card:** the content is approved: rows, rewards, the Claim/Reroll/Claimed states and the 20 BB reroll. The always-on HUD presentation is **not** approved, and it is too small on mobile. Where quests live instead is PENDING JACK (Q15).
+  - **Daily rewards dialog: not approved.** It must be rebuilt to match the existing UI (DEC-013) using existing components and patterns. The modal backdrop renders over the dialog, a layering bug; check whether it also happens in the real mount or only in the edit-mode preview (the preview needed `ZIndexBehavior = Sibling`).
+  - **Daily button:** no comment; it stays as is.
+  - **Q14 = A:** promo-code BB and item-sell BB don't count toward MostBobaBucks. Tag both `Modify` callers with reasons and add the reasons to `LEADERBOARD_EXCLUDED_REASONS`.
+
 ## REVIVAL-001 / DEC-037: Reroll price, Veteran badge list, statue 2
 
 - **Date:** 2026-10-19.

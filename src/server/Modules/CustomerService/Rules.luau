@@ -224,6 +224,28 @@ function Rules.NextCombo(comboCount: number, grade: ServeGrade): number
 	return 0
 end
 
+-- The server-wide Team Combo chain after an event (DEC-036 C1): any successful serve adds one,
+-- a walkout (`grade` nil) resets to 0. Returns (newChain, triggered); reaching `target` triggers
+-- the combo and restarts the chain at 0.
+function Rules.NextTeamChain(chain: number, grade: ServeGrade?, target: number): (number, boolean)
+	if grade == nil then
+		return 0, false
+	end
+	local nextChain = chain + 1
+	if nextChain >= target then
+		return 0, true
+	end
+	return nextChain, false
+end
+
+-- Team Combo pay: `pay` x (1 + bonus) rounded while the combo is active, else unchanged.
+function Rules.TeamComboPay(pay: number, active: boolean, bonus: number): number
+	if not active then
+		return pay
+	end
+	return math.round(pay * (1 + bonus))
+end
+
 -- Who may serve: the assigned barista always, anyone else only on a Rescue
 -- (patience below RESCUE_FRACTION, design 4.3).
 function Rules.CanServe(isAssigned: boolean, fractionLeft: number, config: Config?): boolean
