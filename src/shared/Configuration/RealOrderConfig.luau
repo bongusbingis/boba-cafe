@@ -4,7 +4,7 @@
 --]]
 
 return {
-	PAY_MULT = 2, -- PROPOSED (Jack)
-	BONUS_ORDER_COUNT = 3, -- PROPOSED (Jack)
-	WINDOW_SECONDS = 600, -- PROPOSED (Jack)
+	PAY_MULT = 2, -- DEC-024 (E5)
+	BONUS_ORDER_COUNT = 3, -- DEC-024 (E5)
+	WINDOW_SECONDS = 600, -- DEC-024 (E5)
 }

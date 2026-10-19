@@ -87,24 +87,24 @@ local CustomerConfig = {
 	-- spellings ("Coffee", "Hot Cocoa", "Tea", "Grab") alias the same values
 	-- so both spellings pay the same.
 	PAY_TABLE = {
-		["Boba Teas"] = 3, -- PROPOSED (Jack)
-		["Coffees"] = 2, -- PROPOSED (Jack)
-		["Coffee"] = 2, -- PROPOSED (Jack)
-		["Hot Cocoas"] = 2, -- PROPOSED (Jack)
-		["Hot Cocoa"] = 2, -- PROPOSED (Jack)
-		["Teas"] = 2, -- PROPOSED (Jack)
-		["Tea"] = 2, -- PROPOSED (Jack)
-		["Pastries"] = 1, -- PROPOSED (Jack)
-		["Grab"] = 1, -- PROPOSED (Jack)
+		["Boba Teas"] = 3, -- DEC-024 (E1)
+		["Coffees"] = 2, -- DEC-024 (E1)
+		["Coffee"] = 2, -- DEC-024 (E1)
+		["Hot Cocoas"] = 2, -- DEC-024 (E1)
+		["Hot Cocoa"] = 2, -- DEC-024 (E1)
+		["Teas"] = 2, -- DEC-024 (E1)
+		["Tea"] = 2, -- DEC-024 (E1)
+		["Pastries"] = 1, -- DEC-024 (E1)
+		["Grab"] = 1, -- DEC-024 (E1)
 	} :: { [string]: number },
-	GRADE_MULT = { Perfect = 1.0, Close = 0.5 }, -- PROPOSED (Jack)
-	FAST_MULT = 1.5, -- PROPOSED (Jack)
-	FAST_FRACTION = 0.5, -- PROPOSED (Jack)
-	COMBO_STEP = 0.1, -- PROPOSED (Jack)
-	COMBO_CAP = 0.5, -- PROPOSED (Jack)
-	RESCUE_MULT = 1.5, -- PROPOSED (Jack)
-	RESCUE_FRACTION = 0.3, -- PROPOSED (Jack)
-	MIN_PAY = 1, -- PROPOSED (Jack)
+	GRADE_MULT = { Perfect = 1.0, Close = 0.5 }, -- DEC-024
+	FAST_MULT = 1.5, -- DEC-024
+	FAST_FRACTION = 0.5, -- DEC-024
+	COMBO_STEP = 0.1, -- DEC-024
+	COMBO_CAP = 0.5, -- DEC-024
+	RESCUE_MULT = 1.5, -- DEC-024
+	RESCUE_FRACTION = 0.3, -- DEC-024
+	MIN_PAY = 1, -- DEC-024
 
 	---> variants (design 4.10, DEC-011, DEC-015)
 	-- Rules.PickVariant rolls once: Karen first, then VIP in the next band. The level is the highest

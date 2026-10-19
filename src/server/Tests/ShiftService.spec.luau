@@ -10,6 +10,7 @@
 
 return function()
 	local ServerScriptService = game:GetService("ServerScriptService")
+	local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 	local service = require(ServerScriptService.Server.Modules.ShiftService) :: any
 
@@ -147,6 +148,42 @@ return function()
 			expect(service.StarsFor(10, 4, 0)).to.equal(1)
 			expect(service.StarsFor(10, 10, 2)).to.equal(1)
 			expect(service.StarsFor(0, 0, 0)).to.equal(1)
+		end)
+	end)
+
+	describe("Shift star bonus", function()
+		it("pays 5 / 10 / 15 BobaBucks for 1 / 2 / 3 stars", function()
+			local ShiftConfig = require(ReplicatedStorage.Shared.Configuration.ShiftConfig)
+			expect(ShiftConfig.SHIFT_BONUS_PER_STAR * 1).to.equal(5)
+			expect(ShiftConfig.SHIFT_BONUS_PER_STAR * 2).to.equal(10)
+			expect(ShiftConfig.SHIFT_BONUS_PER_STAR * 3).to.equal(15)
+		end)
+
+		it("reports Bonus == 15 in the summary of a 3-star shift", function()
+			local player = makePlayer(9001)
+			local state = {
+				Resolved = 10,
+				Target = 10,
+				Served = 10,
+				Walkouts = 0,
+				Perfects = 10,
+				Pay = 0,
+				BestCombo = 0,
+				Completed = 1,
+				Loaded = true,
+			}
+			local captured = nil
+			local connection = service.ShiftEnding:Connect(function(_, summary)
+				captured = summary
+			end)
+			service._states[player] = state
+			service:_endShift(player, state)
+			connection:Disconnect()
+			service._states[player] = nil
+
+			expect(captured).to.be.ok()
+			expect(captured.Stars).to.equal(3)
+			expect(captured.Bonus).to.equal(15)
 		end)
 	end)
 end

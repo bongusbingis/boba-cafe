@@ -1,7 +1,7 @@
 --!strict
 --[[
     ShiftConfig: count-based shift tuning (REVIVAL-001 M2-SHIFT, DEC-011 Q11).
-    Values marked PROPOSED (Jack) are placeholders until the M3 gate.
+    Approved values: DEC-024 (E7, E13).
 --]]
 
 return {
@@ -9,7 +9,7 @@ return {
 	FIRST_SHIFT_SIZE = 5,
 	CARD_SECONDS_FIRST = 8,
 	CARD_SECONDS_LATER = 6,
-	SHIFT_BONUS_PER_STAR = 0, -- PROPOSED (Jack)
-	SHIFT_XP = 10, -- PROPOSED (Jack)
-	SHIFT_XP_PER_STAR = 5, -- PROPOSED (Jack)
+	SHIFT_BONUS_PER_STAR = 5, -- DEC-024 (E7)
+	SHIFT_XP = 10, -- DEC-024 (E13)
+	SHIFT_XP_PER_STAR = 5, -- DEC-024 (E13)
 }

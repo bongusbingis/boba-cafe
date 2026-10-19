@@ -14,10 +14,10 @@ return {
 	SPILL_DRAIN = -0.5, -- PROPOSED (Jack): per drain tick while any spill is present
 	DRAIN_SECONDS = 5, -- TUNING
 	SPILL_XP = 5, -- PROPOSED (Jack): XP to the player who cleans a spill
-	RUSH_SECONDS = 120, -- PROPOSED (Jack)
+	RUSH_SECONDS = 120, -- DEC-024 (E8)
 	RUSH_NPC_MULT = 1.5, -- PROPOSED (Jack)
 	RUSH_CAP_BONUS = 4, -- PROPOSED (Jack)
-	RUSH_PAY_MULT = 2, -- PROPOSED (Jack)
+	RUSH_PAY_MULT = 2, -- DEC-024 (E8)
 	AFTER_RUSH = 60, -- PROPOSED (Jack)
 	MIN_GAP_SECONDS = 360, -- TUNING
 	BOBA_PARTY_SECONDS = 600, -- DEC-029 E18: 10-minute server-wide rush hour

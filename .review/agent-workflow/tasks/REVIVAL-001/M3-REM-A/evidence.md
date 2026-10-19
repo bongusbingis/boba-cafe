@@ -1,0 +1,5 @@
+RESULT: PASS
+Files changed: src/shared/Configuration/ShiftConfig.luau (SHIFT_BONUS_PER_STAR = 5; PROPOSED markers removed on SHIFT_BONUS_PER_STAR/SHIFT_XP/SHIFT_XP_PER_STAR; header now "Approved values: DEC-024 (E7, E13)"); CustomerConfig.luau, RealOrderConfig.luau, RatingConfig.luau, Progression.luau (comment-only marker swaps to DEC-024 on approved lines only; Progression header reworded); src/server/Tests/ShiftService.spec.luau (added ReplicatedStorage local and a "Shift star bonus" describe with 2 tests: 5/10/15 multiplier check and _endShift 3-star summary Bonus == 15).
+Gate: stylua clean; selene new=0 on all 6 files; rojo build OK; GATE: PASS.
+Studio steps for later: none required for this packet. Test for Jack: run the ShiftService.spec "Shift star bonus" tests in TestEZ (not run by agent, per DEC-019).
+Questions for Jack: none. Note: the packet said to mirror an existing summary test, but ShiftService.spec has no _endShift test, so the new test is built directly on the fake-player helper. The _endShift test fires the Knit client signal unguarded, so it may need a fix if TestEZ shows an error there.

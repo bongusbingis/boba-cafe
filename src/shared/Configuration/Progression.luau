@@ -3,16 +3,16 @@
 	Progression
 	XP curve, level gates, ticket slots, titles and cosmetic rewards
 	(REVIVAL-001 M2-PROGRESS, design 5.3-5.4). Pure data and functions.
-	Every number is a placeholder until Jack approves it (DEC-017/018).
+	Numbers still marked PROPOSED (Jack) are placeholders (DEC-017/018).
 --]]
 
 export type CosmeticReward = { ItemType: string, Name: string, Tier: string }
 
 local Progression = {}
 
-Progression.XP_PER_ITEM = 10 -- PROPOSED (Jack)
-Progression.XP_PERFECT = 5 -- PROPOSED (Jack)
-Progression.XP_FAST = 5 -- PROPOSED (Jack)
+Progression.XP_PER_ITEM = 10 -- DEC-024 (E13)
+Progression.XP_PERFECT = 5 -- DEC-024 (E13)
+Progression.XP_FAST = 5 -- DEC-024 (E13)
 Progression.MAX_LEVEL = 50 -- PROPOSED (Jack)
 
 -- Level at which each item or option opens for NPC orders (design 5.3). PROPOSED (Jack)
