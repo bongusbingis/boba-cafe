@@ -2,6 +2,21 @@
 
 Newest first. Each entry is `## <GOAL> / DEC-###: <title>` with Date, Source, and Decision. Prime is the only writer. Numbering continues; never reuse a number.
 
+## REVIVAL-001 / DEC-034: DEC-032 reward amounts are not approved
+
+- **Date:** 2026-10-19.
+- **Source:** Prime audit (`tasks/REVIVAL-001/AUDIT-2026-10-19/evidence.md` D2), checked against the Gemini /grill-me transcript.
+- **Decision:** Jack answered only the structural DEC-032 questions: the 7-day cycle with Day 4/7 capsules and a 48h reset; quest rerolls (1 free for Star Employee, then 50 BB); chests as 3-5 shared spawns with a 90s respawn; Most Orders Served; Veteran yes; no Cleanliness Board; the three events with staff rank >= 10. The VIP 2x daily reward and the +1 quest slot come from revival-plan §6.3 (E20). **PENDING JACK (not approved):** daily BobaBucks 50/75/100/125/150/200/300 and the 20h cooldown; chest 35-100 BB and the 15% capsule chance (including Nametag capsules); quest rewards (40-75 BB, 20-40 XP) and targets. The coded values stay as placeholders until Jack answers.
+
+## REVIVAL-001 / DEC-033: Claude Opus resumes as Prime; docs are the only workflow
+
+- **Date:** 2026-10-19.
+- **Source:** Jack: "proceed per your recommendations. ignore workflow references to 'terra' or other workflows utilized by agents while you were away; the documented workflows under docs/ and elsewhere are the single source of truth." Also: blocking questions are asked directly in session; Prime delegates to subagents and hands Jack a kickoff prompt before the context is cleared.
+- **Decision:**
+  - Claude Opus is Prime. DEC-023's Muse model routing and the Codex "Luna/Terra" escalation protocol are retired. Terra reviews remain historical evidence only; no task requires Terra.
+  - Approved per Prime's audit recommendations: local checkpoint commit `f06a9bf` (no push); hunk-by-hunk review of the abandoned M5-SENTRY edits (risky hunks reverted, sound ones kept); Boba Party option A (the prompt hides during the cooldown, a late receipt is still granted); a Claude Sentry subagent replaces Terra for independent review.
+  - Open questions Q1-Q10 are tracked in `AUDIT-2026-10-19/evidence.md` and the kickoff.
+
 ## REVIVAL-001 / DEC-032: Milestone 4 Retention & Return Loops Design Specifications
 
 - **Date:** 2026-10-18.

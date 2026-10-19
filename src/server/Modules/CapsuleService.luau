@@ -756,7 +756,6 @@ end
 function CapsuleService:PlayerRemoving(player: Player)
 	local elapsed = currentSessionElapsed(player)
 	sessionStarts[player.UserId] = nil
-	playerTransactions[player.UserId] = nil
 	hatchDebounces[player.UserId] = nil
 	-- Persist progress; completion will happen on the next login or server check.
 	flushAccumulatedTime(player, elapsed)

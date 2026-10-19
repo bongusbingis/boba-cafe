@@ -1,56 +1,56 @@
-# REVIVAL-001: Kickoff for Next Session (M4 UI & Pre-Release Hardening)
-Written: 2026-10-18 (following Milestone 4 completion & DEC-032)
+# REVIVAL-001: kickoff for the next Prime session (written 2026-10-19 by Claude Opus Prime)
 
-## Current Repository State
-- Branch: `uhweifh` (preserve all uncommitted working tree changes; do not reset, clean, or discard files).
-- Milestones M1, M2, M3, and M4 are 100% complete and recorded in `completed.ndjson`.
-- Decisions DEC-001 through DEC-032 are on record in `decisions.md`.
-- Studio: Connected to "jacks project" (placeId: 89999123284040). Jack does in-game testing (DEC-019).
-- WSL gate environment: `. .review/agent-workflow/tools/wsl/env.sh && gate <files>`
+Paste the block below into a fresh session, with Jack's answers filled in.
 
 ---
 
-## Session Objectives (Options A & B)
+You are Prime (Claude Opus) for REVIVAL-001, the Boba Cafe revival, in C:/Users/jackc/Desktop/boba-cafe on branch `uhweifh`.
+Commits are local only; never push. Preserve all work and never reset, clean or discard.
 
-### Part A: Milestone 4 UI Presentation (Daily Rewards Modal & Daily Quests Card)
-1. **Daily Rewards Modal**:
-   - Location: `src/shared/UI/Pages/DailyRewards/` or `src/shared/UI/Components/Popups/DailyRewardsDialog.luau` integrated with `AppDialogs.luau`.
-   - UI Rules: Follow `docs/STYLE.md` strictly (DEC-013). Use existing tokens, font (`Styles.FONT_FREDOKA`), pane cards, and normal buttons.
-   - Behavior:
-     - Checks `DailyRewardService.Client:GetRewardStatus()`. If `CanClaim == true`, pops automatically on join.
-     - Also accessible via a button in `BottomLeft.luau` or `TopBar.luau` / Menu.
-     - Renders 7-day progression cards with reward icons (BobaBucks, Day 4 Regular Capsule, Day 7 Rare Capsule, VIP 2× indicator).
-     - "Claim" button calls `DailyRewardService.Client:ClaimReward()`, plays reward feedback, and updates UI state.
-2. **Daily Quests HUD / Menu Card**:
-   - Location: `src/shared/UI/Components/Core/Hud/QuestCard.luau` or `src/shared/UI/Pages/Quests/`.
-   - Behavior:
-     - Queries `QuestService.Client:GetQuests()`. Listens to `QuestsUpdated` client signal.
-     - Displays the 3–4 daily quest cards with progress bars (`Progress / Target`), task description, and rewards (BobaBucks + XP).
-     - "Claim" button calls `QuestService.Client:ClaimQuest(index)`.
-     - Reroll button (with free or 50 BB tag) calls `QuestService.Client:RerollQuest(index)`.
+**Source of truth:** `AGENTS.md`, `docs/AI_AGENT_WORKFLOW.md`, `docs/CONVENTIONS.md` and `.review/agent-workflow/decisions.md`.
+Ignore "Terra" and any other agent's private workflow (DEC-033).
 
-### Part B: Sentry Remote Security Audit & Legacy Scripts Audit
-1. **Sentry Remote Exploit & Authority Audit**:
-   - Review every client-exposed Knit remote function and event across:
-     - `QuestService.luau`
-     - `DailyRewardService.luau`
-     - `TreasureHuntService.luau`
-     - `EventService.luau`
-     - `ShiftService.luau`
-     - `OrderService.luau`
-     - `CurrencyService.luau`
-     - `CapsuleService.luau`
-     - `RealOrderService.luau`
-   - Verify rate limiting, distance validation, parameter type checking, and server authority (zero trust of client arguments).
-   - Document any vulnerabilities or hardening in `.review/agent-workflow/tasks/REVIVAL-001/R2-SECURITY/review.md`.
-2. **Legacy Scripts Audit (`Workspace.OldScriptables`)**:
-   - Inspect the 17 legacy scripts in `Workspace.OldScriptables` (Elevator, Zipline, Fruits Freezer `StockRandom`, IslandTeleporter, ad boards).
-   - Verify none conflict with the revival loop or trigger deprecated gamepasses/products.
-   - Document recommendations in `.review/agent-workflow/tasks/REVIVAL-001/LEGACY-AUDIT/audit.md`.
+**Read only these, in order. Use `head` or `grep` for anything large:**
+1. `.review/agent-workflow/decisions.md`: DEC-029 to DEC-034.
+2. `.review/agent-workflow/tasks/REVIVAL-001/AUDIT-2026-10-19/evidence.md`: the full audit state and open findings.
+3. `.review/agent-workflow/board.json`.
+4. `.review/agent-workflow/tasks/REVIVAL-001/R2-SECURITY/review.md`: the security findings, lines 1-45.
 
----
+**Working rules from Jack:**
+- Ask blocking questions directly in chat, inline (Jack is often on his phone).
+- Delegate bounded lanes to subagents from packets in `tasks/REVIVAL-001/packets/`. Keep Prime's own context small.
+- Stop at a good point and give Jack a kickoff prompt before the context gets large.
+- Agents never run Play or TestEZ (DEC-019).
+- Gate every changed Luau file:
+  `wsl bash -lc 'cd /mnt/c/Users/jackc/desktop/boba-cafe && . .review/agent-workflow/tools/wsl/env.sh && stylua <files> && gate <files>'`
 
-## Workflow Rules & Guidelines
-- Run WSL gates on all edited files: `. .review/agent-workflow/tools/wsl/env.sh && gate <files>`
-- No new Selene findings, StyLua formatted, Rojo build passed.
-- Maintain board and ledger: update `board.json` and append to `completed.ndjson`.
+**State:**
+- The checkpoint commit `f06a9bf` preserves all prior Codex and Gemini work.
+- The next commit holds the audit corrections:
+  - reverted the transaction-lock clear in CapsuleService:PlayerRemoving;
+  - removed the redundant distance check in OrderService:_handlePickUp;
+  - added the Boba Party `BobaPartyCooldownEndsAt` workspace attribute;
+  - saved the audit, R2-SECURITY, the board and the decisions.
+
+**Next actions:**
+1. **R2-FIX** (READY; no Jack input needed). Dispatch a Mason subagent with a packet. Fix three R2-SECURITY findings:
+   - **P1-1:** a player can serve their own real order. Skip orders where customer == staff, and pay no real-order bonus to self.
+   - **P2-1:** daily and chest capsules must be tagged `RandomSource = "FreeEarned"` through one shared helper, not the monkey-patched shims.
+   - **P3-1:** use one per-player lock shared by ClaimQuest and RerollQuest.
+
+   Then dispatch a fresh Sentry subagent to re-review R2-FIX, and gate it.
+2. Apply Jack's answers below to the blocked board tasks, one bounded lane per task.
+3. **DOCS-M3M4** (Quill, haiku).
+4. Extend `M1M2-TEST/checklist.md` into a single batched M1-M4 checklist for Jack (M1.6).
+
+**Jack's answers (Q1-Q10):**
+- Q1 M4 reward amounts (daily 50-300 BB plus the 20h cooldown; chests 35-100 BB with a 15% capsule chance; quests 40-75 BB / 20-40 XP). Options: A = Prime writes a proposal sized against the 9 BB/min anchor; B = approve as coded; C = I give the numbers. **Q1 = <>**
+- Q2 Per-player treasure-chest limit. Options: A = per-player cooldown (one chest every N minutes); B = daily cap of N chests; C = no limit. **Q2 = <> (N = <>)**
+- Q3 Veteran title, definition of a legacy badge. Options: A = any listed badge awarded before a cutoff date (give the date, or "launch day"); B = only badges the revival no longer awards (FirstQuest, Celebrity, SakuraIsland, ShinyPet, HalloweenEvent, FirstStaff); C = disable Veteran for now. **Q3 = <>**
+- Q4 Monthly leaderboard metrics. Options: A = Most Tips = BobaBucks earned this month, Most Boba Bucks = BobaBucks earned, Orders Served = serves, Most Active = minutes played, Top Donators = Robux spent on dev products; B = wire Orders Served, Most Active and BobaBucks earned, and hide Most Tips and Top Donators; C = custom (describe). **Q4 = <>**
+- Q5 A daily or chest capsule when the Capsules inventory is full. Options: A = refuse the daily claim with "Inventory full" until there's space; the chest gives BobaBucks only (no capsule roll) when full; B = save a pending capsule and grant it later; C = give BobaBucks instead of the capsule (needs an amount). **Q5 = <>**
+- Q6 New M4 UI (the daily-reward dialog that pops up on join, the quest HUD card, the Daily button in the bottom-left). Options: A = approve after Prime sends Studio screenshots; B = approve now as built; C = change it (describe). **Q6 = <>**
+- Q7 Approved but unbuilt M3 items (E1 +1 per Iced/Sugar option, E7 shift star pay, E13 shift XP, E20 pass perks, E21 pet tip boosts, E23 Team Combo, E14 live Robux price display). Options: A = build now, after R2-FIX; B = after the M4 fixes; C = later (state when). **Q7 = <>**
+- Q8 Creator Hub product IDs, for when you have them: Boba Party = <>, BobaBucks packs (50/150/500/1000/5000) = <>, capsule Robux products = <>. Otherwise write "not yet". **Q8 = <>**
+- Q9 Your Oct-16 instruction to Gemini (NPCs queue per register, use PathfindingService, reuse the register and pick-up nodes). Options: A = still wanted, add it as a task; B = superseded by the current NPC flow (DEC-022); C = revisit after the playtest. **Q9 = <>**
+- Q10 Studio saves. Did you save "jacks project" after FIX-SOUNDGROUPS (Music SoundGroup) and RIG-1? **Q10 = <yes/no/unsure>**

@@ -78,9 +78,12 @@ function CafeRatingService:StartOrExtendBobaParty(buyer: Player?): (boolean, str
 		return true
 	end
 
+	-- A receipt that arrives during the cooldown is still granted (Jack, 2026-10-19); the purchase
+	-- prompt hides itself while BobaPartyCooldownEndsAt (server time) is in the future.
 	self._partyActive = true
 	self._partyEndTime = os.clock() + RatingConfig.BOBA_PARTY_SECONDS
 	self._partyCooldownEnd = nil
+	workspace:SetAttribute("BobaPartyCooldownEndsAt", nil)
 	self._rush = true
 	workspace:SetAttribute("RushHour", true)
 	workspace:SetAttribute("BobaParty", true)
@@ -110,6 +113,10 @@ function CafeRatingService:StartOrExtendBobaParty(buyer: Player?): (boolean, str
 		workspace:SetAttribute("RushHour", false)
 		workspace:SetAttribute("BobaParty", false)
 		self._partyCooldownEnd = os.clock() + RatingConfig.BOBA_PARTY_COOLDOWN
+		workspace:SetAttribute(
+			"BobaPartyCooldownEndsAt",
+			workspace:GetServerTimeNow() + RatingConfig.BOBA_PARTY_COOLDOWN
+		)
 		self:_publish()
 		self:_notifyParty("Boba Party has ended!")
 	end)

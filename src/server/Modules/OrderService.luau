@@ -706,18 +706,6 @@ end
 --   • If the area belongs to the triggering player → they pick up their order.
 --   • Otherwise → the player is a staff member depositing a prepared order.
 function OrderService:_handlePickUp(player: Player, area: Model)
-	if player.Character then
-		local root = player.Character:FindFirstChild("HumanoidRootPart") or player.Character.PrimaryPart
-		local areaPart = if area:IsA("BasePart")
-			then area
-			else (area.PrimaryPart or area:FindFirstChildWhichIsA("BasePart"))
-		if root and root:IsA("BasePart") and areaPart and areaPart:IsA("BasePart") then
-			if (root.Position - areaPart.Position).Magnitude > 25 then
-				return
-			end
-		end
-	end
-
 	local ownerValue: IntValue = area.OrderOwner
 
 	if ownerValue.Value == player.UserId then
