@@ -60,10 +60,6 @@ Owners of the approved passes get their perks through one catalog and one resolv
 - `wsl bash -lc 'cd /mnt/c/Users/jackc/desktop/boba-cafe && . .review/agent-workflow/tools/wsl/env.sh && stylua <files> && gate <files>'`. Never Play or run TestEZ (DEC-019); add a "Test for Jack" list to evidence.
 
 ## STOP-AND-ASK
-- Q1: "There is no tip in the current loop (ShiftService summary has Tips = 0; NPC serves pay one BobaBucks amount). What does the tip-family boost (Barista +25%, Kitchen Leader +50%, pet +2/4/7/10%) multiply: (a) the per-serve BobaBucks pay from NPC and real-player serves, (b) a new separate tip amount (then please give its size), or (c) nothing yet?"
-- Q2: "Does the pass XP boost apply to shift-end XP and spill-clean XP as well as serve XP?"
-- Q3: "Do the pass tip boost and the pet tip boost take the highest value (my reading of the 'highest wins in the family' rule) or add together?"
-- Q4: "Double Storage (InventoryX2) needs per-player inventory limits in InventoryLimits and about five CapsuleService call sites. May this be a follow-up packet M3-REM-D?"
-
-## Evidence
+- none: B1-B4 are answered in DEC-036: B1=A (boost multiplies each serve's BB pay, NPC and real; the shift summary Tips line shows the boost-earned extra), B2=A (all play XP), B3=A (highest in a family wins), B4=A (Double Storage moves to M3-REM-D; skip it here). Apply them where the packet asked.
+Evidence
 `tasks/REVIVAL-001/M3-REM-B/evidence.md` (RUNBOOK step 5)

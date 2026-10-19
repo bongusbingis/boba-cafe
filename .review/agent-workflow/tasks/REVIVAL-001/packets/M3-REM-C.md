@@ -45,11 +45,6 @@ When the server reaches a 10-serve chain, everyone earns +10% pay for 60 seconds
 - `wsl bash -lc 'cd /mnt/c/Users/jackc/desktop/boba-cafe && . .review/agent-workflow/tools/wsl/env.sh && stylua <files> && gate <files>'`. Never Play or run TestEZ (DEC-019); add a "Test for Jack" list to evidence.
 
 ## STOP-AND-ASK
-- Q1: "What forms the 10-serve Team Combo chain: (a) any 10 consecutive NPC serves server-wide, (b) 10 consecutive Perfect serves server-wide, or (c) something else? Does a Close serve, a wrong attempt, a walkout, or 30 seconds of idle reset it?"
-- Q2: "During Rush Hour (x2), does Team Combo multiply on top (x2 then x1.10) or is only the larger boost used?"
-- Q3: "Does the Team Combo bonus also apply to real-player order pay (RealOrderService), and do real-player serves count toward the chain?"
-- Q4: "If a new 10-chain completes while a Team Combo window is active, does it refresh the 60 seconds, extend it, or is it ignored?"
-- Q5: "Is a chat-style announcement enough, or do you want a HUD indicator? (A new HUD element needs a pattern approved in docs/STYLE.md.)"
-
-## Evidence
+- none: C1-C5 are answered in DEC-036: C1=A (any 10 consecutive successful serves server-wide, NPC and real; only a walkout resets), C2=A (stacks: x2 then x1.10), C3=A (also real-player pay), C4=A (a new chain refreshes to 60 s), C5=A (existing announcement path only). Apply them where the packet asked.
+Evidence
 `tasks/REVIVAL-001/M3-REM-C/evidence.md` (RUNBOOK step 5)

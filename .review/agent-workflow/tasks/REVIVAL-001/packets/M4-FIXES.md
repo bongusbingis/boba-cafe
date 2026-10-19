@@ -21,7 +21,7 @@ Model: sonnet   Studio: no   Depends on: R2-FIX (Sentry PASS)   Size: M
 
 ## Write scope
 - `src/server/Modules/TreasureHuntService.luau`
-- `src/shared/Configuration/TreasureHuntConfig.luau`
+- `src/shared/Configuration/TreasureHuntConfig.luau`, `src/shared/Configuration/DailyRewardConfig.luau`, `src/shared/Configuration/QuestConfig.luau`, `src/server/Tests/QuestService.spec.luau`
 - `src/shared/Configuration/ProfileTemplate.luau`
 - `src/server/Modules/BadgeService.luau`
 - `src/server/Modules/LeaderboardService.luau`
@@ -62,8 +62,15 @@ Model: sonnet   Studio: no   Depends on: R2-FIX (Sentry PASS)   Size: M
    - full inventory refuses the daily claim without changing the streak;
    - the chest cooldown refuses a second chest.
 
+6. **Approved reward amounts (DEC-036 Q11).**
+   - `DailyRewardConfig.REWARDS` BobaBucks become 30/45/60/60/90/120/180; capsules unchanged.
+   - `TreasureHuntConfig`: `MIN_BOBABUCKS = 20`, `MAX_BOBABUCKS = 40`, `CAPSULE_CHANCE = 0.10`.
+   - `QuestConfig`: `BobaBucks` and `XP` become arrays aligned with `Targets`. BobaOrdered and CustomersServed 25/40/60 and 15/25/35. SpillsCleaned 20/30/45 and 10/20/30. RegularOrders and ShiftsCompleted 40/75 and 25/40.
+   - Both generators (`QuestConfig` ~100-109 and ~130-139) pick the reward at the rolled target's index.
+   - Mark each value `-- DEC-036`. Update the Quest spec if it asserts the flat amounts.
+   - The reroll price is unchanged (Q11b open).
+
 ## Not in this packet
-- Reward amounts (M4-ECON-VALUES, PENDING JACK).
 - Statue art and board models.
 - Studio edits.
 

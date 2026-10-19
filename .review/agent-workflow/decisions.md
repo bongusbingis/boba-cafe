@@ -2,6 +2,26 @@
 
 Newest first. Each entry is `## <GOAL> / DEC-###: <title>` with Date, Source, and Decision. Prime is the only writer. Numbering continues; never reuse a number.
 
+## REVIVAL-001 / DEC-036: M4 reward amounts and M3 perk/Team Combo rules approved
+
+- **Date:** 2026-10-19.
+- **Source:** Jack in session: "B1: A; additionally I am ok with all other recommendations so OK approve them." This answers Prime's recommendations for Q11, B1-B4 and C1-C5. Q11b, Q12 and Q13 had no recommended option and remain open.
+- **Decision:**
+  - **Q11 (supersedes the DEC-034 placeholders):** the amounts in `tasks/REVIVAL-001/M4-ECON-VALUES/proposal.md` are approved.
+    - Daily: 30/45/60/60+Regular/90/120/180+Rare. The 20h cooldown and 48h expiry are kept; VIP x2.
+    - Chest: 20-40 BB with a 10% capsule chance (Regular or Nametag).
+    - Quests: reward by rolled target. Prepare Boba and Serve Customers 25/40/60 BB, 15/25/35 XP. Clean Spills 20/30/45 BB, 10/20/30 XP. Serve Real Players and Complete Shifts 40/75 BB, 25/40 XP.
+  - **B1 = A:** "tip" means serve pay (revival-plan core loop: base pay plus a speed/accuracy tip). Tip-family boosts multiply each serve's BB pay (NPC and real-player). The shift summary's Tips line shows the extra BB earned from those boosts.
+  - **B2 = A:** the pass XP boost applies to all XP earned in play (serve, shift-end, spill).
+  - **B3 = A:** within a boost family, the highest boost wins; boosts in the same family don't add.
+  - **B4 = A:** Double Storage moves to a follow-up packet (M3-REM-D).
+  - **C1 = A:** the Team Combo chain is any 10 consecutive successful serves server-wide, NPC and real-player. Only a customer walkout resets it.
+  - **C2 = A:** Team Combo stacks multiplicatively with Rush Hour (x2 then x1.10).
+  - **C3 = A:** Team Combo applies to real-player order pay too.
+  - **C4 = A:** a new chain completed during an active combo refreshes it to 60 s.
+  - **C5 = A:** players are told through the existing announcement path. No new HUD element.
+  - **Open:** Q11b (reroll price: keep 50 BB or lower to 20), Q12 (Veteran: drop FirstStaff, or stop awarding it), Q13 (the Most Tips statue: Most Boba Bucks, Most Active, or hide).
+
 ## REVIVAL-001 / DEC-035: Jack's answers to audit Q1-Q10
 
 - **Date:** 2026-10-19.
