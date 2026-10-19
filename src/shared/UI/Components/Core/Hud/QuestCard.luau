@@ -138,10 +138,12 @@ local function QuestActionButton(props: {
 		},
 		Native = {
 			Active = not isDisabled,
+			AnchorPoint = Vector2.new(1, 0.5),
 			AutoButtonColor = false,
 			BackgroundColor3 = baseColor,
 			BackgroundTransparency = if isDisabled then 0.5 else 0,
 			LayoutOrder = props.LayoutOrder,
+			Position = UDim2.fromScale(1, 0.5),
 			Size = props.Size or UDim2.fromOffset(72, 20),
 			Text = "",
 		},
@@ -435,6 +437,7 @@ return function(props: {
 		Native = {
 			AutoButtonColor = false,
 			BackgroundColor3 = Styles.GREEN,
+			BackgroundTransparency = 0,
 			BorderSizePixel = 0,
 			Size = UDim2.new(1, 0, 0, 28),
 			Text = "",
