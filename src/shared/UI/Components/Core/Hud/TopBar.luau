@@ -9,6 +9,7 @@
 --!nonstrict
 
 local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Packages = ReplicatedStorage:WaitForChild("Packages")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -30,6 +31,7 @@ local HudTabButton = require(UI.Components.Buttons.HudTabButton)
 -- workspace["Ordering System"].Computers is authored in the place. It is resolved
 -- after the HUD mounts with a bounded wait so a missing folder never blocks the HUD.
 local ORDERING_SYSTEM_TIMEOUT_SECONDS = 30
+local CLOCKED_IN_ATTRIBUTE = "ClockedIn" -- owned by the server's ShiftService
 
 ---> private
 local c = React.createElement
@@ -58,6 +60,7 @@ return function(props: {
 		React.useEffect(function()
 			local prompts: { ProximityPrompt } = {}
 			local cancelled = false
+			local clockedInConnection: RBXScriptConnection? = nil
 
 			task.spawn(function()
 				local computers = waitForComputers()
@@ -78,10 +81,25 @@ return function(props: {
 					end)
 					table.insert(prompts, prompt)
 				end
+
+				-- Clocked-in baristas don't see the register prompt, so it can't fight the NPC Serve prompt (DEC-046).
+				local function updatePromptEnabled()
+					for _, prompt in prompts do
+						prompt.Enabled = Players.LocalPlayer:GetAttribute(CLOCKED_IN_ATTRIBUTE) ~= true
+					end
+				end
+				updatePromptEnabled()
+				if not cancelled then
+					clockedInConnection =
+						Players.LocalPlayer:GetAttributeChangedSignal(CLOCKED_IN_ATTRIBUTE):Connect(updatePromptEnabled)
+				end
 			end)
 
 			return function()
 				cancelled = true
+				if clockedInConnection then
+					clockedInConnection:Disconnect()
+				end
 				for _, prompt in prompts do
 					prompt:Destroy()
 				end

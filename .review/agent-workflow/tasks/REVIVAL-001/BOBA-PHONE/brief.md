@@ -24,6 +24,13 @@ Pick it up after the gameplay milestones Prime is driving, or when Jack asks. Pr
   5. "Place Order" fires `PhoneServiceReplica:FireServer("PlaceMobileOrder", order)`, with no response handling.
   - Only the Order page works; the Home/Order/History tab bar is not wired.
 - **Raw React port by Jack's plugin:** chunked modules named `__REACT_…` under `StarterGui.UIArchive.OldUI.BobaPhone.Frame`. The earlier single module `__REACT_PHONE` is empty (0 bytes), so ignore it. Chunk inventory, compile check and quality notes: `../PHONE-RECON/evidence.md`, section "Chunked React port (DEC-043)". Sources are saved in `../PHONE-RECON/react-port/`.
+  - **Chunk summary (recon 2026-10-19):**
+    - There are two modules: `__REACT_TOPFRAME` (774 bytes, the status-bar notch) and `__REACT_SCREEN` (175,905 bytes, 3,444 lines). The Boba app is lines 549-1380; the rest is the shell, Home, CloseApps and the retired apps. The phone body Frame and its constraints were not chunked; port them from the legacy tree.
+    - Both compile under `loadstring`. Each is a bare static `c("Frame", {...}, {...})` dump: no `return`, no `require`, `c` undefined, and no state or handlers. Script children are empty stubs.
+    - 56 legacy image ids. Sizing is mostly scale, with offsets in the popups and Order rows.
+    - Dropped or degraded: the item-card ViewportFrame survives only as an empty template, the Boba root's background image is missing, and the greeting and date/time are hard-coded.
+    - Fonts and colours stay as in the dump: Q20 = A means a faithful port, not a STYLE.md token mapping.
+    - **The files in `../PHONE-RECON/react-port/` were transcribed by an agent from the script reader, so they are not byte-exact.** Read the source of truth from the Studio modules themselves.
 - **Phone Tool:** `ReplicatedStorage.ToolsStorage."Boba Phone"` (place content).
   - No Handle (`RequiresHandle = false`).
   - One 16-line LocalScript toggles `PlayerGui.BobaPhone.Enabled` on Equipped/Unequipped (`legacy-src/ToolsStorage.Boba_Phone.LocalScript.luau`).
@@ -56,7 +63,7 @@ Pick it up after the gameplay milestones Prime is driving, or when Jack asks. Pr
 - The legacy scripts contain bugs: undeclared globals in MenuHandler, and TimeHandler. Port the behaviour, not the bugs.
 - The Tool and the legacy GUI are place content, not Rojo. Code must name exact instance paths (AGENTS.md).
 
-## Interim until the phone lands
+## Interim until the phone lands (DEC-046: register prompt hidden for clocked-in players)
 The register prompt stays, because removing it now would leave real players no way to order. It shows for everyone and fights with the NPC Serve prompt for clocked-in baristas (the Q19 context). See the board note for the interim fix status.
 
 ## Hard constraints for whoever picks this up

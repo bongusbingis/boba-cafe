@@ -88,3 +88,38 @@ Rojo: `default.project.json` manages only `ReplicatedStorage.Shared`, `Packages`
 8. Mobile: ModifyDeviceSize hack for touch; MobileOrder page already exists in React as the closest reusable base.
 9. Many UI assets are legacy image ids (possible ownership/permission issues in this experience).
 BLOCKED: `__REACT_PHONE` source (empty); `ReplicatedStorage.Boba` / FoodService legacy server code (absent).
+
+## Chunked React port (DEC-043)
+Recon (read-only, Edit mode, studio 61656dd1, "jacks project"). Full-DataModel scan for names containing "REACT": only two modules exist; `OldUI.__REACT_PHONE` from section 4 is gone (replaced by the chunks).
+
+### Modules
+| Path (under `StarterGui.UIArchive.OldUI.BobaPhone.Frame`) | Bytes (#Source) | Lines | Legacy subtree |
+|---|---|---|---|
+| `__REACT_TOPFRAME` | 774 | 25 | `Frame.TopFrame` (status-bar notch) |
+| `__REACT_SCREEN` | 175,905 | 3,444 | `Frame.Screen`: root, `Home` (icon grid, date/time), `Apps` containing Boba (tab bar, Menus Home/Order/PopUp), Web, Chat, Jokes, Word Of The Day, `CloseApps`, `UIAspectRatioConstraint` |
+
+Not chunked: the phone body `Frame` itself (black rounded body, UIAspectRatioConstraint/UISizeConstraint), `ModifyDeviceSize`, and no popups/tab bar as separate modules. Tab bar and popups are inside `__REACT_SCREEN` (lines 563-663 tab bar, 1031-1378 PopUp). Apps in `__REACT_SCREEN`: Boba lines 549-1380 (832), Web 1382-1660 (retired; closeApps 1636-1656 and aspect 1658-1660 are shell), Chat 1662-2019, Jokes 2021-2731, Word Of The Day 2733-3443. Home icons Subs/Games/Gifts/Event exist only as hidden buttons (Visible=false) on Home.
+
+### Saved (react-port/)
+- `__REACT_TOPFRAME.luau` (whole module, verbatim)
+- `__REACT_SCREEN.shell-home.luau` (lines 1-541 root + Home, `apps` wrapper, closeApps, aspect constraint; Boba/retired app bodies elided and marked)
+- `__REACT_SCREEN.boba-app.luau` (lines 549-1380, the whole Boba app incl. tab bar, Home, Order, PopUp ItemOptions/SelectList)
+Retired apps (Web, Chat, Jokes, WOTD) listed only; the full source stays in Studio.
+
+### Generated code characterization
+- Compile: `loadstring` returns a function for both modules (no syntax errors, not truncated, balanced; ends with `})`).
+- NOT runnable as-is: the source is a single bare expression `c("Frame", {props}, {children})` with NO `return`, NO `require`, NO React import, and `c` is an undefined free global (presumably a createElement alias the plugin expected to be prepended). Zero hooks, zero state, zero events. Children passed as a name-keyed table (`boba = c(...)`), so keys double as React keys.
+- Does not use `React.createElement`/`Roact.createElement`/`React.Event` anywhere; nothing about React path or version. To use it: add `local React = require(ReplicatedStorage.Packages.React); local c = React.createElement` plus `return function() return <expr> end`, and translate property names.
+- Static tree only. Properties are raw Instance property dumps: Enum.* values, `Font.new(...)`, `FontFace`, `UICorner` per-corner radii, `TileSize`, `SizeConstraint`, `BorderColor3 = Color3.fromRGB(27,42,53)` defaults, `Visible=false` templates. `c("Folder", nil, {...})` for `menus`. Props like `ScaleType`, `SliceCenter`, `SliceScale`, `AutoButtonColor` are valid for createElement; `Disabled=true` on script stubs is not meaningful.
+- Scripts are empty stubs only: `c("LocalScript")` x7 (appsHandler, timeHandler, menuHandler [Disabled], 4 AppHandlers), `c("ModuleScript")` x4 (phoneMenuController etc.), one `BoolValue` (disableScript). No logic survived; behaviour must come from the legacy scripts in `legacy-src/`.
+- Images: 56 `http://www.roblox.com/asset/?id=` strings (+2 `rbxassetid`-matching hits), legacy URL form. Same ids as section 6 (Home bg 8261032060, tab icons 8267151132/8267206830/8267150291, row deco 5150079965, remove X 5017723314, rounded bg 5150445362, scroll bar 4983877983 and 1912796145). New in this dump: scroll-bar Mid/Top/Bottom images 4983877983, 1912796145.
+- Sizing: mixed. Layout is mostly scale (`UDim2.fromScale`) with offsets for popup rows and Order rows (`UDim2.new(1,-10,0,40)`, `fromOffset(100,100)` for icon buttons, `fromOffset(30,30)` toggles). Root `Screen` is `UDim2.new(1,-16,1,-16)`. Aspect handled by `UIAspectRatioConstraint 0.483` under `Apps` only. Fonts: GothamSSm (Bold/Medium/Heavy), FredokaOne. 63 TextScaled labels (13 UITextSizeConstraint).
+- Class counts: Frame 101, UICorner 101, TextLabel 59, ImageButton 51, ImageLabel 49, UIStroke 26, UITextSizeConstraint 13, UIListLayout 12, UIAspectRatioConstraint 9, UIGradient 8, TextBox 9 (all in Chat/Jokes/WOTD), ScrollingFrame 7, ViewportFrame 1, UIGridLayout 1, UISizeConstraint 1.
+
+### Dropped or degraded vs legacy
+- Boba `Order` item card `ViewportFrame` exists only as the empty Template (no Camera/WorldModel/CurrentCamera); item rendering was always runtime (`ViewportProvider`), so nothing lost, but still must be rebuilt.
+- Dropped/changed: Boba root has no `Image`; phone body `Frame` (black body, UISizeConstraint), `TopFrame` constraints and the `BobaPhone` ScreenGui settings are outside the chunks. `Screen` root has no `UICorner`/aspect constraint of its own (aspect is under `Apps`). Tab-bar Home and History buttons are `Visible=false` (as legacy). `Hi, xSa_m` and `December 15, 2021 / 11:00 AM` are hard-coded placeholders. All behaviour scripts are empty.
+- No TextBoxes in the Boba app (TextBoxes only in retired Chat/Jokes/WOTD).
+
+### Port quality / main work
+Faithful, complete, static visual dump of both the shell and the Boba app, including all templates (category row, item card, My Order row, ItemOptions Select/RequiredSelection/Options, SelectList) in their hidden `Visible=false` template form. Work to do: (1) wrap each chunk as a real React component (`React.createElement` + `return`), (2) flatten templates into data-driven components (menu from `Shared.Ordering.Menu`, launch items only), (3) rebuild all logic (tab switch, popups, 1-4 item cap, `OrderService:CreateOrder`, ViewportFrame item cards), (4) replace hard-coded greeting/date/time, (5) map legacy fonts/colors/offset sizing to `docs/STYLE.md` tokens (DEC-013) or get Jack's decision, (6) decide the shell body (phone Frame) which was not chunked.

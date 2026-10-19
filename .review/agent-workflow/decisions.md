@@ -2,6 +2,12 @@
 
 Newest first. Each entry is `## <GOAL> / DEC-###: <title>` with Date, Source, and Decision. Prime is the only writer. Numbering continues; never reuse a number.
 
+## REVIVAL-001 / DEC-046: Interim: hide the register prompt for clocked-in players (Q22)
+
+- **Date:** 2026-10-19.
+- **Source:** Jack in session: "Q22: A".
+- **Decision:** until the Boba Phone ships (DEC-044), the counter "Use Ordering System" prompt (`TopBar.luau`) is hidden while the local player is clocked in (`ClockedIn == true`). Baristas see only Serve/Rescue, and customers can still order at the registers. The phone change removes the prompt entirely.
+
 ## REVIVAL-001 / DEC-045: M4 UI redo review: Daily approved; Quests placement again
 
 - **Date:** 2026-10-19.
