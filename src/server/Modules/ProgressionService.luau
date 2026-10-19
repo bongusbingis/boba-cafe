@@ -42,10 +42,13 @@ function ProgressionService:GetLevel(player: Player): number
 end
 
 -- Adds XP, levels up while the curve allows. Safe to call at any time.
-function ProgressionService:AddXp(player: Player, amount: number, skipShiftCount: boolean?)
+-- Returns the XP actually granted (boost included).
+function ProgressionService:AddXp(player: Player, amount: number, skipShiftCount: boolean?): number
 	if amount <= 0 then
-		return
+		return 0
 	end
+	-- Pass XP boost applies to all play XP, highest wins (DEC-036 B2/B3).
+	amount = math.round(amount * (1 + self:_getXpBonus(player)))
 	local data = Knit.GetService("DataService")
 	data:GetDataAsync(player)
 		:andThen(function(proxy)
@@ -80,6 +83,14 @@ function ProgressionService:AddXp(player: Player, amount: number, skipShiftCount
 		:catch(function(err)
 			warn(`[ProgressionService] AddXp failed: {err}`)
 		end)
+	return amount
+end
+
+function ProgressionService:_getXpBonus(player: Player): number
+	local ok, bonus = pcall(function()
+		return Knit.GetService("PerkService"):GetFamilyBonus(player, "Xp")
+	end)
+	return if ok and typeof(bonus) == "number" then bonus else 0
 end
 
 function ProgressionService:_onLevelUp(player: Player, level: number, proxy: any)
@@ -132,16 +143,17 @@ function ProgressionService:KnitStart()
 		local ok, err = pcall(function()
 			local levelBefore = self:GetLevel(player)
 			local shiftXp = ShiftConfig.SHIFT_XP + ShiftConfig.SHIFT_XP_PER_STAR * summary.Stars
-			local total = (self._shiftXp[player] or 0) + shiftXp
+			local earned = self._shiftXp[player] or 0 -- serve XP, already boosted
 			self._shiftXp[player] = 0
-			self:AddXp(player, shiftXp, true)
+			local granted = self:AddXp(player, shiftXp, true)
+			local total = earned + granted
 			summary.Xp = total
 			summary.LevelBefore = levelBefore
 			-- AddXp finishes after the profile loads; predict from the cache for the card.
 			local state = self._state[player]
 			local after = levelBefore
 			if state ~= nil then
-				local xp = state.XP + shiftXp
+				local xp = state.XP + granted
 				after = state.Level
 				while after < Progression.MAX_LEVEL and xp >= Progression.XpToNext(after) do
 					xp -= Progression.XpToNext(after)

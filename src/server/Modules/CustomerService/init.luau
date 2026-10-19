@@ -137,7 +137,8 @@ local CustomerService = Knit.CreateService({
 	CustomerLeft = GoodSignal.new(),
 
 	-- Server-side signal: fires (player, result) once per resolved customer for the barista.
-	-- result = { Kind: "Served" | "Walkout", Grade: string?, Pay: number, Fast: boolean, Combo: number }
+	-- result = { Kind: "Served" | "Walkout", Grade: string?, Pay: number, Fast: boolean, Combo: number, Tip: number? }
+	-- Tip = extra BB from the pass/pet tip boost, already included in Pay.
 	CustomerResolved = GoodSignal.new(),
 
 	--- True only after KnitStart found the whole world contract. When false nothing spawns.
@@ -675,11 +676,18 @@ function CustomerService:_ensureServePrompt(npc: Npc.Npc)
 	end)
 end
 
--- The Serve prompt, in design 4.6 order. No yield between the FindServeTools
--- pick and the tool destroy.
+-- The Serve prompt, in design 4.6 order. The tip bonus is resolved first (it may
+-- yield on a cold pass cache); after that there is no yield from the checks through
+-- the FindServeTools pick, the tool destroy and the payout.
 function CustomerService:_onServeTriggered(npc: Npc.Npc, player: Player)
 	if self._context == nil then
 		return
+	end
+	local okTip, tipBonus = pcall(function()
+		return Knit.GetService("PerkService"):GetTipBonus(player)
+	end)
+	if not okTip or typeof(tipBonus) ~= "number" then
+		tipBonus = 0
 	end
 	-- (1) clocked in.
 	if not self._shift:IsClockedIn(player) then
@@ -728,6 +736,17 @@ function CustomerService:_onServeTriggered(npc: Npc.Npc, player: Player)
 	pay = Rules.PayoutVariant(pay, npc.Variant, grade)
 	if self:IsRushHour() then
 		pay = math.round(pay * RatingConfig.RUSH_PAY_MULT)
+	end
+	-- Pass/pet tip boost (DEC-036 B1): base pay stays, the whole-BB extra is added on top.
+	local tip = 0
+	if tipBonus > 0 then
+		local okExtra, extra = pcall(function()
+			return Knit.GetService("PerkService"):TakeTipExtra(player, pay, tipBonus)
+		end)
+		if okExtra and typeof(extra) == "number" then
+			tip = extra
+			pay += extra
+		end
 	end
 	self._currency:Modify(player, "BobaBucks", pay, "Gameplay")
 	pcall(function()
@@ -781,6 +800,7 @@ function CustomerService:_onServeTriggered(npc: Npc.Npc, player: Player)
 			Fast = npc.Scripted or fractionLeft >= CustomerConfig.FAST_FRACTION,
 			Combo = newCombo,
 			Items = #npc.Orders,
+			Tip = tip,
 		})
 	end)
 end

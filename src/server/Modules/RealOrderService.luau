@@ -215,6 +215,15 @@ function RealOrderService:_onOrderPickedUp(
 		return
 	end
 
+	-- Resolve the tip bonus first: it may yield on a cold pass cache, and nothing below
+	-- (history record, pay, XP) may yield after that.
+	local okTip, tipBonus = pcall(function()
+		return Knit.GetService("PerkService"):GetTipBonus(barista)
+	end)
+	if not okTip or typeof(tipBonus) ~= "number" then
+		tipBonus = 0
+	end
+
 	local customer = Players:GetPlayerByUserId(customerId)
 	if customer then
 		removeBubble(customer)
@@ -247,6 +256,18 @@ function RealOrderService:_onOrderPickedUp(
 	RealOrderService.Record(self._history, barista.UserId, customerId, now)
 
 	local pay = Rules.Payout(items, grade, 0, 0, false, false) * multiplier
+	-- Pass/pet tip boost multiplies the serve pay (DEC-036 B1).
+	if tipBonus > 0 then
+		local okExtra, extra = pcall(function()
+			return Knit.GetService("PerkService"):TakeTipExtra(barista, pay, tipBonus)
+		end)
+		if okExtra and typeof(extra) == "number" and extra > 0 then
+			pay += extra
+			pcall(function()
+				Knit.GetService("ShiftService"):AddTip(barista, extra)
+			end)
+		end
+	end
 	pcall(function()
 		self._currency:Modify(barista, "BobaBucks", pay)
 	end)

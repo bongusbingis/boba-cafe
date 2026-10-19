@@ -168,6 +168,7 @@ return function()
 				Walkouts = 0,
 				Perfects = 10,
 				Pay = 0,
+				Tips = 0,
 				BestCombo = 0,
 				Completed = 1,
 				Loaded = true,
@@ -184,6 +185,43 @@ return function()
 			expect(captured).to.be.ok()
 			expect(captured.Stars).to.equal(3)
 			expect(captured.Bonus).to.equal(15)
+		end)
+	end)
+	describe("Tips line", function()
+		it("sums result.Tip and AddTip floors, and resets each shift", function()
+			local player = makePlayer(9100)
+			local state = {
+				Resolved = 0,
+				Target = 10,
+				Served = 0,
+				Walkouts = 0,
+				Perfects = 0,
+				Pay = 0,
+				Tips = 0,
+				BestCombo = 0,
+				Completed = 1,
+				Loaded = true,
+			}
+			service._states[player] = state
+			service:RecordCustomer(
+				player,
+				{ Kind = "Served", Grade = "Close", Pay = 20, Fast = false, Combo = 1, Tip = 3 }
+			)
+			service:AddTip(player, 2.9)
+			service:AddTip(player, 0)
+			expect(state.Tips).to.equal(5)
+			expect(state.Pay).to.equal(22)
+
+			local captured = nil
+			local connection = service.ShiftEnding:Connect(function(_, summary)
+				captured = summary
+			end)
+			service:_endShift(player, state)
+			connection:Disconnect()
+			expect(captured.Tips).to.equal(5)
+			expect(captured.Pay).to.equal(17)
+			expect(service._states[player].Tips).to.equal(0)
+			service._states[player] = nil
 		end)
 	end)
 end

@@ -9,6 +9,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Knit = require(Packages.Knit)
 local InventoryServer = require(Shared.Inventory.InventoryServer)
 local PetConfig = require(Shared.Configuration.PetConfig)
+local PerkConfig = require(Shared.Configuration.Perks)
 local PetShared = require(Shared.Pets.PetShared)
 
 type EquippedPetSnapshot = PetShared.EquippedPetSnapshot
@@ -18,6 +19,7 @@ local inventoryConnections: { [number]: any } = {}
 
 local PetService = Knit.CreateService({
 	Name = "PetService",
+	_equipped = equippedPetsByUserId, -- same table; test seam for GetBestTipBonus
 	Client = {
 		EquippedPetsChanged = Knit.CreateSignal(),
 
@@ -136,6 +138,18 @@ function PetService:RenamePet(player: Player, item: any, requestedName: string):
 
 	item:SetProperty(PetConfig.RENAME_PROPERTY_KEY, filteredName)
 	return true, nil
+end
+
+-- Highest tip bonus among the player's equipped pets (DEC-028 E21); unknown tier = 0.
+function PetService:GetBestTipBonus(player: Player): number
+	local best = 0
+	for _, pet in equippedPetsByUserId[player.UserId] or {} do
+		local bonus = PerkConfig.PetTipBonus[pet.Tier]
+		if bonus ~= nil and bonus > best then
+			best = bonus
+		end
+	end
+	return best
 end
 
 function PetService:PlayerRemoving(player: Player)

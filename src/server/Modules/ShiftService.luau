@@ -28,6 +28,7 @@ export type CustomerResult = {
 	Pay: number,
 	Fast: boolean,
 	Combo: number,
+	Tip: number?, -- extra BB from the pass/pet tip boost, already inside Pay
 }
 
 export type ShiftState = {
@@ -37,6 +38,7 @@ export type ShiftState = {
 	Walkouts: number,
 	Perfects: number,
 	Pay: number,
+	Tips: number, -- boost BB earned this shift (part of Pay)
 	BestCombo: number,
 	Completed: number, -- shifts completed before this one (profile stat)
 	Loaded: boolean, -- Target has been read from the profile
@@ -100,6 +102,7 @@ local function newState(target: number, completed: number, loaded: boolean): Shi
 		Walkouts = 0,
 		Perfects = 0,
 		Pay = 0,
+		Tips = 0,
 		BestCombo = 0,
 		Completed = completed,
 		Loaded = loaded,
@@ -180,8 +183,8 @@ function ShiftService:_endShift(player: Player, state: ShiftState)
 		Stars = stars,
 		Served = state.Served,
 		Walkouts = state.Walkouts,
-		Pay = state.Pay,
-		Tips = 0,
+		Pay = state.Pay - state.Tips, -- base pay; Tips is the boost extra (DEC-036 B1)
+		Tips = state.Tips,
 		Bonus = bonus,
 		BestCombo = state.BestCombo,
 		First = first,
@@ -253,12 +256,25 @@ function ShiftService:RecordCustomer(player: Player, result: CustomerResult)
 			state.Perfects += 1
 		end
 		state.Pay += result.Pay
+		state.Tips += math.floor(result.Tip or 0)
 		state.BestCombo = math.max(state.BestCombo, result.Combo)
 	else
 		state.Walkouts += 1
 	end
 	self:_publish(player, state)
 	self:_checkEnd(player, state)
+end
+
+-- Adds boost BB from a real-player order, which has no CustomerResolved. The BB is
+-- already paid; this only feeds the summary Tips line.
+function ShiftService:AddTip(player: Player, amount: number)
+	local state = self._states[player]
+	if state == nil or amount <= 0 then
+		return
+	end
+	local tip = math.floor(amount)
+	state.Tips += tip
+	state.Pay += tip
 end
 
 ---> client
