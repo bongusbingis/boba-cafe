@@ -365,22 +365,6 @@ return function(props: {
 					LayoutOrder = 2,
 				}),
 
-				Daily = c(NormalButton, {
-					Icon = "rbxassetid://13382286492",
-					Size = BUTTON_SIZE,
-					Color = Styles.GOLD_MID,
-					Text = "Daily",
-					OnClick = function()
-						local ok, controller = pcall(function()
-							return Knit.GetController("DailyRewardController")
-						end)
-						if ok and controller and controller.OpenDailyRewards then
-							controller:OpenDailyRewards()
-						end
-					end,
-					LayoutOrder = 3,
-				}),
-
 				Points = c(NormalButton, {
 					PlusButton = true,
 					Icon = "rbxassetid://13391365805",
@@ -390,7 +374,7 @@ return function(props: {
 					OnClick = function()
 						props.SetCurrentPage(UI.Pages.Shop, "Currency")
 					end,
-					LayoutOrder = 4,
+					LayoutOrder = 3,
 				}),
 
 				Bucks = c(NormalButton, {
@@ -402,7 +386,7 @@ return function(props: {
 					OnClick = function()
 						props.SetCurrentPage(UI.Pages.Shop, "Currency")
 					end,
-					LayoutOrder = 5,
+					LayoutOrder = 4,
 				}),
 			}),
 		}),

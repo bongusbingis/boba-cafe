@@ -8,6 +8,8 @@ local React = require(Packages.React)
 
 ---> components
 local Pane = require(UI.Components.Pane)
+local useCamera = require(UI.Hooks.useCamera)
+local usePx = require(UI.Hooks.usePx)
 local TopBar = require(script.TopBar)
 local BottomLeft = require(script.BottomLeft)
 local BottomRight = require(script.BottomRight)
@@ -19,10 +21,21 @@ local QuestCard = require(script.QuestCard)
 ---> private
 local c = React.createElement
 
+local TICKET_WIDTH = 190
+local TICKET_SCALE = 1.6 -- Jack Q27 A (DEC-052): ticket size only
+local COLUMN_GAP = 10
+
 return function(props: {
 	CurrentPage: ModuleScript,
 	SetCurrentPage: (pageComponent: ModuleScript | nil, ...any) -> (),
 })
+	local px = usePx()
+	local camera = useCamera()
+	local ticketScale = px.scale(TICKET_SCALE)
+	-- ShiftCard keeps its former clamped size (0.2 x 0.3 of the viewport, Min 190x160, Max 300x250).
+	local viewport = camera.ViewportSize
+	local shiftSize = UDim2.fromOffset(math.clamp(viewport.X * 0.2, 190, 300), math.clamp(viewport.Y * 0.3, 160, 250))
+
 	-- Quests is a closed-by-default pop-up card, not a page (DEC-048).
 	local questsOpen, setQuestsOpen = React.useState(false)
 	local questsCloseRef = React.useRef(nil)
@@ -84,25 +97,40 @@ return function(props: {
 			OnToggleQuests = toggleQuests,
 		}),
 
-		TicketStack = c("Frame", {
-			-- Same anchor the single ticket used; tickets stack top to bottom.
-			AnchorPoint = Vector2.new(1, 1),
+		-- One right-hand column (Q28 A): tickets on top, ShiftCard directly below.
+		RightColumn = c("Frame", {
+			AnchorPoint = Vector2.new(1, 0),
 			AutomaticSize = Enum.AutomaticSize.Y,
 			BackgroundTransparency = 1,
-			Position = UDim2.fromScale(0.99, 0.92),
-			Size = UDim2.fromOffset(190, 0),
+			Position = UDim2.fromScale(0.99, 0.14),
+			Size = UDim2.fromOffset(math.ceil(TICKET_WIDTH * ticketScale), 0),
 			ZIndex = 10,
 		}, {
 			Layout = c("UIListLayout", {
 				FillDirection = Enum.FillDirection.Vertical,
-				Padding = UDim.new(0, 10),
+				HorizontalAlignment = Enum.HorizontalAlignment.Right,
+				Padding = UDim.new(0, COLUMN_GAP),
 				SortOrder = Enum.SortOrder.LayoutOrder,
 			}),
-			OrderTicket = c(OrderTicket, { stacked = true, slot = 1, layoutOrder = 1 }),
-			OrderTicket2 = c(OrderTicket, { stacked = true, slot = 2, layoutOrder = 2 }),
+			TicketStack = c(Pane, {
+				AutomaticSize = Enum.AutomaticSize.Y,
+				ListLayout = {
+					FillDirection = Enum.FillDirection.Vertical,
+					Padding = UDim.new(0, 10),
+				},
+				Scale = ticketScale,
+				Native = {
+					LayoutOrder = 1,
+					Size = UDim2.fromOffset(TICKET_WIDTH, 0),
+					ZIndex = 10,
+				},
+			}, {
+				OrderTicket = c(OrderTicket, { stacked = true, slot = 1, layoutOrder = 1 }),
+				OrderTicket2 = c(OrderTicket, { stacked = true, slot = 2, layoutOrder = 2 }),
+			}),
+			ShiftCard = c(ShiftCard, { ColumnSize = shiftSize }),
 		}),
 		OrderQueue = c(OrderQueue, {}),
-		ShiftCard = c(ShiftCard, {}),
 		CafeRating = c(CafeRating, {}),
 
 		-- Last sibling, ZIndex 20 on its single outer Frame (above TicketStack 10).

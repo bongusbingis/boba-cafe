@@ -14,6 +14,7 @@ local OpenableMenu = require(UI.Components.Core.OpenableMenu)
 
 ---> pages
 local FoodMenu    = require(script.FoodMenu)
+local Daily       = require(script.Daily)
 local PromoCodes  = require(script.PromoCodes)
 local Credits     = require(script.Credits)
 local Purchases   = require(script.Purchases)
@@ -36,9 +37,17 @@ return function()
                 },
             },
             {
+                Key = "Daily",
+                Label = "Daily Rewards",
+                LayoutOrder = 2,
+                Content = {
+                    Page = c(Daily, {}),
+                },
+            },
+            {
                 Key = "PromoCodes",
                 Label = "Promo Codes",
-                LayoutOrder = 2,
+                LayoutOrder = 3,
                 Content = {
                     Page = c(PromoCodes, {}),
                 },
@@ -46,7 +55,7 @@ return function()
             {
                 Key = "Statistics",
                 Label = "Statistics",
-                LayoutOrder = 3,
+                LayoutOrder = 4,
                 Content = {
                     Page = c(Statistics, {}),
                 },
@@ -54,7 +63,7 @@ return function()
             {
                 Key = "Purchases",
                 Label = "Purchases",
-                LayoutOrder = 4,
+                LayoutOrder = 5,
                 Content = {
                     Page = c(Purchases, {}),
                 },
@@ -62,7 +71,7 @@ return function()
             {
                 Key = "ServerInfo",
                 Label = "Server Info",
-                LayoutOrder = 5,
+                LayoutOrder = 6,
                 Content = {
                     Page = c(ServerInfo, {}),
                 },
@@ -70,7 +79,7 @@ return function()
             {
                 Key = "Settings",
                 Label = "Settings",
-                LayoutOrder = 6,
+                LayoutOrder = 7,
                 Content = {
                     Page = c(Settings, {}),
                 },
@@ -78,7 +87,7 @@ return function()
             {
                 Key = "Credits",
                 Label = "Credits",
-                LayoutOrder = 7,
+                LayoutOrder = 8,
                 Content = {
                     Page = c(Credits, {}),
                 },
