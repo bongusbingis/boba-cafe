@@ -44,3 +44,15 @@ Cleanup: _LensPreview destroyed; StarterGui children 1, ReplicatedStorage childr
 Jack chose Q26=B: move the Quests button left of the mobile jump zone. BottomRight.luau JUMP_BUTTON_CLEARANCE 130 -> 196 (mount X offset -130 -> -196 px); comment updated.
 Computed span, 844 x 390 frame: right edge = 0.981*844 - 196 = 632.0 px (0.749 width, <= 0.75 jump zone start at 633); width 0.175*844 = 147.7 px, so left edge = 484.3 px (0.574 width, clear of the 0-0.3 stick zone). Minimum offset is -195; 196 gives ~1 px margin.
 Gate: see run result below.
+
+## Q26 recapture (Lens, JUMP_BUTTON_CLEARANCE = 196, f8304c7, DEC-049)
+Studio "jacks project (placeId: 89999123284040)", Edit mode only, no Play/TestEZ, no saves, no script edits.
+Freshness: djb2 (CR stripped) Studio == repo: Hud/init 3444690112, QuestCard 227123852, BottomRight 2843346965 (new), BottomLeft 3757154664. Pages: Menu, Shop, Inventory, Ordering, MobileOrder, Recipes (Pages/Quests absent).
+Mounts as in Part B: _LensPreview (ResetOnSpawn=false, Sibling, IgnoreGuiInset=true), real Hud (CurrentPage=nil, noop); open runs add QuestCard (PREVIEW_QUESTS) as a full-size ZIndex 20 sibling. Springs do not advance in edit mode. Viewport 1171 x 864 (desktop); phone = Hud in an 844 x 390 Frame (usePx stays at desktop camera scale, so card/button px are not true phone px). TicketStack empty (not mountable).
+Captures (captures/): a-closed-bottomright-{desktop,phone844x390}-v2.jpg, b-quests-open-{desktop,phone844x390}-v2.jpg.
+Measured Quests button
+- 844 x 390 frame: x 484.3-632.0 (0.574-0.749 width), width 147.7, y ~359-385 (bottom ~0.987). Right edge 632.0 <= 633 (0.75): does NOT overlap the jump zone 0.75-1.0 (~1 px margin); clear of the stick zone (0-0.3).
+- Desktop 1171 x 864: x 747.8-952.8 (0.639-0.813), y 818-850. The fixed -196 px offset is a smaller fraction on a wide viewport, so the right 0.063 of the button (0.75-0.813) lies inside the 0.75-1.0 jump zone by the width-fraction definition. Desktop has no touch jump button; on phones (<= ~850 wide landscape) it clears. Wider phones (e.g. 932 wide) put the edge at 0.981*932-196 = 718 = 0.770: slight fraction overlap (~0.02), device check by Jack.
+- TicketStack: button vertical position unchanged, so overlap analysis is as in Part B (desktop ~22 px clear; 844 x 390 touching at best ~0-5 px; horizontal ranges overlap). Not verifiable without live tickets.
+- Open card (844 run): x 293-551, bottom 352 vs button top ~359: ~7 px clear vertically; card x 0.347-0.653, clear of both thumb zones.
+Cleanup: _LensPreview destroyed; StarterGui children 1, ReplicatedStorage 7. Nothing saved.
