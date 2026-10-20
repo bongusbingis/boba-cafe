@@ -15,6 +15,7 @@ local OrderTicket = require(script.OrderTicket)
 local OrderQueue = require(script.OrderQueue)
 local ShiftCard = require(script.ShiftCard)
 local CafeRating = require(script.CafeRating)
+local QuestCard = require(script.QuestCard)
 ---> private
 local c = React.createElement
 
@@ -22,6 +23,43 @@ return function(props: {
 	CurrentPage: ModuleScript,
 	SetCurrentPage: (pageComponent: ModuleScript | nil, ...any) -> (),
 })
+	-- Quests is a closed-by-default pop-up card, not a page (DEC-048).
+	local questsOpen, setQuestsOpen = React.useState(false)
+	local questsCloseRef = React.useRef(nil)
+	local questsOpenRef = React.useRef(false)
+	questsOpenRef.current = questsOpen
+
+	local closeQuests = React.useCallback(function()
+		setQuestsOpen(false)
+	end, {})
+
+	local toggleQuests = React.useCallback(function()
+		if questsOpenRef.current then
+			if questsCloseRef.current then
+				questsCloseRef.current()
+			else
+				setQuestsOpen(false)
+			end
+			return
+		end
+		-- App toggles: passing the open page closes it.
+		if props.CurrentPage ~= nil then
+			props.SetCurrentPage(props.CurrentPage)
+		end
+		setQuestsOpen(true)
+	end, { props.CurrentPage, props.SetCurrentPage })
+
+	-- Shop / Inventory / Menu and the card are never stacked.
+	React.useEffect(function()
+		if props.CurrentPage ~= nil and questsOpenRef.current then
+			if questsCloseRef.current then
+				questsCloseRef.current()
+			else
+				setQuestsOpen(false)
+			end
+		end
+	end, { props.CurrentPage })
+
 	return c(Pane, {
 		Native = {
 			Size = UDim2.fromScale(1, 1),
@@ -42,6 +80,8 @@ return function(props: {
 		BottomRight = c(BottomRight, {
 			CurrentPage = props.CurrentPage,
 			SetCurrentPage = props.SetCurrentPage,
+			QuestsOpen = questsOpen,
+			OnToggleQuests = toggleQuests,
 		}),
 
 		TicketStack = c("Frame", {
@@ -64,5 +104,8 @@ return function(props: {
 		OrderQueue = c(OrderQueue, {}),
 		ShiftCard = c(ShiftCard, {}),
 		CafeRating = c(CafeRating, {}),
+
+		-- Last sibling, ZIndex 20 on its single outer Frame (above TicketStack 10).
+		QuestPopup = if questsOpen then c(QuestCard, { OnClose = closeQuests, CloseRef = questsCloseRef }) else nil,
 	})
 end

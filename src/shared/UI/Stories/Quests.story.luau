@@ -8,7 +8,7 @@ local React = require(Packages.React)
 local ReactRoblox = require(Packages.ReactRoblox)
 
 ---> components
-local Quests = require(Shared.UI.Pages.Quests)
+local QuestCard = require(Shared.UI.Components.Core.Hud.QuestCard)
 
 ---> private
 local c = React.createElement
@@ -55,9 +55,9 @@ return function(target)
 		Position = UDim2.fromScale(0.5, 0.5),
 		AnchorPoint = Vector2.new(0.5, 0.5),
 	}, {
-		Quests = c(Quests, {
+		QuestCard = c(QuestCard, {
 			Quests = QUESTS,
-			ClosePage = function() end,
+			OnClose = function() end,
 		}),
 	}))
 

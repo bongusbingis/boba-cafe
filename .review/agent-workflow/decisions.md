@@ -2,6 +2,18 @@
 
 Newest first. Each entry is `## <GOAL> / DEC-###: <title>` with Date, Source, and Decision. Prime is the only writer. Numbering continues; never reuse a number.
 
+## REVIVAL-001 / DEC-048: Quests button slot: shifted BottomRight (Q24)
+
+- **Date:** 2026-10-19.
+- **Source:** Jack in session: "Q24: A".
+- **Decision:** the Quests button is a text-only green NormalButton in the existing `BottomRight` mount, shifted about 130 px left of the right edge to clear the mobile jump button, just under the TicketStack. Exact fit under the TicketStack is confirmed by Lens captures before Jack approves.
+
+## REVIVAL-001 / DEC-047: Quests pop-up card; Quests button moves to bottom right (Q23)
+
+- **Date:** 2026-10-19.
+- **Source:** Jack in session: "I actually don't really like the quests button at the bottom left, the bottom left hud becomes too tall; move the quests button to bottom right, then make the behavior as you described in option A".
+- **Decision:** the original DEC-038 QuestCard design (header, rows, Claim / Reroll 20 BB / Claimed) returns as a centred pop-up, closed by default, with finger-sized rows. It closes by its X or by tapping Quests again, and stays clear of the mobile thumbstick and jump button. The Quests button moves from the bottom-left stack to the bottom right. The interim Pages/Quests menu is replaced. Supersedes the placement part of DEC-039/DEC-041 (bottom-left button). Exact bottom-right slot and its fit with existing right-side HUD is for the Architect to propose; if nothing fits STYLE.md it is a PENDING JACK question.
+
 ## REVIVAL-001 / DEC-046: Interim: hide the register prompt for clocked-in players (Q22)
 
 - **Date:** 2026-10-19.

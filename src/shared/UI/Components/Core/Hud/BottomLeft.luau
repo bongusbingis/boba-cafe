@@ -381,17 +381,6 @@ return function(props: {
 					LayoutOrder = 3,
 				}),
 
-				Quests = c(NormalButton, {
-					Icon = "",
-					Size = BUTTON_SIZE,
-					Color = Styles.GREEN_MID,
-					Text = "Quests",
-					OnClick = function()
-						props.SetCurrentPage(UI.Pages.Quests)
-					end,
-					LayoutOrder = 4,
-				}),
-
 				Points = c(NormalButton, {
 					PlusButton = true,
 					Icon = "rbxassetid://13391365805",
@@ -401,7 +390,7 @@ return function(props: {
 					OnClick = function()
 						props.SetCurrentPage(UI.Pages.Shop, "Currency")
 					end,
-					LayoutOrder = 5,
+					LayoutOrder = 4,
 				}),
 
 				Bucks = c(NormalButton, {
@@ -413,7 +402,7 @@ return function(props: {
 					OnClick = function()
 						props.SetCurrentPage(UI.Pages.Shop, "Currency")
 					end,
-					LayoutOrder = 6,
+					LayoutOrder = 5,
 				}),
 			}),
 		}),
