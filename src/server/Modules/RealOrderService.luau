@@ -242,9 +242,12 @@ function RealOrderService:_onOrderPickedUp(
 			self._stats:IncrementStat(customer, "RegularOrders", 1)
 		end)
 		local ok, quests = pcall(Knit.GetService, "QuestService")
-		if ok and quests and quests.Progress then
-			pcall(function()
-				quests:Progress(customer, "RealOrder")
+		if ok and quests and quests.AdvanceQuest then
+			-- AdvanceQuest can yield (data and pass lookups); spawn it so the payout below never waits on it.
+			task.spawn(function()
+				pcall(function()
+					quests:AdvanceQuest(customer, "RegularOrders", 1)
+				end)
 			end)
 		end
 	end

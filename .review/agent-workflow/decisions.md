@@ -2,6 +2,24 @@
 
 Newest first. Each entry is `## <GOAL> / DEC-###: <title>` with Date, Source, and Decision. Prime is the only writer. Numbering continues; never reuse a number.
 
+## REVIVAL-001 / DEC-051: Real-order customers advance their RegularOrders quest (Q27)
+
+- **Date:** 2026-10-20.
+- **Source:** Jack in session: "your recs" (Q27 A, RegularOrders).
+- **Decision:** `RealOrderService` calls `AdvanceQuest(customer, "RegularOrders", 1)` instead of the dead `quests:Progress(customer, "RealOrder")` (no such method or quest type; silent no-op). Same position, no new yields. Self-serve still earns nothing. Money path: Sentry review before commit.
+
+## REVIVAL-001 / DEC-052: Ticket size/placement and Daily-in-Menu answers (packet Q27-Q31)
+
+- **Date:** 2026-10-20.
+- **Source:** Jack in session: "OK on ticket/daily menu recs".
+- **Decision:** ticket scale 1.6x; one right-hand column with tickets on top and ShiftCard below (fallback: tickets in a column left of ShiftCard if Lens measures a jump-zone clash); Quests button unchanged; Daily Rewards is Menu tab 2 with Food Menu still the default; the standalone Daily dialog stays only for the join auto-open; no claimable indicator. Implements DEC-050. Note: this packet's Q27-Q31 numbering is separate from the earlier quest-bug Q27 (DEC-051).
+
+## REVIVAL-001 / DEC-050: Order ticket larger, upper right; Daily moves into the Menu UI
+
+- **Date:** 2026-10-20.
+- **Source:** Jack in session: "make the order ticket much larger and put it on the right upper side of the screen; also remove the 'Daily' button from the bottomleft hud and move it to a sub-menu within the 'Menu' UI."
+- **Decision:** (1) the order ticket (TicketStack) is enlarged a lot and moved to the upper right of the screen. (2) The Daily button leaves the bottom-left stack and Daily Rewards becomes a sub-menu (tab) inside the existing Menu UI. Scope widening approved by Jack; exact size, placement relative to ShiftCard, and the Daily tab/join auto-open behaviour are proposed by the Architect as packet questions with a recommended option. Touches DEC-039/DEC-045 placement of Daily only; Daily content (DEC-045 A) and amounts unchanged. May change the Quests button clearance work in DEC-048/049 (ticket stack leaves the bottom right).
+
 ## REVIVAL-001 / DEC-049: Quests button shifted further left to clear the jump zone (Q26)
 
 - **Date:** 2026-10-20.
