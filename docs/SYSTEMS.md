@@ -367,3 +367,142 @@ ticket = {
 | `UniformService` | Barista uniform on clock-in (see Customers). | `SharedStorage.KitchenStorage.Assets.S_DefaultUniform` / `P_DefaultUniform` | none |
 | `AnalyticsEvents` (M1.MEASURE) | Thin wrapper over AnalyticsService: first-session funnel steps, BobaBucks economy events, custom events. Warns once, never errors or yields the caller. | Methods `Funnel`, `Economy`, `Custom` | none |
 | `AreaController` (client, M2-AREAS) | Break-area gates: below Level 3 a clone of each gate is placed in `workspace.AreaLimitsLocal`; at Level 3 that folder is destroyed. Re-runs when the `Level` attribute changes. | Waits 10 s for `ReplicatedStorage.AreaLimits.BreakGates` (the parked `Gate_Template` is never cloned); desert walls are authored at `workspace.Assets.AreaLimits.DesertWalls` and are not referenced by code. No server check | `OPEN_LEVEL` = 3 in `client/Modules/AreaController.luau` (Q20) |
+
+### M3/M4 Systems (retention, perks, events)
+**Purpose:** The M3 perk and Team Combo layer and the M4 retention loops, documented in the sections below. Reward and price values are Jack-approved economy data (DEC-036, DEC-037); do not retune them without Jack. Studio checks are UNVERIFIED unless a task's evidence says otherwise.
+
+### Cafe Rating & Boba Party
+**Purpose:** Server-wide Cafe Rating (0 to 100), Rush Hour, and the Boba Party (a purchasable 10-minute server-wide Rush Hour).
+**Owner modules:**
+- `server/Modules/CafeRatingService.luau`, `shared/Configuration/RatingConfig.luau`
+- `server/Scripts/ProcessReceipt.server.luau`, `shared/UI/Components/Core/Hud/CafeRating.luau`
+- `server/Tests/CafeRating.spec.luau`
+**Key invariants:**
+- The server publishes the workspace attributes `CafeRating`, `RushHour` and `BobaParty`; `CustomerService:IsRushHour()` reads `RushHour`. `Apply` is `clamp(rating + delta / max(1, clocked-in baristas), 0, 100)`. The meter is frozen (`_change` returns early) while any Rush is active.
+- A natural Rush starts when the rating reaches 100, unless a Boba Party is active, the party cooldown is running, or `MIN_GAP_SECONDS` have not passed since the last Rush. It ends after `RUSH_SECONDS` (120) and resets the rating to `AFTER_RUSH`; its end timer does nothing while a party is active.
+- `StartOrExtendBobaParty(buyer)` starts a party (`BOBA_PARTY_SECONDS` 600; sets `RushHour` and `BobaParty`) or, when one is active, adds `BOBA_PARTY_EXTENSION_SECONDS` (600). On end it sets `BobaPartyCooldownEndsAt` (server time, `BOBA_PARTY_COOLDOWN` 600) so the purchase prompt can hide itself. A receipt that arrives during the cooldown is still granted (Jack, 2026-10-19). Every player is notified through `DialogService`.
+- The purchase is wired in `ProductActionMap` only when `BOBA_PARTY_PRODUCT_ID` is set. It is `nil` in code (Creator Hub product pending Jack, DEC-029 E18), so the party cannot be bought yet.
+**Depends on:** ShiftService, CustomerService (`CustomerResolved`), SpillService, ProgressionService, DialogService.
+**Consumers:** CustomerService (pay x2 and pacing), HUD meter, ProcessReceipt.
+
+### Group Benefit (Ant Pet)
+**Purpose:** One free "Ant Pet" for members of group 3174578, claimed from the Shop "Group Benefit" tab.
+**Owner modules:** `server/Modules/GroupBenefitService.luau`, `shared/UI/Pages/Shop/GroupBenefit.luau`
+**Key invariants:**
+- `GetClaimStatusAsync` returns `Retry`, `Claimed` or `Available`. `ClaimAntPetAsync` returns `Retry`, `Claimed` or `NotMember`. Membership is checked on the server with `IsInGroupAsync`. One claim per player at a time (`claimsInProgress`, cleared in `PlayerRemoving`).
+- The claim is a three-step durable sequence using `DataService:SaveAsync` predicates: save a `GroupPetPending:<guid>` marker in `Inventory.FreeItemsRedeemed`; insert the pet tagged with that claim id (`GroupPetClaimId`) and save; replace the pending marker with `GroupPet` and save. A failed final save rolls back only its own change, so a retry resumes from the pending marker and never grants a second pet.
+- Each write composes `FreeItemsRedeemed` against the live list immediately before a synchronous write, because other services (for example `StarterCapsule`) write the same list across yields.
+**Depends on:** DataService, Inventory, HttpService.
+**Consumers:** Shop UI.
+
+### BobaBucks Refund (PendingBobaBucksRefund)
+**Purpose:** Durable compensation when a paid capsule purchase fails after BobaBucks were deducted (DEC-031).
+**Owner modules:** `server/Modules/CapsuleService.luau` (`refundBobaBucks`, `retryPendingBobaBucksRefund`, `settlePendingBobaBucksRefund`), `shared/Configuration/ProfileTemplate.luau` (`PendingBobaBucksRefund`)
+**Key invariants:**
+- The owed amount is recorded in `PendingBobaBucksRefund` first. Settling saves that obligation, then in one `SetValues` adds it to `Currency.BobaBucks`, subtracts it from `Statistics.BobaBucksSpent` (floored at 0) and zeroes the field, then confirms that save. A failed step returns false and leaves the obligation recorded.
+- Paid purchases call `retryPendingBobaBucksRefund` first inside the per-player transaction and fail with `RefundPending` until it settles; `PlayerAdded` retries it on join.
+- It writes the balance directly, not through `CurrencyService:Modify`, so it adds no leaderboard or analytics event.
+**Depends on:** DataService.
+**Consumers:** CapsuleService purchase paths.
+
+### Daily Rewards
+**Purpose:** A 7-day login streak reward claimed from the Daily button.
+**Owner modules:**
+- `server/Modules/DailyRewardService.luau`, `shared/Configuration/DailyRewardConfig.luau`
+- `client/Modules/DailyRewardController.luau`, `shared/UI/Components/Dialogs/DailyRewardsDialog.luau`
+- `server/Tests/DailyRewardService.spec.luau`
+**Key invariants:**
+- Rewards are `DailyRewardConfig.REWARDS` (DEC-036): 30, 45, 60, 60 + Regular Pet Capsule, 90, 120, 180 + Rare Pet Capsule. Claim cooldown 20 h; a gap over 48 h restarts at day 1. The VIP gamepass (12385781) doubles the BobaBucks, not the capsule.
+- Server-authoritative. `Client.ClaimReward` has a 2 s per-player rate limit and `ClaimReward` a per-player in-progress lock. State is `DailyRewards.Streak` and `LastClaimTime` in the profile.
+- On a capsule day the capsule is granted first. If there is no space (`HasCapsuleSpace`) or the grant fails, nothing changes and the streak is not consumed. BobaBucks are paid with reason `DailyReward`.
+- UI (DEC-041, approved in DEC-045): a one-tab `OpenableMenu` (seven `ShopItem` rows, a `PromptButton` Claim, red X to close) with no modal backdrop, opened by the Daily button through the dialog host.
+**Depends on:** DataService, CapsuleService, CurrencyService, GamepassUtil.
+**Consumers:** HUD Daily button.
+
+### Quests
+**Purpose:** Daily quests with claim and reroll, shown in a pop-up card.
+**Owner modules:**
+- `server/Modules/QuestService.luau`, `shared/Configuration/QuestConfig.luau`
+- `shared/UI/Components/Core/Hud/QuestCard.luau`, `Hud/BottomRight.luau`, `Hud/init.luau`
+- `server/Tests/QuestService.spec.luau`
+**Key invariants:**
+- Profile `Quests` holds `AssignedDay`, `ActiveQuests` and `FreeRerollsRemaining`. `_ensureDailyQuests` regenerates the set when the day changes: 3 slots (`BASE_SLOTS`), +1 for the More Quests or Star Employee pass, and 1 free reroll for Star Employee. Types are `BobaOrdered`, `CustomersServed`, `SpillsCleaned`, `RegularOrders`, `ShiftsCompleted`; rewards by rolled target are in `QuestConfig` (DEC-036).
+- `AdvanceQuest(player, type, amount)` (alias `Progress`) caps progress at the target and sets `Completed`. Claim needs `Completed` and not `Claimed`; it sets `Claimed` before paying BobaBucks (reason `QuestReward`) and XP. Reroll is refused for a completed or claimed quest and costs the free reroll or 20 BB (`REROLL_COST_BOBABUCKS`, DEC-037) through `TrySpendAsync`. It re-checks the quest after that yield, and a charged reroll that lost the race is refunded with reason `QuestRerollRefund`. One claim or reroll per player at a time (`questLocks`); indexes are validated.
+- UI (DEC-047, DEC-048, DEC-049): the QuestCard is a centred pop-up, closed by default, mounted only while open, closed by its X or by tapping Quests again. The Quests button is a text-only green `NormalButton` in the `BottomRight` mount, shifted left to clear the mobile jump zone (DEC-049: right edge at or left of 0.75 width in the 844 x 390 frame). There is no always-on HUD quest card and no Quests menu page (DEC-045 B). Jack still confirms the placement in the device emulator.
+**Depends on:** DataService, CurrencyService, ProgressionService, GamepassUtil.
+**Consumers:** CustomerService, RealOrderService, the Quests button.
+
+### Treasure Hunt
+**Purpose:** Shared hidden chests that pay BobaBucks and sometimes a capsule.
+**Owner modules:** `server/Modules/TreasureHuntService.luau`, `shared/Configuration/TreasureHuntConfig.luau`, `server/Tests/TreasureHuntService.spec.luau`
+**Key invariants:**
+- Nodes come from `workspace.OldScriptables.ChestNodesFolder`, else `workspace.Assets.Chests` (bounded waits). If neither exists it warns and spawning is disabled. Chests are code-built Parts tagged `BuiltBy`. Up to `MAX_ACTIVE_CHESTS` (5) sit on unoccupied nodes; a claimed chest respawns after 90 s.
+- `ClaimChest` checks distance (prompt range + 5 studs). After the data yield it re-checks the claimed flag and the per-player cooldown (`PLAYER_COOLDOWN_SECONDS` 15 min, `LastTreasureChestTime`), then writes the timestamp and the claimed flag back to back, so two triggers cannot both pass. Only the cooldown toast is throttled.
+- Reward: 20 to 40 BB (reason `TreasureChest`) and a 10% chance of a Regular Pet or Nametag capsule; the BB are kept if the capsule cannot be given. It awards the `TreasureChest` badge and counts `TreasureChestsFound`.
+- The `TreasureFrenzy` workspace attribute raises the cap to 8 and the respawn to 15 s; it never shortens the per-player cooldown (DEC-035 Q2).
+**Depends on:** DataService, CurrencyService, CapsuleService, BadgeService, StatisticsService, DialogService.
+**Consumers:** EventService (Treasure Frenzy).
+
+### Leaderboards
+**Purpose:** Five monthly OrderedDataStore boards, in-world SurfaceGuis and top-player statues.
+**Owner modules:** `server/Modules/LeaderboardService.luau`, `shared/Configuration/LeaderboardConfig.luau`, `server/Modules/CurrencyService.luau` (`LEADERBOARD_EXCLUDED_REASONS`), `server/Tests/LeaderboardService.spec.luau`
+**Key invariants:**
+- Keys are `YYYY_MM_<board>` (`GetMonthKey`), so boards reset monthly. `MostTips` and `TopDonators` are `Hidden`: `IncrementStat` ignores them, they are never queried, their SurfaceGui is disabled, and they feed no statue (DEC-035 Q4, DEC-037 Q13). Statue 1 shows Most Orders Served and statue 2 shows Most Boba Bucks. The in-world boards and statues are authored in the place at `workspace.OldScriptables.LeaderboardsFolder` (`Monthly`, `Statues`); if the folder is missing the board refresh is disabled but batching still runs.
+- `IncrementStat` only adds to an in-memory batch (positive numeric deltas, real users). One `UpdateAsync` per (user, board) is written every `REFRESH_INTERVAL_SECONDS` (120), on `PlayerRemoving` (that user only) and in `BindToClose` (waits up to 25 s for in-flight writes). `MostActive` adds 1 per player per minute.
+- A failed write re-queues its delta into the pending batch (`_settleFlush`) and retries on the next flush, up to `FLUSH_MAX_ATTEMPTS` (3) total attempts. After that it is dropped with a warn, and it is dropped at once once shutdown has begun (`_closing`). A delta is in exactly one place at a time, so a re-queue does not double-count. Known residual: if `UpdateAsync` errors after Roblox already committed the write, a retry can add the delta twice (accepted, rare).
+- `CurrencyService:Modify` adds positive BobaBucks to `MostBobaBucks` unless the reason is in `LEADERBOARD_EXCLUDED_REASONS`: `QuestRerollRefund`, `PromoCode`, `ItemSell` (DEC-035 Q4, DEC-038 Q14). The call is `pcall`-guarded, so a leaderboard failure never blocks a payment. A new non-play BB credit must add its reason to that table.
+- A "Most Tips" sign on a statue is a Studio follow-up for Jack (DEC-037).
+**Depends on:** DataStoreService, WorldPath.
+**Consumers:** CurrencyService, CustomerService, RealOrderService.
+
+### Events
+**Purpose:** Server-wide timed events, hosted by staff or started on a schedule.
+**Owner modules:** `server/Modules/EventService.luau`, `shared/Configuration/EventConfig.luau`, `server/Tests/EventService.spec.luau`
+**Key invariants:**
+- Events (`RushHour`, `KarenRush`, `TreasureFrenzy`) are workspace boolean attributes set true on start and false on end. They last `EVENT_DURATION_SECONDS` (600) and only one runs at a time (`_startingEvent` guards the rank-check yield). Readers: `KarenRush` in `CustomerService/Rules.luau`, `TreasureFrenzy` in `TreasureHuntService`, `RushHour` through `CustomerService:IsRushHour()`.
+- A host needs `IsAdmin` or rank `MIN_STAFF_RANK` (10) and is subject to `HOST_COOLDOWN_SECONDS` (1800) after any event ends. The client call has a 5 s per-player debounce and validates the name. A random event starts every `AUTO_EVENT_INTERVAL_SECONDS` (3600) when none is active. Start and end are announced through `DialogService`.
+**Depends on:** RankUtil, DialogService.
+**Consumers:** CustomerService, TreasureHuntService.
+
+### Veteran
+**Purpose:** Marks players who owned a pre-revival badge.
+**Owner modules:** `server/Modules/BadgeService.luau` (`LEGACY_BADGES`, `CheckVeteranStatusAsync`), `client/Scripts/PlayerOverheads.client.luau`, `server/Tests/BadgeService.spec.luau`
+**Key invariants:**
+- On join (the check runs before the Studio early-return) the server checks `LEGACY_BADGES`: exactly FirstQuest, Celebrity, SakuraIsland, ShinyPet and HalloweenEvent (DEC-035 Q3, DEC-037 Q12). FirstStaff is not one; staff-rank players still get it on join. Owning any of them sets the `IsVeteran` player attribute; a failed lookup is ignored.
+- The overhead shows "Veteran" or "Veteran - <LevelTitle>" from the attribute; presentation only.
+**Depends on:** Roblox BadgeService.
+**Consumers:** Overheads.
+
+### Perks & Pass Catalog
+**Purpose:** Maps gamepass ids to perks and resolves boosts on the server.
+**Owner modules:** `server/Modules/PerkService.luau`, `shared/Configuration/PassCatalog.luau`, `shared/Configuration/Perks.luau`, `server/Tests/PerkService.spec.luau`
+**Key invariants:**
+- `PassCatalog` maps pass id to `{ Name, Perks, Listed, Legacy }`. Owners get the perks whether the pass is `Listed` or not; `Listed` only controls shop display. Catalog-only ids are registered on `GamepassUtil.Gamepasses` at require time. Deferred (DEC-028): x2/x4 Multiplier, Unlock All Pets, Unlimited Stock.
+- Boost families in `Perks.luau` are Tip and Xp (25% or 50%). Within a family the highest value wins and values never add (DEC-036 B3). `GetTipBonus` is the higher of the pass bonus and the best equipped pet bonus (`PetTipBonus`). The XP boost applies to all XP earned (`ProgressionService`, DEC-036 B2).
+- `TakeTipExtra(player, basePay, bonus)` adds `basePay * bonus` to a per-player remainder, pays `floor` of it and keeps the fraction (`_tipRemainder`). It is synchronous and must be called right after `GetTipBonus`, with nothing yielding between. Base pay is untouched.
+- Double Storage (`InventoryX2`, `StorageMultiplier` 2; DEC-040..042) doubles Storage limits only; Equipped limits are unchanged (Q-D1). `PlayerAdded` prefetches the passes, then `RefreshStorageMultiplier` caches the multiplier per player (skipped if the player already left). `GetStorageMultiplier` is synchronous, never yields, and returns 1 until resolved, so an unresolved cache can only block an addition. `InventoryServer` inserts and `CapsuleService` `storageLimit` read it inside count-then-insert spans. A player who loses the pass while over the normal limit loses nothing; additions stay blocked until they are under it (Q-D2). The cache is cleared in `PlayerRemoving`.
+**Depends on:** GamepassUtil, PetService, DataService.
+**Consumers:** CustomerService, RealOrderService, ProgressionService, InventoryServer, CapsuleService.
+
+### Team Combo & the Serve Path
+**Purpose:** A server-wide pay bonus after a chain of successful serves, and the rule that keeps a serve payout atomic.
+**Owner modules:**
+- `server/Modules/CustomerService/init.luau` (`RecordTeamServe`, `ApplyTeamCombo`, `_onServeTriggered`), `CustomerService/Rules.luau` (`NextTeamChain`, `TeamComboPay`)
+- `server/Modules/RealOrderService.luau`, `shared/Configuration/TeamComboConfig.luau`
+- `server/Tests/TeamCombo.spec.luau`
+**Key invariants:**
+- Any `CHAIN_TARGET` (10) consecutive successful serves server-wide, NPC and real-player, open a window of `DURATION_SECONDS` (60) paying `PAY_BONUS` (+10%). Only a customer walkout (assigned or not) resets the chain. A chain completed inside an open window refreshes it to a full 60 s. It stacks multiplicatively with Rush Hour (x2 then x1.10), and the tip boost is applied on the result. It is announced through the existing Notify path, with no HUD element (DEC-036 C1-C5).
+- Throttled real serves (DEC-042 Q-P3): when the repeat-pair rule gives multiplier 1, `RealOrderService.CountsForTeamChain` is false, so the serve neither advances nor resets the chain. It still gets the combo pay bonus on its reduced pay.
+- Serve-path invariant: nothing may yield between the serve guards and the payout. In `CustomerService:_onServeTriggered` the tip bonus is resolved first (it may yield on a cold pass cache); after that nothing yields from the guards (clocked in, distance, still waiting, assigned or rescue, matching tool) through the tool destroy, the payout and `RecordTeamServe`. In `RealOrderService._onOrderPickedUp` the tip bonus is resolved first and nothing after it (history record, `ApplyTeamCombo`, `TakeTipExtra`, payout) may yield. Any new call on either path must be synchronous or move before that point, or a tool can be consumed twice or a payout counted twice.
+- `ApplyTeamCombo` and `IsTeamComboActive` are plain clock reads, safe on the serve path.
+**Depends on:** PerkService, CurrencyService, DialogService.
+**Consumers:** CustomerService, RealOrderService.
+
+### Register Prompt (Interim)
+**Purpose:** Keeps the counter "Use Ordering System" prompt from fighting the NPC Serve prompt (DEC-046).
+**Owner modules:** `shared/UI/Components/Core/Hud/TopBar.luau`
+**Key invariants:**
+- The prompt is created per register but `Enabled` only while the local player's `ClockedIn` attribute is not `true`, and it follows `GetAttributeChangedSignal("ClockedIn")`. Clocked-in baristas see only Serve and Rescue; customers still order at the registers. This is presentation only; `OrderService` still validates every order.
+- It is removed together with the Boba Phone and not before (DEC-040, DEC-044). The phone is deferred (board task BOBA-PHONE; pick-up brief `tasks/REVIVAL-001/BOBA-PHONE/brief.md`), so until then real players order at the registers.
+**Depends on:** ShiftService (`ClockedIn` attribute).
+**Consumers:** Ordering page.

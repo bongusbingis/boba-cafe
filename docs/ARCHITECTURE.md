@@ -16,7 +16,7 @@ Authored content may be missing or renamed (the place is edited separately from 
 
 ## 3. Source Layout
 * **`src/shared/`** — Code used by both sides, mapped to `ReplicatedStorage.Shared`:
-  * `Configuration/` — Tunable data: profile template, kitchen, spills, capsules, gamepasses, teams, item definitions (`InventoryItemDefinitions/`), customers (`CustomerConfig`, `CustomerDialogue`), shifts (`ShiftConfig`), progression (`Progression`), cafe rating (`RatingConfig`), real orders (`RealOrderConfig`).
+  * `Configuration/` — Tunable data: profile template, kitchen, spills, capsules, gamepasses, teams, item definitions (`InventoryItemDefinitions/`), customers (`CustomerConfig`, `CustomerDialogue`), shifts (`ShiftConfig`), progression (`Progression`), cafe rating (`RatingConfig`), real orders (`RealOrderConfig`), perks and passes (`PassCatalog`, `Perks`), Team Combo (`TeamComboConfig`), daily rewards (`DailyRewardConfig`), quests (`QuestConfig`), treasure chests (`TreasureHuntConfig`), leaderboards (`LeaderboardConfig`), events (`EventConfig`).
   * `Inventory/` — Inventory model (`InventoryServer`, `InventoryClient`, `InventoryItem`, `ItemActions`, `CapsuleUtil`). `init.luau` returns the server or client implementation by `RunService:IsServer()`.
   * `Kitchen/` — Recipe data, recipe constructors, kitchen types.
   * `Ordering/` — Menu definitions (`Menu`, including the launch allowlist) and `OrderSpec` (grading a tool against an order).
@@ -25,13 +25,13 @@ Authored content may be missing or renamed (the place is edited separately from 
   * `Utility/` — `RankUtil`, `GamepassUtil`, `WorldPath`, `Animator`, `ItemFader`.
 * **`src/server/`** — `ServerScriptService.Server`:
   * `init.server.luau` — Starts Knit, dispatches `PlayerAdded` / `PlayerRemoving` to services.
-  * `Modules/` — Knit services (each file or folder with `init.luau`), including `CustomerService` (with `Npc` and `Rules`), `UniformService`, `TrashService`, `ShiftService`, `ProgressionService`, `RealOrderService`, `CafeRatingService`, and `AnalyticsEvents`.
+  * `Modules/` — Knit services (each file or folder with `init.luau`), including `CustomerService` (with `Npc` and `Rules`), `UniformService`, `TrashService`, `ShiftService`, `ProgressionService`, `RealOrderService`, `CafeRatingService`, `AnalyticsEvents`, `PerkService`, `GroupBenefitService`, `DailyRewardService`, `QuestService`, `TreasureHuntService`, `LeaderboardService`, and `EventService`.
   * `Scripts/` — Standalone server scripts (`ProcessReceipt`, `PromoCodes`, `Teams`).
   * `Configuration/` — Server-only data (`PromoCodes`).
   * `Tests/` — TestEZ specs and the Studio-only runner.
 * **`src/client/`** — `StarterPlayerScripts.Client`:
   * `init.client.luau` — Starts Knit, dispatches `PlayerAdded` / `PlayerRemoving` to controllers.
-  * `Modules/` — Knit controllers (`App/AppEntry`, `DataController`, `OrderController`, `KitchenController`, `PetController`, `SpillController`, `AreaController`, `AppDialogs`, `Pets/`) and `KitchenGuidance` (pure logic, not a controller).
+  * `Modules/` — Knit controllers (`App/AppEntry`, `DataController`, `OrderController`, `KitchenController`, `PetController`, `SpillController`, `AreaController`, `DailyRewardController`, `AppDialogs`, `Pets/`) and `KitchenGuidance` (pure logic, not a controller).
   * `Scripts/` — Standalone client scripts (`PlayerOverheads`).
 * **`docs/`** — Durable documentation. **`.review/agent-workflow/`** — Agent board, decisions, and task evidence.
 
@@ -65,6 +65,11 @@ Knit is the transport for services and controllers.
 * **Orders:** The Ordering and MobileOrder pages send `OrderService.Client:CreateOrder(userId, { { Category, Item, CustomInfo }, ... })` for the calling player only; the server rebuilds each item from `Shared.Ordering.Menu` and rejects unknown or invalid choices. Staff screens and pick-up prompts drive claiming (clocked-in players) and collection. The service owns the order list, barista queue, status transitions, and the pick-up models, and pushes updates through its `Client` signals.
 * **Purchases:** `MarketplaceService.ProcessReceipt` and gamepass checks run on the server; UI only prompts purchases and reflects results. Receipts are durable: the `PurchaseId` is recorded in the profile (`ProcessedReceipts`) and saved with `DataService:SaveAsync` before `PurchaseGranted`; anything unmapped, unapplied, or unconfirmed answers `NotProcessedYet`.
 * **Customers:** `CustomerService` spawns NPCs from the authored `workspace.Assets.NPC` contract into `workspace.Customers` and assigns each waiting customer to a clocked-in barista. Assignment is pushed to that barista through `CustomerService.Client.TicketChanged`. The Serve prompt on the NPC runs the checks listed in `SYSTEMS.md` before any tool is taken.
+* **Serve path:** Both payout paths (`CustomerService:_onServeTriggered` for NPCs, `RealOrderService` on pick-up) resolve `PerkService:GetTipBonus` first, because it can yield on a cold pass cache. From the serve guards to the payout nothing may yield; a yield there lets a tool be consumed twice or a payout be counted twice. Pay is built as base, Rush Hour (x2), Team Combo (x1.10), then the tip-boost extra, and is paid through `CurrencyService:Modify`.
+* **Perks:** `PerkService` resolves pass ownership through `PassCatalog` and `GamepassUtil`; boosts in one family take the highest value. Double Storage is read through a per-player cached multiplier (`GetStorageMultiplier`, synchronous) inside inventory count-then-insert spans.
+* **Retention loops:** `DailyRewardService`, `QuestService` and `TreasureHuntService` keep their state in the profile and grant through `CurrencyService`, `CapsuleService` and `ProgressionService`; the client only prompts and reflects (the Daily dialog, the Quests pop-up card). `CurrencyService:Modify` feeds `LeaderboardService` (batched, flushed every 120 s, on leave and on close) except for reasons in `LEADERBOARD_EXCLUDED_REASONS`.
+* **Refunds:** A failed paid capsule purchase records `PendingBobaBucksRefund` in the profile first; later paid purchases and join settle it with confirmed saves.
+* **Events and Rush:** `CafeRatingService` (Rush Hour, Boba Party) and `EventService` (`RushHour`, `KarenRush`, `TreasureFrenzy`) communicate through `workspace` attributes that `CustomerService` and `TreasureHuntService` read.
 * **Dialogs:** Server code asks a player a question through `DialogService`; `AppDialogs` (client) renders a component from `Shared.UI.Components.Dialogs` and returns the answer.
 * **UI:** React components read from controllers and data bindings and dispatch Knit calls.
 
