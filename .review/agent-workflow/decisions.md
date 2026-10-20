@@ -2,6 +2,12 @@
 
 Newest first. Each entry is `## <GOAL> / DEC-###: <title>` with Date, Source, and Decision. Prime is the only writer. Numbering continues; never reuse a number.
 
+## REVIVAL-001 / DEC-049: Quests button shifted further left to clear the jump zone (Q26)
+
+- **Date:** 2026-10-20.
+- **Source:** Jack in session: "B" (Q26: increase the shift now rather than emulator check or accept).
+- **Decision:** the `BottomRight` Quests button X offset grows from -130 px to whatever puts its right edge at or left of 0.75 width in the 844 x 390 frame (about -180 to -220 px). Amends DEC-048's offset only. Tickets are unaffected vertically; Jack still confirms in the device emulator.
+
 ## REVIVAL-001 / DEC-048: Quests button slot: shifted BottomRight (Q24)
 
 - **Date:** 2026-10-19.

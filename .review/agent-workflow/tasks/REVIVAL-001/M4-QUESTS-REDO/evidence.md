@@ -39,3 +39,8 @@ Measurements
 - Serve path: no server/serve/payout code touched.
 
 Cleanup: _LensPreview destroyed; StarterGui children 1, ReplicatedStorage children 7 (as before). Nothing saved.
+
+## Q26 follow-up
+Jack chose Q26=B: move the Quests button left of the mobile jump zone. BottomRight.luau JUMP_BUTTON_CLEARANCE 130 -> 196 (mount X offset -130 -> -196 px); comment updated.
+Computed span, 844 x 390 frame: right edge = 0.981*844 - 196 = 632.0 px (0.749 width, <= 0.75 jump zone start at 633); width 0.175*844 = 147.7 px, so left edge = 484.3 px (0.574 width, clear of the 0-0.3 stick zone). Minimum offset is -195; 196 gives ~1 px margin.
+Gate: see run result below.

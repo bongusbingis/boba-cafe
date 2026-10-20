@@ -27,8 +27,8 @@ local NormalButton = require(UI.Components.Buttons.NormalButton)
 
 ---> constants
 local BUTTON_SIZE = UDim2.fromScale(1, 1)
--- Shifts the mount left of Roblox's mobile jump button (DEC-048, Q24 = A).
-local JUMP_BUTTON_CLEARANCE = 130
+-- Shifts the mount left of the mobile jump zone (width 0.75-1.0) (DEC-048, Q26 = B).
+local JUMP_BUTTON_CLEARANCE = 196
 
 ---> private
 local c = React.createElement
