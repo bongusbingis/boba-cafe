@@ -52,7 +52,7 @@ end
 
 ---> Component
 
-return function(props: { ColumnSize: UDim2? })
+return function()
 	local summary, setSummary = React.useState(nil :: any)
 
 	if RunService:IsRunning() then
@@ -105,18 +105,15 @@ return function(props: { ColumnSize: UDim2? })
 	end
 
 	-- Top-right zone: free in STYLE 2.4. Frame and labels do not take input.
-	-- With ColumnSize the Hud right column places it (fixed size, no own anchor).
-	local inColumn = props.ColumnSize ~= nil
 	return c(Pane, {
 		ClassName = "Frame",
-		AspectRatio = if inColumn then nil else 1.2,
+		AspectRatio = 1.2,
 		Native = {
 			Active = false,
-			AnchorPoint = if inColumn then nil else Vector2.new(1, 0),
+			AnchorPoint = Vector2.new(1, 0),
 			BackgroundTransparency = 1,
-			LayoutOrder = if inColumn then 2 else nil,
-			Position = if inColumn then nil else UDim2.fromScale(0.99, 0.14),
-			Size = props.ColumnSize or UDim2.fromScale(0.2, 0.3),
+			Position = UDim2.fromScale(0.99, 0.14),
+			Size = UDim2.fromScale(0.2, 0.3),
 			ZIndex = 10,
 		},
 	}, {

@@ -32,9 +32,9 @@ return function(props: {
 	local px = usePx()
 	local camera = useCamera()
 	local ticketScale = px.scale(TICKET_SCALE)
-	-- ShiftCard keeps its former clamped size (0.2 x 0.3 of the viewport, Min 190x160, Max 300x250).
-	local viewport = camera.ViewportSize
-	local shiftSize = UDim2.fromOffset(math.clamp(viewport.X * 0.2, 190, 300), math.clamp(viewport.Y * 0.3, 160, 250))
+	-- ShiftCard is back at its original anchor (1,0) / (0.99, 0.14), width 0.2 clamped to 190..300.
+	-- The ticket column sits directly left of it (Q28 fallback B, DEC-052).
+	local shiftWidth = math.clamp(camera.ViewportSize.X * 0.2, 190, 300)
 
 	-- Quests is a closed-by-default pop-up card, not a page (DEC-048).
 	local questsOpen, setQuestsOpen = React.useState(false)
@@ -97,12 +97,12 @@ return function(props: {
 			OnToggleQuests = toggleQuests,
 		}),
 
-		-- One right-hand column (Q28 A): tickets on top, ShiftCard directly below.
-		RightColumn = c("Frame", {
+		-- Ticket column, upper right, left of the ShiftCard (Q28 fallback B).
+		TicketColumn = c("Frame", {
 			AnchorPoint = Vector2.new(1, 0),
 			AutomaticSize = Enum.AutomaticSize.Y,
 			BackgroundTransparency = 1,
-			Position = UDim2.fromScale(0.99, 0.14),
+			Position = UDim2.new(0.99, -(shiftWidth + COLUMN_GAP), 0.14, 0),
 			Size = UDim2.fromOffset(math.ceil(TICKET_WIDTH * ticketScale), 0),
 			ZIndex = 10,
 		}, {
@@ -128,8 +128,8 @@ return function(props: {
 				OrderTicket = c(OrderTicket, { stacked = true, slot = 1, layoutOrder = 1 }),
 				OrderTicket2 = c(OrderTicket, { stacked = true, slot = 2, layoutOrder = 2 }),
 			}),
-			ShiftCard = c(ShiftCard, { ColumnSize = shiftSize }),
 		}),
+		ShiftCard = c(ShiftCard, {}),
 		OrderQueue = c(OrderQueue, {}),
 		CafeRating = c(CafeRating, {}),
 
