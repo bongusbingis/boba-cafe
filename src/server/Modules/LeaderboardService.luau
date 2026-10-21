@@ -23,6 +23,7 @@ local WorldPath = require(Shared.Utility.WorldPath)
 ---> constants
 local ACTIVE_MINUTE_SECONDS = 60
 local FLUSH_ON_CLOSE_WAIT_SECONDS = 25
+local BOARDS_WAIT_SECONDS = 10 -- DEC-058 agent-set, Jack to tune: bounded wait for the authored boards folder
 
 ---> service declaration
 local LeaderboardService = Knit.CreateService({
@@ -740,7 +741,16 @@ function LeaderboardService:KnitStart()
 		end)
 	end
 
-	local leaderboardsFolder = workspace:WaitForChild("Assets"):WaitForChild("LeaderboardsFolder")
+	-- Bounded (TAKEOVER-FIX 4): a missing folder disables the in-world boards with one
+	-- warning; stats, flushes and MostActive above keep running.
+	local leaderboardsFolder = WorldPath.waitFor(Workspace, { "Assets", "LeaderboardsFolder" }, BOARDS_WAIT_SECONDS)
+		or WorldPath.find(Workspace, { "OldScriptables", "LeaderboardsFolder" })
+	if leaderboardsFolder == nil then
+		warn(
+			`[LeaderboardService] In-world boards disabled; workspace.Assets.LeaderboardsFolder not found after {BOARDS_WAIT_SECONDS} s.`
+		)
+		return
+	end
 
 	self.Enabled = true
 	self.LeaderboardsFolder = leaderboardsFolder
