@@ -67,7 +67,7 @@ return function(props: {
 			SetCurrentPage = props.SetCurrentPage,
 		}),
 
-		-- The Quests button was removed from the bottom right; how the Quests card opens is a later pass (Jack, 2026-10-20).
+		-- No HUD Quests button (DEC-057); quests open from the Menu's Quests tab, which carries the claim dot.
 
 		-- Ticket column, middle right. Bottom edge is fixed, so it grows upward as tickets are added.
 		TicketColumn = c("Frame", {

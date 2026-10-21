@@ -46,6 +46,8 @@ export type Page = {
 	ButtonColor: Color3?,
 	--- Text color of the side button label (defaults to white)
 	ButtonTextColor: Color3?,
+	--- Shows a claim dot on the side button
+	ShowDot: boolean?,
 }
 
 export type Props = {
@@ -63,6 +65,8 @@ export type Props = {
 	Pages: { Page }?,
 	--- Key of the page shown on first render; defaults to the first page
 	DefaultPage: string?,
+	--- Side button height as a fraction of the panel, defaults to 0.095
+	TabHeight: number?,
 	--- Props forwarded to the SideButtons panel (image, size, layout, etc.)
 	SideButtonsProps: SideButtonsProps?,
 	--- Called when the close button is clicked
@@ -84,7 +88,8 @@ return function(props: Props)
 			sideButtonChildren[key] = c(HudTabButton, {
 				Text = page.Label,
 				LayoutOrder = page.LayoutOrder or i,
-				Size = UDim2.fromScale(0.85, 0.095),
+				Size = UDim2.fromScale(0.85, props.TabHeight or 0.095),
+				ShowDot = page.ShowDot,
 				BackgroundColor = page.ButtonColor or Styles.OFFWHITE,
 				TextColor3 = page.ButtonTextColor or Styles.GREEN_LIGHT,
 				OnClick = function()

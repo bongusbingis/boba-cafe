@@ -26,6 +26,7 @@ local Styles = require(UI.Styles)
 local Pages = UI.Pages
 local Pane = require(UI.Components.Pane)
 local HudTabButton = require(UI.Components.Buttons.HudTabButton)
+local useQuestClaimable = require(UI.Hooks.useQuestClaimable)
 
 ---> constants
 -- workspace["Ordering System"].Computers is authored in the place. It is resolved
@@ -48,6 +49,8 @@ return function(props: {
 	CurrentPage: ModuleScript,
 	SetCurrentPage: (pageComponent: ModuleScript | nil, ...any) -> (),
 })
+	local questClaimable = useQuestClaimable()
+
 	local function setPage(page: ModuleScript)
 		return function()
 			props.SetCurrentPage(page)
@@ -191,6 +194,7 @@ return function(props: {
 				Menu = c(HudTabButton, {
 					LayoutOrder = 1,
 					Text = "Menu",
+					ShowDot = questClaimable,
 					TextColor3 = Styles.OFFWHITE,
 					OnClick = setPage(Pages.Menu),
 				}),

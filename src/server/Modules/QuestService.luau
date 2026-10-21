@@ -254,7 +254,7 @@ function QuestService:AdvanceQuest(player: Player, questType: string, amount: nu
 						dialog:Notify(
 							player,
 							{
-								Text = "Quest complete: " .. QuestConfig.GetQuestTitle(entry) .. "!",
+								Text = "Quest complete: " .. QuestConfig.GetQuestTitle(entry) .. "! Claim it in Quests",
 							} :: any
 						)
 					end

@@ -23,6 +23,8 @@ local Purchases = require(script.Purchases)
 local Settings = require(script.Settings)
 local Statistics = require(script.Statistics)
 local Regulars = require(script.Regulars)
+local Quests = require(script.Quests)
+local useQuestClaimable = require(UI.Hooks.useQuestClaimable)
 local c = React.createElement
 
 local PAGES: { OpenableMenu.Page } = {
@@ -45,28 +47,35 @@ local PAGES: { OpenableMenu.Page } = {
 		Content = c(Daily, {}),
 	},
 	{
+		-- Daily + weekly quests; the only way to open them (DEC-057 removed the HUD button).
+		Key = "Quests",
+		Label = "Quests",
+		LayoutOrder = 4,
+		Content = c(Quests, {}),
+	},
+	{
 		Key = "PromoCodes",
 		Label = "Promo Codes",
-		LayoutOrder = 4,
+		LayoutOrder = 5,
 		Content = c(PromoCodes, {}),
 	},
 	{
 		Key = "Statistics",
 		Label = "Statistics",
-		LayoutOrder = 5,
+		LayoutOrder = 6,
 		Content = c(Statistics, {}),
 	},
 	{
 		-- BIG-B5 Regulars collection.
 		Key = "Regulars",
 		Label = "Regulars",
-		LayoutOrder = 6,
+		LayoutOrder = 7,
 		Content = c(Regulars, {}),
 	},
 	{
 		Key = "Purchases",
 		Label = "Purchases",
-		LayoutOrder = 7,
+		LayoutOrder = 8,
 		Content = c(Purchases, {}),
 	},
 	-- ServerInfo button is made invisible for now to fit the side menu cleanly (DEC-019).
@@ -79,18 +88,28 @@ local PAGES: { OpenableMenu.Page } = {
 	{
 		Key = "Settings",
 		Label = "Settings",
-		LayoutOrder = 8,
+		LayoutOrder = 9,
 		Content = c(Settings, {}),
 	},
 	{
 		Key = "Credits",
 		Label = "Credits",
-		LayoutOrder = 9,
+		LayoutOrder = 10,
 		Content = c(Credits, {}),
 	},
 }
 
 return function(props)
+	local questClaimable = useQuestClaimable()
+	local pages: { OpenableMenu.Page } = {}
+	for _, page in PAGES do
+		local copy = table.clone(page)
+		if page.Key == "Quests" then
+			copy.ShowDot = questClaimable
+		end
+		table.insert(pages, copy)
+	end
+
 	local landingPage = PAGES[1]
 	if props and props.Args and props.Args[1] then
 		for _, page in PAGES do
@@ -105,12 +124,13 @@ return function(props)
 		TitleText = "Menu",
 		TitleColor = Styles.GREEN,
 		DefaultPage = landingPage.Key,
-		Pages = PAGES,
+		Pages = pages,
+		TabHeight = 0.088,
 		SideButtonsProps = {
 			ListLayout = {
 				HorizontalAlignment = Enum.HorizontalAlignment.Center,
 				VerticalAlignment = Enum.VerticalAlignment.Top,
-				Padding = UDim.new(0.008, 0), -- BIG-B5: 0.015 -> 0.008 so nine tabs fit the side panel
+				Padding = UDim.new(0.006, 0), -- ten tabs at 0.088 each fit the side panel
 				SortOrder = Enum.SortOrder.LayoutOrder,
 			},
 		},

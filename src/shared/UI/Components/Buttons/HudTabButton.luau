@@ -28,6 +28,7 @@ return function(props: {
     BackgroundColor: Color3?,
 	LayoutOrder: number?,
 	Selected: boolean?,
+	ShowDot: boolean?,
 	OnClick: (() -> ())?,
 })
     local isHovering, setIsHovering = React.useState(false)
@@ -71,6 +72,21 @@ return function(props: {
 			Color = Styles.GREEN_DEEP,
 			ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
 		}),
+		ClaimDot = if props.ShowDot
+			then c(Pane, {
+				ClassName = "Frame",
+				CornerRadius = Styles.CORNER_FULL,
+				Stroke = { Color = Styles.OFFWHITE, Thickness = 2 },
+				Native = {
+					Name = "ClaimDot",
+					AnchorPoint = Vector2.new(0.5, 0.5),
+					BackgroundColor3 = Styles.GREEN_BADGE,
+					Position = UDim2.fromScale(0.96, 0.08),
+					Size = UDim2.fromOffset(16, 16),
+					ZIndex = 5,
+				},
+			})
+			else nil,
 		TextLabel = c(Pane, {
 			ClassName = "TextLabel",
             Scale = not props.BackgroundColor and styles.scale or nil,

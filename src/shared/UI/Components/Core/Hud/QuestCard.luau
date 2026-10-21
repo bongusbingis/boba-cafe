@@ -8,6 +8,7 @@
     - OnClose: Called after the closing animation; the Hud unmounts the card.
     - CloseRef: Optional ref the card fills with its animated close function.
     - Quests: Optional preset quests (stories / previews).
+    - Embedded: Render only the scrolling list, filling its parent (Menu Quests tab).
 --]]
 
 --!nonstrict
@@ -407,6 +408,7 @@ end
 local function QuestCardBody(props: {
 	Quests: { QuestEntry }?,
 	WeeklyQuests: { QuestEntry }?,
+	Embedded: boolean?,
 	OnCloseRequested: () -> (),
 })
 	local px = usePx()
@@ -722,21 +724,32 @@ local function QuestCardBody(props: {
 			LayoutOrder = 2,
 			Active = true,
 			AutomaticCanvasSize = Enum.AutomaticSize.Y,
-			AutomaticSize = Enum.AutomaticSize.Y,
+			AutomaticSize = if props.Embedded then Enum.AutomaticSize.None else Enum.AutomaticSize.Y,
 			BackgroundTransparency = 1,
 			BorderSizePixel = 0,
 			CanvasSize = UDim2.new(),
 			ScrollBarImageColor3 = Color3.new(),
 			ScrollBarThickness = 5,
 			ScrollingDirection = Enum.ScrollingDirection.Y,
-			Size = UDim2.fromScale(1, 0),
+			Size = if props.Embedded then UDim2.fromScale(1, 1) else UDim2.fromScale(1, 0),
 		}, {
-			SizeLimit = c("UISizeConstraint", { MaxSize = Vector2.new(math.huge, bodyMaxHeight) }),
+			SizeLimit = if props.Embedded
+				then nil
+				else c("UISizeConstraint", { MaxSize = Vector2.new(math.huge, bodyMaxHeight) }),
 			Content = c("Frame", {
 				AutomaticSize = Enum.AutomaticSize.Y,
 				BackgroundTransparency = 1,
 				Size = UDim2.fromScale(1, 0),
 			}, questItems),
+		})
+	end
+
+	if props.Embedded then
+		return c("Frame", {
+			BackgroundTransparency = 1,
+			Size = UDim2.fromScale(1, 1),
+		}, {
+			Body = body,
 		})
 	end
 
@@ -770,6 +783,7 @@ return function(props: {
 	CloseRef: { current: (() -> ())? }?,
 	Quests: { QuestEntry }?,
 	WeeklyQuests: { QuestEntry }?,
+	Embedded: boolean?,
 })
 	local closeFnRef = React.useRef(nil)
 	local onCloseRef = React.useRef(props.OnClose)
@@ -803,6 +817,15 @@ return function(props: {
 			end
 		end
 	end, { props.CloseRef })
+
+	if props.Embedded then
+		return c(QuestCardBody, {
+			Quests = props.Quests,
+			WeeklyQuests = props.WeeklyQuests,
+			Embedded = true,
+			OnCloseRequested = function() end,
+		})
+	end
 
 	local pageContent = React.useMemo(function()
 		return c(QuestCardBody, {
