@@ -157,6 +157,10 @@ local function resolveAssets()
 			end
 		end
 	end
+	-- BIG-B5: a stable order so a regular's look index always names the same description.
+	table.sort(looks, function(a, b)
+		return a.Name < b.Name
+	end)
 	if #looks == 0 then
 		warnAssetsOnce("SharedStorage.NPCs.Characters has no HumanoidDescription; customers use the default body.")
 	end
@@ -190,16 +194,39 @@ local function karenDescription(): HumanoidDescription?
 	return nil
 end
 
+-- BIG-B5 regulars: a fixed look. `Base` indexes the name-sorted pool (wrapping); every
+-- `Description` entry is a HumanoidDescription property set on top. 0 and "" are TODO
+-- placeholders and are skipped. One bad property is skipped, never fatal.
+export type Look = { Base: number, Description: { [string]: any }? }
+
+local function lookDescription(pool: { HumanoidDescription }, look: Look): HumanoidDescription
+	local description = if #pool > 0
+		then pool[((math.floor(look.Base) - 1) % #pool) + 1]:Clone()
+		else Instance.new("HumanoidDescription")
+	for property, value in look.Description or {} do
+		if value == 0 or value == "" then
+			continue
+		end
+		pcall(function()
+			(description :: any)[property] = value
+		end)
+	end
+	return description
+end
+
 -- A random HumanoidDescription from SharedStorage.NPCs (Karen's own for the Karen variant),
--- or an empty one (the default body) when there are none. Returns nil (after one warning)
--- when the rig cannot be built.
-local function buildNpcModel(variant: Rules.Variant?): Model?
+-- or an empty one (the default body) when there are none. `look` (BIG-B5 regulars) builds a
+-- fixed description instead (lookDescription). Returns nil (after one warning) when the rig
+-- cannot be built.
+local function buildNpcModel(variant: Rules.Variant?, look: Look?): Model?
 	resolveAssets()
 	local pool = descriptions or {}
 	local description: HumanoidDescription
 	local karen = if variant == "Karen" then karenDescription() else nil
 	if karen ~= nil then
 		description = karen:Clone()
+	elseif look ~= nil then
+		description = lookDescription(pool, look)
 	elseif #pool > 0 then
 		description = pool[math.random(#pool)]:Clone()
 	else
@@ -409,15 +436,24 @@ local npcSeq = 0
 
 -- Builds an NPC for `order` (a pool order item) and its resolved `spec`. Yields while
 -- the rig is built. Returns nil when the rig could not be built. Call Start to send
--- it on its way.
+-- it on its way. `look` (optional, BIG-B5) fixes the appearance for a named regular; if that
+-- rig cannot be built the NPC falls back to the normal random look.
 function Npc.new(
 	ctx: Context,
 	order: Rules.OrderItem,
 	spec: OrderSpec.OrderSpec,
 	patienceSeconds: number,
-	variant: Rules.Variant?
+	variant: Rules.Variant?,
+	look: Look?
 ): Npc?
-	local model = buildNpcModel(variant)
+	local model: Model? = nil
+	if look ~= nil then
+		local ok, built = pcall(buildNpcModel, variant, look)
+		model = if ok then built else nil
+	end
+	if model == nil then
+		model = buildNpcModel(variant)
+	end
 	if model == nil then
 		return nil
 	end

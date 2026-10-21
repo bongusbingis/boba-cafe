@@ -76,6 +76,11 @@ export type WeeklyQuestData = {
 	ActiveQuests: { QuestEntry },
 }
 
+export type RegularsData = {
+	Visits: { [string]: number },
+	RewardClaimed: boolean,
+}
+
 export type ProfileTemplate = {
 	Currency: {
 		Points: number,
@@ -113,6 +118,9 @@ export type ProfileTemplate = {
 	BestShiftPay: number,
 	WeeklyQuests: WeeklyQuestData,
 	InvitedFriends: { [string]: boolean },
+	-- BIG-B5: serves per regular id (RegularsConfig.ROSTER); a key present = stamped.
+	-- RewardClaimed is set once when every regular is stamped. Written only by RegularsService.
+	Regulars: RegularsData,
 }
 
 return {
@@ -182,4 +190,8 @@ return {
 		ActiveQuests = {},
 	},
 	InvitedFriends = {},
+	Regulars = {
+		Visits = {},
+		RewardClaimed = false,
+	},
 }
