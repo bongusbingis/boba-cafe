@@ -1086,7 +1086,9 @@ function CustomerService:_onServeTriggered(npc: Npc.Npc, player: Player)
 	if okPour and typeof(pourResult) == "number" then
 		pourTip = pourResult
 	end
-	if #tools > 0 and npc.Model ~= nil and npc.Model.Parent ~= nil then
+	-- The NPC carries the drink only when it may sit with it (TAKEOVER-FIX 5); with seating
+	-- off, no clone (and none of the tool's scripts) is made on every serve.
+	if self:_seatingOn() and #tools > 0 and npc.Model ~= nil and npc.Model.Parent ~= nil then
 		pcall(function()
 			local carried = tools[1]:Clone()
 			carried.Parent = npc.Model

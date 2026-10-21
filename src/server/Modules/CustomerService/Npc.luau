@@ -21,6 +21,7 @@
 local Debris = game:GetService("Debris")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 
 ---> dependencies
 
@@ -946,7 +947,8 @@ function Npc._run(self: Npc)
 	self:Leave("PatienceOut")
 
 	-- BIG-B4: living cafe seating for served customers
-	local seatingForced = workspace:GetAttribute("B4SeatingForce") == true
+	-- B4SeatingForce is a Studio-only test switch (TAKEOVER-FIX 5); live servers follow ENABLED.
+	local seatingForced = RunService:IsStudio() and workspace:GetAttribute("B4SeatingForce") == true
 	local seatingOn = SeatingConfig.ENABLED or seatingForced
 	if self.LeftReason == "Served" and self.Thanked and seatingOn and math.random() <= SeatingConfig.SIT_CHANCE then
 		local seat = self._ctx.TryClaimSeat(self.Id, self.Root.Position, SeatingConfig.SEAT_MAX_DISTANCE_STUDS)
