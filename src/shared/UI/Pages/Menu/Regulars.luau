@@ -182,42 +182,46 @@ return function()
 			})
 		end
 		if book.RewardClaimed then
-			statusText = `{book.Stamped}/{book.Total} stamped. Reward claimed: {book.RewardTitle}!`
+			statusText = `{book.Stamped}/{book.Total} served · {book.RewardTitle} title earned!`
 			statusColor = Styles.GREEN_BADGE
 		else
-			statusText = `{book.Stamped}/{book.Total} stamped. Serve every regular for {formatThousands(
+			statusText = `{book.Stamped}/{book.Total} served · Serve them all for {formatThousands(
 				book.RewardBobaBucks
-			)} Boba Bucks and the {book.RewardTitle} title!`
+			)} Boba Bucks and the {book.RewardTitle} title.`
 		end
 	end
 
+	-- UI-REVISION: tab title and hint line copied from the 14-page pattern (STYLE
+	-- 4.1a, Pets hint), so the status wraps instead of shrinking to one tiny line.
 	return c("Frame", {
 		BackgroundTransparency = 1,
 		Size = UDim2.fromScale(1, 1),
 	}, {
 		Title = c("TextLabel", {
+			AnchorPoint = Vector2.new(0.5, 0),
 			BackgroundTransparency = 1,
 			FontFace = Styles.FONT_FREDOKA,
-			Size = UDim2.fromScale(1, 0.09),
+			Position = UDim2.fromScale(0.470149, 0),
+			Size = UDim2.fromScale(0.94, 0.09),
 			Text = "Regulars",
 			TextColor3 = Styles.GREEN,
 			TextScaled = true,
-			TextXAlignment = Enum.TextXAlignment.Left,
 		}),
 		Status = c("TextLabel", {
+			AnchorPoint = Vector2.new(0.5, 0),
 			BackgroundTransparency = 1,
 			FontFace = Styles.FONT_FREDOKA,
-			Position = UDim2.fromScale(0, 0.095),
-			Size = UDim2.fromScale(1, 0.05),
+			Position = UDim2.fromScale(0.5, 0.095),
+			Size = UDim2.fromScale(0.94, 0.085),
 			Text = statusText,
 			TextColor3 = statusColor,
 			TextScaled = true,
-			TextXAlignment = Enum.TextXAlignment.Left,
+			TextWrapped = true,
 		}),
 		Grid = c("Frame", {
 			BackgroundTransparency = 1,
-			Position = UDim2.fromScale(0, 0.16),
-			Size = UDim2.fromScale(1, 0.84),
+			Position = UDim2.fromScale(0, 0.2),
+			Size = UDim2.fromScale(1, 0.8),
 		}, gridChildren),
 	})
 end
