@@ -93,6 +93,8 @@ type NpcFields = {
 	CounterSpot: number?,
 	PickupSpot: BasePart?,
 	RequestedDrinkText: string?,
+	OrderRolled: boolean, -- the register order is fixed once the first "Take Order" rolls it (TAKEOVER-FIX 3)
+	RolledScriptedFor: number?, -- UserId whose first-session script the rolled order is (nil = pool order)
 	AssignedUserId: number?, -- the barista holding this NPC's ticket (nil while unassigned)
 	Scripted: boolean, -- first-session order: patience does not tick, serve is always Fast
 	Rescue: boolean, -- served by a non-assignee below RESCUE_FRACTION (set by CustomerService)
@@ -456,6 +458,8 @@ function Npc.new(
 		CounterSpot = nil,
 		PickupSpot = nil,
 		RequestedDrinkText = nil,
+		OrderRolled = false,
+		RolledScriptedFor = nil,
 		AssignedUserId = nil,
 		Scripted = false,
 		Rescue = false,

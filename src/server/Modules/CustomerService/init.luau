@@ -62,6 +62,7 @@ local Styles = require(Shared.UI.Styles)
 
 local WORLD_WAIT_SECONDS = 10 -- total budget for resolving the authored world in KnitStart
 local PACING_TICK_SECONDS = 1
+local SUBMIT_MAX_DISTANCE_STUDS = 20 -- DEC-058 agent-set, Jack to tune: tablet submit range (Take Order is 12; slack to step back)
 local COMBO_MILESTONES = { [3] = true, [5] = true, [10] = true } -- TUNING: combo values that get a callout toast
 local TEAM_PROGRESS_FROM = 5 -- TUNING: show Team N/10 on the serve toast from this chain length
 local SERVED_COUNT_TIMEOUT_SECONDS = 5 -- budget for reading Statistics.CustomersServed
@@ -917,44 +918,48 @@ function CustomerService:_onTakeOrderTriggered(npc: Npc.Npc, player: Player)
 		return
 	end
 
-	local order, scripted = self:_pickOrderFor(player)
-	local spec, reason = OrderSpec.FromOrderItem(order)
-	if spec == nil then
-		warnOnce("order", `[CustomerService] Order rejected by OrderSpec ({reason}): {order.Category}/{order.Item}`)
-		return
-	end
+	-- The order is rolled once per NPC (TAKEOVER-FIX 3): a re-press or a second barista
+	-- sees the same order, so an open tablet always still matches.
+	if not npc.OrderRolled then
+		local order, scripted = self:_pickOrderFor(player)
+		local spec, reason = OrderSpec.FromOrderItem(order)
+		if spec == nil then
+			warnOnce("order", `[CustomerService] Order rejected by OrderSpec ({reason}): {order.Category}/{order.Item}`)
+			return
+		end
 
-	self._npcSeq += 1
-	if npc.Model.Name == "Customer" then
-		npc.Model.Name = `Customer_{self._npcSeq}`
-	end
-	local orders: { Rules.OrderItem } = { order }
-	local specs: { OrderSpec.OrderSpec } = { spec }
-	if scripted then
-		npc:ClearVariant()
-	else
-		for _ = 2, Rules.ItemCountForLevel(self:_levelOf(player)) do
-			local extra = Rules.PickOrder(nil, nil, self:_levelOf(player))
-			local extraSpec = OrderSpec.FromOrderItem(extra)
-			if extraSpec ~= nil then
-				table.insert(orders, extra)
-				table.insert(specs, extraSpec)
+		self._npcSeq += 1
+		if npc.Model.Name == "Customer" then
+			npc.Model.Name = `Customer_{self._npcSeq}`
+		end
+		local orders: { Rules.OrderItem } = { order }
+		local specs: { OrderSpec.OrderSpec } = { spec }
+		if scripted then
+			npc:ClearVariant()
+		else
+			for _ = 2, Rules.ItemCountForLevel(self:_levelOf(player)) do
+				local extra = Rules.PickOrder(nil, nil, self:_levelOf(player))
+				local extraSpec = OrderSpec.FromOrderItem(extra)
+				if extraSpec ~= nil then
+					table.insert(orders, extra)
+					table.insert(specs, extraSpec)
+				end
 			end
 		end
+		npc:SetOrders(orders, specs)
+		npc.OrderRolled = true
+		npc.RolledScriptedFor = if scripted then player.UserId else nil
+		self._lastOrder[player] = order
+		npc.RequestedDrinkText = Rules.FormatOrderForNotepad(orders, specs)
 	end
-	npc:SetOrders(orders, specs)
-	self._lastOrder[player] = order
 	npc:ExtendRegisterPatience(CustomerConfig.REGISTER_TAKE_ORDER_GRACE_SECONDS)
-
-	local requestedText = Rules.FormatOrderForNotepad(orders, specs)
-	npc.RequestedDrinkText = requestedText
 	self._activeOrderingNpc[player] = npc
 
 	self.Client.OpenOrderingTablet:Fire(player, {
 		NpcId = npc.Id,
-		RequestedText = requestedText,
-		Orders = orders,
-		Specs = specs,
+		RequestedText = npc.RequestedDrinkText,
+		Orders = npc.Orders,
+		Specs = npc.Specs,
 	})
 end
 
@@ -973,17 +978,19 @@ function CustomerService:_submitNpcOrder(
 		return { Success = false, Message = "Invalid order submission." }
 	end
 
+	-- Only the NPC whose tablet this player opened last (TAKEOVER-FIX 3: no Id fallback).
 	local npc = self._activeOrderingNpc[player]
-	if npc == nil or npc.Id ~= npcId then
-		for activeNpc in self._npcs do
-			if activeNpc.Id == npcId and not activeNpc.Left and activeNpc.State == "AtCounter" then
-				npc = activeNpc
-				break
-			end
-		end
-	end
-	if npc == nil or npc.Left or npc.State ~= "AtCounter" then
+	if npc == nil or npc.Id ~= npcId or npc.Left or npc.State ~= "AtCounter" then
 		return { Success = false, Message = "Customer is no longer waiting at the counter." }
+	end
+	-- Re-checked at submit: another tablet may have filled the slot since Take Order.
+	if not self:_hasFreeSlot(player) then
+		return { Success = false, Message = "Your order slots are full. Serve a customer first!" }
+	end
+	local character = player.Character
+	local primary = if character ~= nil then character.PrimaryPart else nil
+	if primary == nil or (primary.Position - npc.Root.Position).Magnitude > SUBMIT_MAX_DISTANCE_STUDS then
+		return { Success = false, Message = "Stand by the customer to place their order." }
 	end
 
 	local matches = Rules.ValidateSubmittedOrder(submittedOrderItems, npc.Orders)
@@ -992,7 +999,7 @@ function CustomerService:_submitNpcOrder(
 	end
 
 	-- Dedicated mode ticket generation & assignment
-	local scripted = npc.Scripted
+	local scripted = npc.RolledScriptedFor == player.UserId
 	local patienceSeconds = Rules.VariantPatience(
 		Rules.PatienceSeconds(npc.Orders, nil, if scripted then nil else self:_sessionShiftOf(player)),
 		npc.Variant
@@ -1005,7 +1012,11 @@ function CustomerService:_submitNpcOrder(
 
 	-- Claim pickup spot and move NPC there
 	local pickupSpot = self._context.ClaimPickupSpot(npc)
-	self._activeOrderingNpc[player] = nil
+	for taker, ordering in self._activeOrderingNpc do
+		if ordering == npc then
+			self._activeOrderingNpc[taker] = nil
+		end
+	end
 	if pickupSpot ~= nil then
 		npc:GoToPickup(pickupSpot)
 	end
