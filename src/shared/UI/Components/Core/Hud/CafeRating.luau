@@ -22,6 +22,7 @@ local UI = Shared:WaitForChild("UI")
 local React = require(Packages.React)
 
 local Styles = require(UI.Styles)
+local RatingConfig = require(Shared.Configuration.RatingConfig)
 local Banner = require(UI.Components.Buttons.Banner)
 local Pane = require(UI.Components.Pane)
 local UiSfx = require(UI.Utility.UiSfx)
@@ -138,7 +139,16 @@ return function()
 		end
 	end
 
+	-- UI-REVISION: during a Rush the rating is frozen, so the bar shows the Rush
+	-- itself instead of a stale percentage: it drains with the time left and
+	-- reads the pay boost.
 	local alpha = math.clamp(rating / 100, 0, 1)
+	local barText = `{math.floor(rating + 0.5)}%`
+	if rush then
+		local total = if party then RatingConfig.BOBA_PARTY_SECONDS else RatingConfig.RUSH_SECONDS
+		alpha = if hasCountdown then math.clamp(remaining / math.max(1, total), 0, 1) else 1
+		barText = `\u{00D7}{RatingConfig.RUSH_PAY_MULT} pay`
+	end
 
 	return c(Pane, {
 		ClassName = "Frame",
@@ -178,7 +188,7 @@ return function()
 				FontFace = Styles.FONT_FREDOKA,
 				Position = UDim2.fromScale(0.5, 0.5),
 				Size = UDim2.fromScale(0.5, 0.8),
-				Text = `{math.floor(rating + 0.5)}%`,
+				Text = barText,
 				TextColor3 = Styles.GREEN_DEEP,
 				TextScaled = true,
 				ZIndex = 2,
