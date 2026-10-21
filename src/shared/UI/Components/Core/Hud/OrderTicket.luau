@@ -439,23 +439,33 @@ return function(props: {
 	-- "Ready for pick up" footer, shown once the order has been deposited
 	local readyFooter = readyNode
 			and c("Frame", {
-				LayoutOrder = math.huge,
-				AutomaticSize = Enum.AutomaticSize.Y,
+				-- UI-REVISION: was math.huge, which overflows LayoutOrder (int32) and
+				-- sorted the footer above the header.
+				LayoutOrder = 100,
 				BackgroundColor3 = Styles.GREEN,
 				BorderSizePixel = 0,
-				Size = UDim2.new(1, 0, 0, 0),
+				Size = UDim2.new(1, 0, 0, 32),
 			}, {
-				Padding = c("UIPadding", {
-					PaddingTop = UDim.new(0, 6),
-					PaddingBottom = UDim.new(0, 6),
+				-- Round the bottom to match the card, square the top (header's trick, flipped).
+				Corner = c("UICorner", { CornerRadius = UDim.new(0, 6) }),
+				TopBlocker = c("Frame", {
+					BackgroundColor3 = Styles.GREEN,
+					BorderSizePixel = 0,
+					Size = UDim2.new(1, 0, 0, 6),
 				}),
 				Label = c("TextLabel", {
 					BackgroundTransparency = 1,
 					FontFace = Styles.FONT_FREDOKA,
-					Size = UDim2.new(1, 0, 0, 20),
+					Size = UDim2.fromScale(1, 1),
 					Text = "Ready for Pick Up!",
 					TextColor3 = Styles.OFFWHITE,
 					TextScaled = true,
+					ZIndex = 2,
+				}, {
+					Padding = c("UIPadding", {
+						PaddingTop = UDim.new(0, 6),
+						PaddingBottom = UDim.new(0, 6),
+					}),
 				}),
 			})
 		or nil
