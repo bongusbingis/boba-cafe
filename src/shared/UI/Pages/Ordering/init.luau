@@ -130,6 +130,40 @@ local function itemsMatch(a: any, b: any): boolean
 	return true
 end
 
+-- AUDIT-FIX D3.1a: the NPC's order as tablet items, so Submit is one tap. Starts from the same
+-- Select and Option defaults as onItemSelected, then the customer's choices. Unknown items are skipped.
+local function prefillFromNpc(npcOrderData: any): { any }
+	local items = {}
+	if npcOrderData == nil or typeof(npcOrderData.Orders) ~= "table" then
+		return items
+	end
+	for _, order in npcOrderData.Orders do
+		local category = FoodService.FoodTable[order.Category]
+		local def = if category and category.Items then category.Items[order.Item] else nil
+		if def == nil or #items >= MAX_ORDER_ITEMS then
+			continue
+		end
+		local info: { [string]: any } = {}
+		if def.Select then
+			for selType, options in def.Select do
+				info[selType] = options[1]
+			end
+		end
+		if def.Options then
+			for optType, defaultValue in def.Options do
+				info[optType] = defaultValue
+			end
+		end
+		if typeof(order.CustomInfo) == "table" then
+			for key, value in order.CustomInfo do
+				info[key] = value
+			end
+		end
+		table.insert(items, { Category = order.Category, Item = order.Item, DefaultInfo = def, CustomInfo = info })
+	end
+	return items
+end
+
 local function validateSubmittedOrder(submittedList: { any }, expectedList: { any }): boolean
 	if #submittedList ~= #expectedList then
 		return false
@@ -209,7 +243,9 @@ return function(props: {
 	local reqSelIdx, setReqSelIdx = React.useState(1)
 
 	---> order accumulation
-	local orderItems, setOrderItems = React.useState({} :: { any })
+	local orderItems, setOrderItems = React.useState(function(): { any }
+		return prefillFromNpc(npcOrderData)
+	end)
 
 	---> barista info (local player, loaded async)
 	local staffRole, setStaffRole = React.useState("Staff")
