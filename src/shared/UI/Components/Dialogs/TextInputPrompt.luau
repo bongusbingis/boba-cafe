@@ -24,6 +24,7 @@ return function(props: {
 	Title: string,
 	Text: string,
 	PlaceholderText: string?,
+	SkipText: string?,
 	Filter: (string) -> boolean?,
 	OffsetX: number?,
 	OnResolution: (string) -> (),
@@ -33,28 +34,28 @@ return function(props: {
 	local textRef = React.useRef()
 	local buttonElements = {}
 
+	local hasSkip = props.SkipText ~= nil
+
 	table.insert(
 		buttonElements,
 		c(PromptTextBox, {
-			Size = UDim2.fromScale(0.75, 0.77),
+			Size = UDim2.fromScale(if hasSkip then 0.5 else 0.75, 0.77),
 			PlaceholderText = props.PlaceholderText,
 			Color = Styles.GRAY,
-			LayoutOrder = math.huge,
+			LayoutOrder = 1,
 			OnTextChange = function(newText: string)
 				textRef.current = newText
 			end,
 		})
 	)
 
-	print(textRef.current)
-
 	table.insert(
 		buttonElements,
 		c(PromptButton, {
 			Text = "Submit",
-			Size = UDim2.fromScale(0.25, 0.77),
+			Size = UDim2.fromScale(if hasSkip then 0.2 else 0.25, 0.77),
 			Color = Styles.GREEN,
-			LayoutOrder = math.huge,
+			LayoutOrder = 2,
 			OnClick = function()
 				if closeFnRef.current then
 					closeFnRef.current()
@@ -63,6 +64,24 @@ return function(props: {
 			end,
 		})
 	)
+
+	if hasSkip then
+		table.insert(
+			buttonElements,
+			c(PromptButton, {
+				Text = props.SkipText,
+				Size = UDim2.fromScale(0.2, 0.77),
+				Color = Styles.CORAL,
+				LayoutOrder = 3,
+				OnClick = function()
+					if closeFnRef.current then
+						closeFnRef.current()
+					end
+					props.OnResolution("")
+				end,
+			})
+		)
+	end
 
 	local promptElement = c(Pane, {
 		ClassName = "Frame",

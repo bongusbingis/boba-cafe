@@ -5,6 +5,10 @@ local TextService = game:GetService("TextService")
 local Packages = ReplicatedStorage:WaitForChild("Packages")
 
 local Knit = require(Packages.Knit)
+local ShiftConfig = require(ReplicatedStorage.Shared.Configuration.ShiftConfig)
+
+---> constants
+local CARD_WAIT_SECONDS = 30
 
 ---> lifecycle
 local function getFilterResult(text: string, fromUserId: number)
@@ -43,8 +47,14 @@ return {
 					Text = formatBrackets(`{baseMessage} {toAppend}`),
 					PlaceholderText = player.DisplayName,
 					CloseText = "Close",
+					SkipText = "Skip",
 				})
 				:andThen(function(nickname)
+					if nickname == nil or nickname == "" then
+						player:SetAttribute("NicknamePending", nil)
+						return -- Skip, or an empty Submit: keep DisplayName
+					end
+
 					if typeof(nickname) ~= "string" or nickname:gsub(" ", "") == "" then
 						chooseNicknameRecursive("|Invalid nickname. Please try again.|")
 						return
@@ -64,13 +74,49 @@ return {
 						end
 						proxy:SetValue({ "Nickname" }, nickname)
 						Knit.GetService("CosmeticsService"):NotifyNicknameChanged(player, nickname)
+						player:SetAttribute("NicknamePending", nil)
 					else
 						chooseNicknameRecursive("|An unexpected error occurred. Please try again.|")
 						return
 					end
 				end)
 		end
-		task.delay(3, chooseNicknameRecursive)
+
+		-- The prompt waits for the end of the first shift (summary.First) and for the shift card to close.
+		-- The listener only sets an attribute and schedules; it never yields (it runs inside ShiftService:_endShift).
+		task.defer(function()
+			local ok, err = pcall(function()
+				local connection
+				local gaveUp = false
+				connection = Knit.GetService("ShiftService").ShiftEnding:Connect(function(shiftPlayer, summary)
+					if shiftPlayer ~= player or not (summary.First or gaveUp) then
+						return
+					end
+					player:SetAttribute("NicknamePending", true)
+					task.delay(ShiftConfig.CARD_SECONDS_FIRST, function()
+						local waited = 0
+						while
+							player.Parent ~= nil
+							and player:GetAttribute("ShiftCardOpen") == true
+							and waited < CARD_WAIT_SECONDS
+						do
+							task.wait(1)
+							waited += 1
+						end
+						if player.Parent == nil or player:GetAttribute("ShiftCardOpen") == true then
+							gaveUp = true -- the hook stays for the next shift end
+							player:SetAttribute("NicknamePending", nil)
+							return
+						end
+						connection:Disconnect()
+						chooseNicknameRecursive()
+					end)
+				end)
+			end)
+			if not ok then
+				warn("[PlayerSetup] Nickname hook failed:", err)
+			end
+		end)
 	end,
 	function(player: Player, proxy) ---> cosmetics replication
 		Knit.GetService("CosmeticsService"):SetupPlayerCosmetics(player, proxy)
