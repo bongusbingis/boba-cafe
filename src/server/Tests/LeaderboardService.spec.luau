@@ -27,10 +27,10 @@ return function()
 			expect(boards.OrdersServed.Metric).to.equal("Orders")
 		end)
 
-		it("hides Most Tips and Top Donators only (DEC-035 Q4)", function()
+		it("hides Most Tips only (DEC-035 Q4; Top Donators shown, Jack 2026-10-21)", function()
 			local boards = LeaderboardConfig.BOARDS
 			expect(boards.MostTips.Hidden).to.equal(true)
-			expect(boards.TopDonators.Hidden).to.equal(true)
+			expect(boards.TopDonators.Hidden).to.never.be.ok()
 			expect(boards.OrdersServed.Hidden).to.never.be.ok()
 			expect(boards.MostBobaBucks.Hidden).to.never.be.ok()
 			expect(boards.MostActive.Hidden).to.never.be.ok()
@@ -51,13 +51,13 @@ return function()
 		end)
 
 		it("handles month rollover formatting correctly", function()
+			-- Roblox os.time(table) is UTC and GetMonthKey formats in UTC, so the keys are exact at the boundary.
 			local novTimestamp = os.time({ year = 2026, month = 11, day = 1, hour = 0 })
-			local expectedNov = os.date("%Y_%m_", novTimestamp) .. "OrdersServed"
-			expect(LeaderboardConfig.GetMonthKey("OrdersServed", novTimestamp)).to.equal(expectedNov)
+			expect(LeaderboardConfig.GetMonthKey("OrdersServed", novTimestamp)).to.equal("2026_11_OrdersServed")
+			expect(LeaderboardConfig.GetMonthKey("OrdersServed", novTimestamp - 1)).to.equal("2026_10_OrdersServed")
 
 			local janTimestamp = os.time({ year = 2027, month = 1, day = 15, hour = 0 })
-			local expectedJan = os.date("%Y_%m_", janTimestamp) .. "OrdersServed"
-			expect(LeaderboardConfig.GetMonthKey("OrdersServed", janTimestamp)).to.equal(expectedJan)
+			expect(LeaderboardConfig.GetMonthKey("OrdersServed", janTimestamp)).to.equal("2027_01_OrdersServed")
 		end)
 
 		it("defaults to current timestamp if omitted", function()

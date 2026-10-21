@@ -62,8 +62,11 @@ return function()
 			expect(taro < strawberry and strawberry < coffee).to.equal(true)
 		end)
 
-		it("grab text stays", function()
-			expect(find(Content.build(nil, 1), "1. Fudge Brownie") ~= nil).to.equal(true)
+		-- Grab items now carry one Food Display step (OrderSpec), so the "Grab it from the display." fallback only
+		-- prints for an item with no steps; the pastry block shows its pick step instead.
+		it("grab items show their display pick step", function()
+			local block = '<b>Fudge Brownie</b>\n<font face="DenkOne">1. Fudge Brownie</font>'
+			expect(find(Content.build(nil, 1), block) ~= nil).to.equal(true)
 		end)
 
 		it("level 1 lists Espresso and Mango Boba locked, in level order", function()

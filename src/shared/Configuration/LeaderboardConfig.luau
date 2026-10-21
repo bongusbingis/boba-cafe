@@ -53,10 +53,11 @@ local LeaderboardConfig = {
 }
 
 --- Derives the monthly OrderedDataStore key: YYYY_MM_ prefix followed by boardType.
---- Automatically resets monthly boards when month rolls over.
+--- Automatically resets monthly boards when month rolls over. UTC ("!"), matching os.time() and the board's
+--- FormatUniversalTime month label, so a Studio session near a month boundary writes the same month as servers.
 function LeaderboardConfig.GetMonthKey(boardType: string, timestamp: number?): string
 	local t = timestamp or os.time()
-	return os.date("%Y_%m_", t) .. boardType
+	return os.date("!%Y_%m_", t) .. boardType
 end
 
 --- TAKEOVER-REVIEW-FIX P2-4: the all-time OrderedDataStore key behind the Global boards (never resets). Reuses
