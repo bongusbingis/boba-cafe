@@ -75,6 +75,7 @@ export type BubbleUI = {
 	Track: Frame,
 	Chip: Frame,
 	Label: TextLabel,
+	Detail: TextLabel,
 	Card: Frame,
 }
 
@@ -122,8 +123,20 @@ local ARRIVE_RADIUS_STUDS = 3 -- close enough counts as arrived when MoveToFinis
 local WALK_POLL_SECONDS = 0.1
 local WAIT_POLL_SECONDS = 0.25 -- queue shuffling and patience updates
 local ROOT_HEIGHT_STUDS = 3 -- default R15 root part centre above the floor
-local BUBBLE_SIZE = UDim2.fromOffset(200, 64)
+-- UI-REVISION: the gui is tall enough for the speech card over the order card; the
+-- order card keeps its 200 x 64 footprint at the bottom.
+local BUBBLE_CARD_H = 64
+local BUBBLE_SPEECH_H = 34
+local BUBBLE_SIZE = UDim2.fromOffset(200, BUBBLE_CARD_H + BUBBLE_SPEECH_H + 6)
+local BUBBLE_PAD = 8
+local BUBBLE_TOP = 6
+local BUBBLE_CHIP = 12
+local BUBBLE_TITLE_H = 22
+local BUBBLE_DETAIL_H = 16
+local BUBBLE_TRACK_H = 6
 local BUBBLE_OFFSET = Vector3.new(0, 3.5, 0) -- above the head
+-- Lifts the gui so the order card's centre (not the gui's) sits on BUBBLE_OFFSET.
+local BUBBLE_SIZE_OFFSET = Vector2.new(0, (BUBBLE_SPEECH_H + 6) / 2 / (BUBBLE_CARD_H + BUBBLE_SPEECH_H + 6))
 local BUBBLE_MAX_DISTANCE_STUDS = 80
 
 -- S9-SPARKLE: Perfect-serve burst, reusing the authored CleanlinessStorage.Sparkles
@@ -265,8 +278,8 @@ local function buildNpcModel(variant: Rules.Variant?, look: Look?): Model?
 	return model
 end
 
--- "Medium Custom Boba", plus a second line for the flavour so the order can be read.
-local function describeOrder(spec: OrderSpec.OrderSpec): string
+-- The flavour line under the item name ("Classic Milk Tea · Normal tapioca"), or "".
+local function describeDetails(spec: OrderSpec.OrderSpec): string
 	local details: { string } = {}
 	if spec.Syrup ~= nil then
 		table.insert(details, spec.Syrup)
@@ -280,28 +293,28 @@ local function describeOrder(spec: OrderSpec.OrderSpec): string
 	if spec.Sugar == true then
 		table.insert(details, "Sugar")
 	end
-	if #details == 0 then
-		return spec.Label
-	end
-	return spec.Label .. "\n" .. table.concat(details, ", ")
+	return table.concat(details, " · ")
 end
 
--- Bubble text for every item; more than one item shows labels only, one per line.
-local function describeOrders(specs: { OrderSpec.OrderSpec }, variant: Rules.Variant?): string
-	local text: string
+-- Bubble title and detail line. One item: its name, flavour underneath. More than one
+-- item: the names, one per line, no detail line.
+local function describeOrders(specs: { OrderSpec.OrderSpec }, variant: Rules.Variant?): (string, string)
+	local title: string
+	local detail = ""
 	if #specs == 1 then
-		text = describeOrder(specs[1])
+		title = specs[1].Label
+		detail = describeDetails(specs[1])
 	else
 		local labels: { string } = {}
 		for _, spec in specs do
 			table.insert(labels, spec.Label)
 		end
-		text = table.concat(labels, "\n")
+		title = table.concat(labels, "\n")
 	end
 	if variant == "VIP" then
-		text = "VIP " .. text
+		title = "VIP " .. title
 	end
-	return text
+	return title, detail
 end
 
 local function joinLabels(specs: { OrderSpec.OrderSpec }): string
@@ -323,7 +336,39 @@ local function chipColor(spec: OrderSpec.OrderSpec): Color3
 	return Color3.fromRGB(204, 161, 135) -- coffee
 end
 
--- The order label with a patience bar under it. Returns the bubble UI components.
+local function addCorner(parent: GuiObject, radius: UDim)
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = radius
+	corner.Parent = parent
+end
+
+local function addTextLimit(parent: TextLabel, minSize: number, maxSize: number)
+	local limit = Instance.new("UITextSizeConstraint")
+	limit.MinTextSize = minSize
+	limit.MaxTextSize = maxSize
+	limit.Parent = parent
+end
+
+-- UI-REVISION: places the bubble's pieces for what it is showing. `chip` = a syrup
+-- chip leads the title; `detail` = a flavour line sits under the title. Pixel layout
+-- in a 200 x 64 card (billboards are offset-sized, STYLE 4.5).
+local function layoutBubble(bubble: BubbleUI, chip: boolean, detail: boolean)
+	local left = if chip then BUBBLE_PAD + BUBBLE_CHIP + 6 else BUBBLE_PAD
+	local titleHeight = if detail then BUBBLE_TITLE_H else BUBBLE_TITLE_H + BUBBLE_DETAIL_H
+	bubble.Chip.Visible = chip
+	bubble.Chip.Position = UDim2.fromOffset(BUBBLE_PAD, BUBBLE_TOP + (titleHeight - BUBBLE_CHIP) // 2)
+	bubble.Label.Position = UDim2.fromOffset(left, BUBBLE_TOP)
+	bubble.Label.Size = UDim2.new(1, -(left + BUBBLE_PAD), 0, titleHeight)
+	bubble.Label.TextXAlignment = if chip then Enum.TextXAlignment.Left else Enum.TextXAlignment.Center
+	bubble.Detail.Visible = detail
+	bubble.Detail.Position = UDim2.fromOffset(left, BUBBLE_TOP + BUBBLE_TITLE_H)
+	bubble.Detail.Size = UDim2.new(1, -(left + BUBBLE_PAD), 0, BUBBLE_DETAIL_H)
+end
+
+-- The order card with a patience bar under it, and the speech bubble above it.
+-- Returns the bubble UI components. Contract (RegularsService, KitchenController,
+-- Npc._say): the gui is "OrderBubble", the card is "Card" and its only direct
+-- TextLabel is the title, the speech line is the gui's "Speech" TextLabel.
 local function buildBubble(model: Model, specs: { OrderSpec.OrderSpec }, variant: Rules.Variant?): BubbleUI
 	local spec = specs[1]
 	local gui = Instance.new("BillboardGui")
@@ -334,63 +379,94 @@ local function buildBubble(model: Model, specs: { OrderSpec.OrderSpec }, variant
 	gui.AlwaysOnTop = true
 	gui.LightInfluence = 0
 	gui.MaxDistance = BUBBLE_MAX_DISTANCE_STUDS
+	gui.SizeOffset = BUBBLE_SIZE_OFFSET
 
 	local card = Instance.new("Frame")
 	card.Name = "Card"
-	card.Size = UDim2.fromScale(1, 1)
+	card.AnchorPoint = Vector2.new(0, 1)
+	card.Position = UDim2.fromScale(0, 1)
+	card.Size = UDim2.new(1, 0, 0, BUBBLE_CARD_H)
 	card.BackgroundColor3 = if variant == "VIP" then Styles.GOLD else Styles.CREAM
 	card.BorderSizePixel = 0
 	card.Parent = gui
-
-	local corner = Instance.new("UICorner")
-	corner.CornerRadius = Styles.CORNER_BUTTON
-	corner.Parent = card
+	addCorner(card, Styles.CORNER_BUTTON)
 
 	local stroke = Instance.new("UIStroke")
-	stroke.Color = Styles.GREEN
+	stroke.Color = if variant == "VIP" then Styles.GOLD_DEEP else Styles.GREEN
 	stroke.Thickness = 2
 	stroke.Parent = card
 
 	local chip = Instance.new("Frame")
 	chip.Name = "SyrupChip"
-	chip.Position = UDim2.fromOffset(8, 4)
-	chip.Size = UDim2.fromOffset(14, 14)
+	chip.Size = UDim2.fromOffset(BUBBLE_CHIP, BUBBLE_CHIP)
 	chip.BackgroundColor3 = chipColor(spec)
 	chip.BorderSizePixel = 0
 	chip.Parent = card
+	addCorner(chip, Styles.CORNER_FULL)
 
-	local chipCorner = Instance.new("UICorner")
-	chipCorner.CornerRadius = Styles.CORNER_FULL
-	chipCorner.Parent = chip
+	-- Light syrups (milk tea, taro) vanish on CREAM without an outline.
+	local chipStroke = Instance.new("UIStroke")
+	chipStroke.Color = Styles.GREEN_DEEP
+	chipStroke.Thickness = 1
+	chipStroke.Parent = chip
+
+	local title, detailText = describeOrders(specs, variant)
 
 	local label = Instance.new("TextLabel")
-	label.Position = UDim2.fromOffset(26, 4)
-	label.Size = UDim2.new(1, -34, 1, -24)
+	label.Name = "Title"
 	label.BackgroundTransparency = 1
 	label.FontFace = Styles.FONT_FREDOKA
 	label.TextColor3 = Styles.GREEN_DEEP
 	label.TextScaled = true
 	label.TextWrapped = true
-	label.Text = describeOrders(specs, variant)
+	label.Text = title
 	label.Parent = card
+	addTextLimit(label, 9, 20)
+
+	-- The flavour line lives one level down so the title stays Card's only TextLabel.
+	local detailHolder = Instance.new("Frame")
+	detailHolder.Name = "DetailHolder"
+	detailHolder.BackgroundTransparency = 1
+	detailHolder.Size = UDim2.fromScale(1, 1)
+	detailHolder.Parent = card
+
+	local detail = Instance.new("TextLabel")
+	detail.Name = "Detail"
+	detail.BackgroundTransparency = 1
+	detail.FontFace = Styles.FONT_FREDOKA
+	detail.TextColor3 = Styles.GREEN_DEEP
+	detail.TextTransparency = 0.3
+	detail.TextScaled = true
+	detail.TextWrapped = true
+	detail.TextXAlignment = Enum.TextXAlignment.Left
+	detail.Text = detailText
+	detail.Parent = detailHolder
+	addTextLimit(detail, 8, 13)
 
 	local track = Instance.new("Frame")
-	track.Position = UDim2.new(0, 8, 1, -16)
-	track.Size = UDim2.new(1, -16, 0, 8)
+	track.Name = "Patience"
+	track.Position = UDim2.new(0, BUBBLE_PAD, 1, -(BUBBLE_TRACK_H + 6))
+	track.Size = UDim2.new(1, -2 * BUBBLE_PAD, 0, BUBBLE_TRACK_H)
 	track.BackgroundColor3 = Styles.GRAY
 	track.BorderSizePixel = 0
 	track.Parent = card
+	addCorner(track, Styles.CORNER_FULL)
 
-	local trackCorner = Instance.new("UICorner")
-	trackCorner.CornerRadius = Styles.CORNER_FULL
-	trackCorner.Parent = track
+	local fill = Instance.new("Frame")
+	fill.Size = UDim2.fromScale(1, 1)
+	fill.BackgroundColor3 = Styles.GREEN
+	fill.BorderSizePixel = 0
+	fill.Parent = track
+	addCorner(fill, Styles.CORNER_FULL)
 
-	-- Second text line: what the customer says (Greeting / WrongOrder / Leaving).
+	-- What the customer says (Greeting / WrongOrder / Leaving): its own small card with
+	-- the same chrome, floating above the order card.
 	local speech = Instance.new("TextLabel")
 	speech.Name = "Speech"
 	speech.Visible = false
-	speech.Position = UDim2.fromOffset(0, -36)
-	speech.Size = UDim2.new(1, 0, 0, 32)
+	speech.AnchorPoint = Vector2.new(0.5, 1)
+	speech.Position = UDim2.new(0.5, 0, 1, -(BUBBLE_CARD_H + 6))
+	speech.Size = UDim2.new(1, -16, 0, BUBBLE_SPEECH_H)
 	speech.BackgroundColor3 = Styles.CREAM
 	speech.BorderSizePixel = 0
 	speech.FontFace = Styles.FONT_FREDOKA
@@ -399,29 +475,34 @@ local function buildBubble(model: Model, specs: { OrderSpec.OrderSpec }, variant
 	speech.TextWrapped = true
 	speech.Text = ""
 	speech.Parent = gui
+	addCorner(speech, Styles.CORNER_BUTTON)
+	addTextLimit(speech, 9, 15)
 
-	local speechCorner = Instance.new("UICorner")
-	speechCorner.CornerRadius = Styles.CORNER_BUTTON
-	speechCorner.Parent = speech
+	local speechStroke = Instance.new("UIStroke")
+	speechStroke.Color = Styles.GREEN
+	speechStroke.Thickness = 2
+	speechStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	speechStroke.Parent = speech
 
-	local fill = Instance.new("Frame")
-	fill.Size = UDim2.fromScale(1, 1)
-	fill.BackgroundColor3 = Styles.GREEN
-	fill.BorderSizePixel = 0
-	fill.Parent = track
+	local speechPadding = Instance.new("UIPadding")
+	speechPadding.PaddingLeft = UDim.new(0, 6)
+	speechPadding.PaddingRight = UDim.new(0, 6)
+	speechPadding.PaddingTop = UDim.new(0, 3)
+	speechPadding.PaddingBottom = UDim.new(0, 3)
+	speechPadding.Parent = speech
 
-	local fillCorner = Instance.new("UICorner")
-	fillCorner.CornerRadius = Styles.CORNER_FULL
-	fillCorner.Parent = fill
-
-	gui.Parent = model
-	return {
+	local bubble: BubbleUI = {
 		Fill = fill,
 		Track = track,
 		Chip = chip,
 		Label = label,
+		Detail = detail,
 		Card = card,
 	}
+	layoutBubble(bubble, true, detailText ~= "")
+
+	gui.Parent = model
+	return bubble
 end
 
 local PATIENCE_COLORS = {
@@ -616,7 +697,7 @@ function Npc.ShowGreetingBubble(self: Npc)
 	if bubble == nil then
 		return
 	end
-	bubble.Chip.Visible = false
+	layoutBubble(bubble, false, false)
 	bubble.Track.Visible = true -- register patience shows on the same bar (TAKEOVER-FIX 2)
 	bubble.Label.Text = "Hi, can I order?"
 	self:_setPatienceBar(1)
@@ -635,10 +716,12 @@ function Npc.ShowOrderBubble(self: Npc)
 	if bubble == nil then
 		return
 	end
-	bubble.Chip.Visible = true
+	local title, detail = describeOrders(self.Specs, self.Variant)
+	layoutBubble(bubble, true, detail ~= "")
 	bubble.Track.Visible = true
 	bubble.Chip.BackgroundColor3 = chipColor(self.Spec)
-	bubble.Label.Text = describeOrders(self.Specs, self.Variant)
+	bubble.Label.Text = title
+	bubble.Detail.Text = detail
 	self:_setPatienceBar(1)
 end
 
