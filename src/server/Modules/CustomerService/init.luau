@@ -810,8 +810,11 @@ function CustomerService:_onServeTriggered(npc: Npc.Npc, player: Player)
 	pcall(function()
 		Knit.GetService("LeaderboardService"):IncrementStat(player, "OrdersServed", 1)
 	end)
-	pcall(function()
-		Knit.GetService("QuestService"):AdvanceQuest(player, "CustomersServed", 1)
+	-- AdvanceQuest can yield (data, pass lookups); spawned so the serve path never waits on it.
+	task.spawn(function()
+		pcall(function()
+			Knit.GetService("QuestService"):AdvanceQuest(player, "CustomersServed", 1)
+		end)
 	end)
 	local newCombo = Rules.NextCombo(combo, grade)
 	self._combo[player] = newCombo
