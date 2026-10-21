@@ -397,6 +397,7 @@ function QuestService:ClaimWeeklyQuest(player: Player, questIndex: number): (boo
 		end
 
 		local weeklyQuests = self:_ensureWeeklyQuests(player, playerData)
+		local claimWeek = playerData.WeeklyQuests.AssignedWeek
 		if questIndex > #weeklyQuests then
 			return false, "QuestNotFound"
 		end
@@ -424,7 +425,13 @@ function QuestService:ClaimWeeklyQuest(player: Player, questIndex: number): (boo
 		end
 
 		quest.Claimed = true
-		playerData:SetValue({ "WeeklyQuests", "ActiveQuests" }, weeklyQuests)
+		-- TAKEOVER-REVIEW-FIX P3-7: GrantEarnedCapsule can yield across the Monday rollover. If the week's list was
+		-- replaced meanwhile, the earned reward still pays but last week's list is never written over the new one.
+		local current = playerData.WeeklyQuests
+		local stillCurrent = typeof(current) == "table" and current.AssignedWeek == claimWeek
+		if stillCurrent then
+			playerData:SetValue({ "WeeklyQuests", "ActiveQuests" }, weeklyQuests)
+		end
 
 		if (quest.RewardBobaBucks or 0) > 0 then
 			local currencyService = self:_getService("CurrencyService")
@@ -445,7 +452,7 @@ function QuestService:ClaimWeeklyQuest(player: Player, questIndex: number): (boo
 		end
 
 		pcall(function()
-			self.Client.WeeklyQuestsUpdated:Fire(player, weeklyQuests)
+			self.Client.WeeklyQuestsUpdated:Fire(player, if stillCurrent then weeklyQuests else current.ActiveQuests)
 		end)
 
 		return true, nil
