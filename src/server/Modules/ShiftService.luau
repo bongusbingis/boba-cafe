@@ -63,7 +63,7 @@ local TARGET_ATTRIBUTE = "ShiftTarget"
 local NUDGE_TEXT = "You can afford a capsule! Check the Shop."
 local NUDGE_DELAY_SECONDS = 1.5 -- lets the star bonus land before the balance is read
 local NUDGE_POLL_SECONDS = 1
-local NUDGE_NICK_WAIT_SECONDS = 45
+local NUDGE_NICK_WAIT_SECONDS = 160 -- covers the card plus the 120 s nickname prompt timeout
 local NUDGE_DRAIN_SECONDS = 1
 local NEW_BEST_MIN_COMBO = 2
 local CARD_OPEN_ATTRIBUTE = "ShiftCardOpen"
@@ -292,8 +292,11 @@ function ShiftService:_endShift(player: Player, state: ShiftState)
 	pcall(function()
 		Knit.GetService("StatisticsService"):IncrementStat(player, "ShiftsCompleted")
 	end)
-	pcall(function()
-		Knit.GetService("QuestService"):AdvanceQuest(player, "ShiftsCompleted", 1)
+	-- Spawned: AdvanceQuest awaits the profile (and a pass lookup on rollover); the card must not wait.
+	task.spawn(function()
+		pcall(function()
+			Knit.GetService("QuestService"):AdvanceQuest(player, "ShiftsCompleted", 1)
+		end)
 	end)
 	-- Card-open flag for the nickname prompt (ONBOARD-NICK); the card is client-timed.
 	pcall(function()
@@ -353,6 +356,9 @@ function ShiftService:_capsuleNudge(player: Player)
 	while player:GetAttribute(NICK_PENDING_ATTRIBUTE) == true and waited < NUDGE_NICK_WAIT_SECONDS do
 		task.wait(NUDGE_POLL_SECONDS)
 		waited += NUDGE_POLL_SECONDS
+	end
+	if player:GetAttribute(NICK_PENDING_ATTRIBUTE) == true then
+		return -- still choosing a nickname: never toast under the prompt; the next shift end tries again
 	end
 	task.wait(NUDGE_DRAIN_SECONDS)
 	if player.Parent == nil or self._capsuleNudged[player] or not self:IsClockedIn(player) then
