@@ -35,6 +35,8 @@ local c = React.createElement
 local BASE_IMAGE = "http://www.roblox.com/asset/?id=13473433246"
 local BORDER_IMAGE = "http://www.roblox.com/asset/?id=13382163077"
 
+local ROW_HEIGHT = 0.12 -- share of the Container per row
+local ROW_GAP = 0.02
 local STAR_NOTE_SPEEDS = { 1, 1.2599, 1.4983 } -- PlaybackSpeed for note 1, 2, 3 (root, major third, fifth)
 local STAR_NOTE_GAP = 0.2
 local STAR_NOTE_MAX = 3
@@ -156,6 +158,8 @@ return function()
 	end
 
 	local lines = buildLines(summary)
+	-- Rows share the Container height so any line count fits (REVIEW-FIX P3-4); 0.12 is the usual row.
+	local rowHeight = math.min(ROW_HEIGHT, (1 - ROW_GAP * (#lines - 1)) / math.max(#lines, 1))
 	local rows = {}
 	for index, line in lines do
 		rows["Row" .. index] = c(Pane, {
@@ -165,7 +169,7 @@ return function()
 				BackgroundTransparency = 1,
 				FontFace = Styles.FONT_FREDOKA,
 				LayoutOrder = index,
-				Size = UDim2.fromScale(0.95, 0.12),
+				Size = UDim2.fromScale(0.95, rowHeight),
 				Text = line,
 				TextColor3 = Styles.OFFWHITE,
 				TextScaled = true,
@@ -211,7 +215,7 @@ return function()
 					FillDirection = Enum.FillDirection.Vertical,
 					HorizontalAlignment = Enum.HorizontalAlignment.Center,
 					VerticalAlignment = Enum.VerticalAlignment.Top,
-					Padding = UDim.new(0.02, 0),
+					Padding = UDim.new(ROW_GAP, 0),
 				},
 				Native = {
 					AnchorPoint = Vector2.new(0.5, 0),
