@@ -1,3 +1,14 @@
+---
+id: GAMEPLAY-SERVE-QUEST-YIELD
+title: "quest progress no longer yields inside the NPC serve path"
+priority: P1
+role: Mason
+worker_tier: sonnet
+release_gate: before
+depends_on: []
+status: READY
+source_commit: 098175c
+---
 # GAMEPLAY-SERVE-QUEST-YIELD: quest progress no longer yields inside the NPC serve path
 Model: sonnet (Mason, Studio: no; Sentry review after, money path)   Depends on: GAMEPLAY-REVIEW K1 (OBVIOUS fix); same pattern as M4-FIX-REALORDER-QUEST-SENTRY P2   Size: XS
 

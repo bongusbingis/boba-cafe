@@ -1,3 +1,14 @@
+---
+id: GAMEPLAY-MOBILE-TICKET
+title: "on phones the order ticket opens for each new order, and its collapsed header still shows the order and its patience"
+priority: P1
+role: Mason
+worker_tier: sonnet
+release_gate: before
+depends_on: [UI-TICKET-DAILY-MENU]
+status: READY
+source_commit: 098175c
+---
 # GAMEPLAY-MOBILE-TICKET: on phones the order ticket opens for each new order, and its collapsed header still shows the order and its patience
 Model: sonnet (Mason, Part A, Studio: no; Lens, Part B, Studio: YES exclusive)   Depends on: GAMEPLAY-REVIEW T1/T2 (OBVIOUS); run AFTER UI-TICKET-DAILY-MENU Part A lands (DEC-050 moves and scales the TicketStack)   Size: S
 

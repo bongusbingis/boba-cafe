@@ -1,3 +1,14 @@
+---
+id: GAMEPLAY-TOASTS
+title: "every toast shows its message; toasts queue instead of erasing each other"
+priority: P1
+role: Mason
+worker_tier: sonnet
+release_gate: before
+depends_on: []
+status: READY
+source_commit: 098175c
+---
 # GAMEPLAY-TOASTS: every toast shows its message; toasts queue instead of erasing each other
 Model: sonnet (Mason, Studio: no)   Depends on: GAMEPLAY-REVIEW items N1-N3 (OBVIOUS)   Size: S
 
@@ -26,7 +37,8 @@ Not touched: any server file, `AppDialogs.luau`, any caller, `HINTS` text (copy 
 4. **Hint courtesy:** the hint loop skips its turn (continues to the next 60 s wait) when a toast is active, the queue is not empty, or a non-hint toast started less than 20 s ago (`lastGameplayAt` ref, set on every non-hint push).
 5. Keep all existing springs and constants. Add only `HOLD_BUSY` and `HINT_QUIET_SECONDS = 20` as TUNING constants in the constants block.
 6. Update the story if `Stories/` has one for SmallNotification (grep `SmallNotification` in `src/shared/UI/Stories`); otherwise none.
-7. Gate and `rojo build`.
+7. Idle export (ONBOARD-FIRSTRUN D10): add `SmallNotification.IdleFor(): number` to the returned module table: seconds since the panel became fully idle (no active entry and empty queue), 0 while busy. Track it with an `idleSinceRef` set to `os.clock()` when the last entry clears and to nil on any push. Non-yielding, no new visual.
+8. Gate and `rojo build`.
 
 ## Hard constraints
 - Agents never run Play or TestEZ (DEC-019; Jack does). No Studio, no saves, do not commit.

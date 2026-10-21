@@ -1,0 +1,18 @@
+You are Prime (Claude Opus) for REVIVAL-001 (Boba Cafe revival) in C:/Users/jackc/Desktop/boba-cafe, branch uhweifh. Commits stay local; never push. Preserve all work; never reset, clean or discard. Ignore "Terra"/other agents' private workflows (DEC-033). Agent work stays on Claude (DEC-035). HARD DEADLINE: Friday 2026-10-23 (DEC-055). Today is 2026-10-20. Bottleneck = implementation, gates, and ONE batched Jack Studio run, not more specs.
+
+READ ONLY, in order: 1) .review/agent-workflow/tasks/REVIVAL-001/packets/_meta/STATUS.md  2) decisions.md DEC-053, DEC-054, DEC-055  3) _meta/AGENT-BRIEF.md. Never read INVENTORY.md or whole packets; only a packet's `## Summary`.
+
+RATE LIMIT: Opus session limit hit mid-write (reset 5:40pm PT). If you see a rate-limit warning, stop dispatching, update STATUS.md, tell Jack.
+
+PHASE 1 (Opus, small, now): 
+ a) FEEDBACK-VOICE.md (<=80 lines, in packets/_meta): serve feedback budget (toast, combo callout, Team N/10, +N popup, Bucks pulse, sound, NPC wave), one copy tone for every toast, toast priority order, which beats get sound, gold only for money/rank. Then ONE Sonnet agent amends affected packets' exact strings to match (edit in place, <=15-line report).
+ b) FIRST-5-MIN.md (<=60 lines): sequence of welcome toast, first serve, Daily after first serve, nickname after shift 1, level-up callout, capsule nudge; fix collisions/ordering across ONBOARD-*, SERVE-FEEDBACK, SHIFT-END, PROGRESS-CALLOUTS.
+ c) B1 phase 1 content: have agent a9548374ba4738331 (SendMessage; else fresh Opus agent that reads existing BIG-B1*.md first) finish ONLY P2-POOL and P3-RECIPEBOOK for drinks VERIFIED in source (decide names/ladder/locked-state look, STYLE tokens only). Mastery (P4) = 15-line stub. Do NOT continue B4; write BIG-B4 stays as is.
+ d) ONE Opus UI review pass over the visual specs of ship-set packets (HUD-LEVELBAR, SERVE-PAYPOPUP, HUD-BOTTOMLEFT, RUSH-BANNER, SHIFT-END, ONBOARD-NICK Skip, QUESTS-PING dot): spec sections only, edit in place for STYLE tokens, 844x390, HUD zone (STYLE 2.4); <=15-line report.
+ e) Ship-or-cut: confirm the DEC-055 ship set with Jack in one message (accept "OK").
+STUBS: defer-list items get 15-line stubs from existing text (Sonnet/Haiku); no more design docs. B2/B4/B5/B6/B7/H6/Q6/X10 are stubs only. Skip the big final artifact; replace with a short "Ship Plan" artifact: ship set, asset requests, ONE batched Studio checklist, Questions for Jack.
+
+PHASE 2 (Sonnet builders; do this as soon as 1a-1d land, start the independent packets in parallel NOW): implement ship-set packets from packets/ in lease order (see STATUS.md amendments owed), gate every changed Luau file yourself (git diff --name-only + untracked, Windows git; do not stylua files with DEC-001 drift: PromoCodes.server.luau, InventoryItem.luau, Pages/Menu/init.luau): wsl bash -lc 'cd /mnt/c/Users/jackc/desktop/boba-cafe && . .review/agent-workflow/tools/wsl/env.sh && stylua <files> && gate <files>'. Commit each lane locally with explicit paths after its gate passes; Sentry review only for money/security (REALORDER-SHIFT, SERVE-QUEST-YIELD). Serve-path invariant: nothing yields between serve guards and payout; QuestService:AdvanceQuest can yield -> task.spawn. Workers never run Play/TestEZ (DEC-019). Lease amendments owed are in STATUS.md.
+PHASE 3: one batched Studio checklist for Jack (Wed night/Thu), then fixes, Friday ship.
+
+ASK JACK once, batched: Q-P1..Q-P7 in STATUS.md that still apply to the ship set (Sparkles reuse only if S9 stays; B1 items needing place-file confirmation; sounds). Untracked src/server/Scripts/ActivityScript.server.luau is not from this phase; never touch or commit it. Stop at ~100k tokens with a kickoff prompt.

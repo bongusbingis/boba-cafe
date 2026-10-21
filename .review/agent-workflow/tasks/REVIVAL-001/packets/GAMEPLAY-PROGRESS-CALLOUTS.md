@@ -1,3 +1,14 @@
+---
+id: GAMEPLAY-PROGRESS-CALLOUTS
+title: "level-ups say what opened; the shift card shows tips, XP to the next level and the next unlock"
+priority: P1
+role: Mason
+worker_tier: sonnet
+release_gate: before
+depends_on: [UI-TICKET-DAILY-MENU, GAMEPLAY-TOASTS]
+status: READY
+source_commit: 098175c
+---
 # GAMEPLAY-PROGRESS-CALLOUTS: level-ups say what opened; the shift card shows tips, XP to the next level and the next unlock
 Model: sonnet (Mason, Studio: no)   Depends on: GAMEPLAY-REVIEW P1-P3, H1 (OBVIOUS); run AFTER UI-TICKET-DAILY-MENU Part A (it may move `ShiftCard`); best after GAMEPLAY-TOASTS (so level-up toasts are not overwritten)   Size: S
 

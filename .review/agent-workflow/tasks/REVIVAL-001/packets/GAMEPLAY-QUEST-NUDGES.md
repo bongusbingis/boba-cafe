@@ -1,3 +1,14 @@
+---
+id: GAMEPLAY-QUEST-NUDGES
+title: "tell the player when a quest completes and what a claim paid"
+priority: P1
+role: Mason
+worker_tier: sonnet
+release_gate: before
+depends_on: [GAMEPLAY-TOASTS, GAMEPLAY-SERVE-QUEST-YIELD]
+status: READY
+source_commit: 098175c
+---
 # GAMEPLAY-QUEST-NUDGES: tell the player when a quest completes and what a claim paid
 Model: sonnet (Mason, Studio: no)   Depends on: GAMEPLAY-REVIEW Q1/Q2 (OBVIOUS); best after GAMEPLAY-TOASTS (queue) and GAMEPLAY-SERVE-QUEST-YIELD (so the server toast is never inside a serve thread)   Size: XS
 

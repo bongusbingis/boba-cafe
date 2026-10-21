@@ -2,6 +2,49 @@
 
 Newest first. Each entry is `## <GOAL> / DEC-###: <title>` with Date, Source, and Decision. Prime is the only writer. Numbering continues; never reuse a number.
 
+## REVIVAL-001 / DEC-057: Ticket back to middle right; Quests button removed (supersedes DEC-052 placement)
+
+- **Date:** 2026-10-20.
+- **Source:** Jack: "I don't like the position of the ticket; move it back to the middle right-side of their screen, make it expand from the bottom (don't worry too much about mobile right now). Remove the quests button as well at the bottom right and defer how the quests menu is actually opened for a later pass." Also "3. yes": Espresso (L7) and Mango (L8) join B1 phase 1.
+- **Decision:** TicketColumn anchors (1,1) at (0.99, 0.65), bottom edge fixed so tickets grow upward; scale 1.6 kept. Hud/init no longer mounts BottomRight (file kept, unused); the Quests card has no opener until a later pass (QuestPopup code and QUESTS-PING server toast stay; the claim dot has no host). Phone overlap with CafeRating/ShiftCard is accepted for now.
+
+## REVIVAL-001 / DEC-056: Ship set confirmed
+
+- **Date:** 2026-10-20.
+- **Source:** Jack answered "OK" to the DEC-055 ship-or-cut question.
+- **Decision:** The DEC-055 ship set stands as proposed; deferred items get 15-line stubs only. FEEDBACK-VOICE.md and FIRST-5-MIN.md (packets/_meta) govern copy, toast budget and first-session ordering.
+
+## REVIVAL-001 / DEC-055: Friday 2026-10-23 deadline; packet generation narrowed to the ship set
+
+- **Date:** 2026-10-20.
+- **Source:** Jack: "the absolute deadline for this project is Friday, october 23rd; preferably done before then. Go with your recommendations."
+- **Decision:** Stop speculative packet writing. Recommended ship set (Prime proposal; Jack may overrule): the 5 GAMEPLAY-* packets, SERVE-FEEDBACK, SERVE-PAYPOPUP (S3 only), NPC-REACTIONS, HUD-BOTTOMLEFT, HUD-LEVELBAR, NOTIF-HINTS, TICKET-RECIPE-LINK (T4 only), ONBOARD-NICK, ONBOARD-FIRSTRUN, CLIENT-PATIENCE (C1, C3 only), SHIFT-END, RUSH-BANNER (X1 only), REALORDER-SHIFT (Sentry), SOUNDS (inert until assets), B1 phase 1 (verified drinks only). Deferred to the first update: REALORDER-HEARTS, STREAK-REMINDER, SHIFT-STARS-SOUND, PATIENCE-RAMP, T5, T8, S9, X7, B2, B4, B5, B6, B7, H6, Q6, X10 (15-line stubs only, no design docs). Opus is reserved for a feedback-and-voice sheet, a first-5-minutes script, B1 content/UI and the ship-or-cut call; Sonnet does the rest. DEC-053/054 stand.
+
+## REVIVAL-001 / DEC-054: Answers to gameplay review questions Q-G1..Q-G13
+
+- **Date:** 2026-10-20.
+- **Source:** Jack, 2026-10-20 (mass packet-generation instruction): all Q-G answers Yes, with the specifics below.
+- **Decision:**
+  - Q-G1 Yes: wire `MIN_LEVEL_BY_ITEM` (B1 phase 1). Opus finalizes the list; start: L2 Taro and Strawberry syrup, L3 Hot Cocoa Classic, L4 Strawberry tapioca, each only after an end-to-end recipe chain is confirmed.
+  - Q-G2 Yes: Jack sources `SFX.UI.Serve` and `LevelUp` (then `Combo`, `StepDone`, `Rush`). Until then reuse `SFX.UI.Success` for level-up and quest claim.
+  - Q-G3 Yes: nickname prompt after the first shift with Skip (keeps DisplayName); Daily auto-open after the first serve for new profiles.
+  - Q-G4 Yes: HUD level pill + XP bar above the Shift pill, built from CafeRating primitives.
+  - Q-G5 Yes: client "+N BB" popup that rises and fades, GOLD with the derived stroke.
+  - Q-G6 Yes: leaving lines by outcome. Served: "Cya later!", "Goodbye!", "Bye!", "Thanks, see ya!", "Later!", "I'm out, have a good one!". Walkout: "Wow... Ok...". Karen after a Perfect uses the served lines.
+  - Q-G7 Yes: "Team N/10" in the serve toast from 5/10 (amends DEC-036 C5).
+  - Q-G8 Yes: "you can afford a capsule" toast once per session; price read from capsule definitions.
+  - Q-G9 Yes: drop the false hint lines (N4).
+  - Q-G10 Yes: real-player serves count toward the shift N (H5).
+  - Q-G11 Yes: "Fast bonus!" cue on the ticket while patience >= 50% (T4).
+  - Q-G12 Yes: hide the Points button.
+  - Q-G13 Yes: B4 before release only if a Studio perf check is clean, otherwise first update; the B4 packet carries the perf-check protocol and fallback.
+
+## REVIVAL-001 / DEC-053: Jack delegates open-ended design decisions to Opus for the gameplay packets
+
+- **Date:** 2026-10-20.
+- **Source:** Jack, 2026-10-20: "Jack has DELEGATED all open-ended design decisions to Opus" (mass packet generation phase).
+- **Decision:** For the approved gameplay-review set (A: N1-N3, K1, T1, T2, P1-P3, H1, Q1, Q2; B: S4, S5, S6, S10, C1-C3, X1, X4, X5, M4, O3, O4, S2, T3, H2, X2, P6, N5, S3, S7, X3, N4, T4, O1, O2, O5, H5, X6, Q4, S8, S9, T7, Q3, C6; C: P4, T5, H3, H6, H4, Q5, Q6, X7, X10, T8; D: B1, B2, B4, B5, B6, B7) Opus decides mechanics, numbers, copy, names and UI specs; economy values keep the PROPOSED tag and go to `_meta/ECONOMY-LEDGER.md`. This covers STYLE rule 0 (new UI built only from Styles tokens and Pane: no new colors, fonts, radii or springs) and DEC-008 for design choices only, not assets. Excluded: T6, X8/B3, X9, B8. Jack still confirms: B5 regulars roster, B6 track rewards, B2 upgrade list (packets READY-PENDING-CONFIRM). HARD STOPS stay with Jack: (1) assets that do not exist or are unconfirmed (seat folders, sounds, models, NPC looks; never build a substitute); (2) profile field renames or removals (adding is fine); (3) changes to existing catalog data (IDs, rarities, odds, capsule contents; new entries are fine); (4) Robux products, prices, gamepass or product IDs; (5) failure screens or join/play blocks. Packets and docs only in this phase: zero edits under `src/`. Packet home: `tasks/REVIVAL-001/packets/`, shared docs in `packets/_meta/`.
+
 ## REVIVAL-001 / DEC-051: Real-order customers advance their RegularOrders quest (Q27)
 
 - **Date:** 2026-10-20.
