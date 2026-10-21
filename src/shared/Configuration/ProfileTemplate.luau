@@ -76,6 +76,11 @@ export type WeeklyQuestData = {
 	ActiveQuests: { QuestEntry },
 }
 
+export type RegularsData = {
+	Visits: { [string]: number },
+	RewardClaimed: boolean,
+}
+
 export type ProfileTemplate = {
 	Currency: {
 		Points: number,
@@ -121,6 +126,9 @@ export type ProfileTemplate = {
 	InviteRewardedBy: number,
 	-- Invite rewards this player earned as inviter on UTC day `Day` (daily cap in SocialInviteService).
 	InviteRewardsToday: { Day: number, Count: number },
+	-- BIG-B5: serves per regular id (RegularsConfig.ROSTER); a key present = stamped.
+	-- RewardClaimed is set once when every regular is stamped. Written only by RegularsService.
+	Regulars: RegularsData,
 }
 
 return {
@@ -196,5 +204,9 @@ return {
 	InviteRewardsToday = {
 		Day = 0,
 		Count = 0,
+	},
+	Regulars = {
+		Visits = {},
+		RewardClaimed = false,
 	},
 }

@@ -22,6 +22,7 @@ local Purchases = require(script.Purchases)
 -- local ServerInfo = require(script.ServerInfo)
 local Settings = require(script.Settings)
 local Statistics = require(script.Statistics)
+local Regulars = require(script.Regulars)
 local c = React.createElement
 
 local PAGES: { OpenableMenu.Page } = {
@@ -56,9 +57,16 @@ local PAGES: { OpenableMenu.Page } = {
 		Content = c(Statistics, {}),
 	},
 	{
+		-- BIG-B5 Regulars collection.
+		Key = "Regulars",
+		Label = "Regulars",
+		LayoutOrder = 6,
+		Content = c(Regulars, {}),
+	},
+	{
 		Key = "Purchases",
 		Label = "Purchases",
-		LayoutOrder = 6,
+		LayoutOrder = 7,
 		Content = c(Purchases, {}),
 	},
 	-- ServerInfo button is made invisible for now to fit the side menu cleanly (DEC-019).
@@ -71,13 +79,13 @@ local PAGES: { OpenableMenu.Page } = {
 	{
 		Key = "Settings",
 		Label = "Settings",
-		LayoutOrder = 7,
+		LayoutOrder = 8,
 		Content = c(Settings, {}),
 	},
 	{
 		Key = "Credits",
 		Label = "Credits",
-		LayoutOrder = 8,
+		LayoutOrder = 9,
 		Content = c(Credits, {}),
 	},
 }
@@ -102,7 +110,7 @@ return function(props)
 			ListLayout = {
 				HorizontalAlignment = Enum.HorizontalAlignment.Center,
 				VerticalAlignment = Enum.VerticalAlignment.Top,
-				Padding = UDim.new(0.015, 0),
+				Padding = UDim.new(0.008, 0), -- BIG-B5: 0.015 -> 0.008 so nine tabs fit the side panel
 				SortOrder = Enum.SortOrder.LayoutOrder,
 			},
 		},

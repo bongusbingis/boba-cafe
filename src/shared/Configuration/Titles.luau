@@ -60,6 +60,13 @@ Titles.MANUAL_TITLES = {
 		Description = "Awarded for winning a special event",
 		UnearnedDisplay = "Secret",
 	},
+	{
+		Id = "CafeFavourite", -- BIG-B5, DEC-058 Opus-set, Jack to tune
+		Text = "Cafe Favourite",
+		Source = "Manual",
+		Description = "Stamp every regular on the Regulars page",
+		UnearnedDisplay = "Secret",
+	},
 } :: { TitleDef }
 
 local byId: { [string]: TitleDef } = {}

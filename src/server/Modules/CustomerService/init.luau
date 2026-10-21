@@ -447,14 +447,32 @@ function CustomerService:_spawnIfNeeded()
 	end
 
 	local variant = self:_rollVariant()
-	local npc = Npc.new(context, order, spec, Rules.PatienceSeconds({ order }), variant)
+	local regular = self:_regulars("RollSpawn", variant ~= nil) -- BIG-B5 hook: maybe a named regular
+	local look = if regular ~= nil then regular.Look else nil
+	local npc = Npc.new(context, order, spec, Rules.PatienceSeconds({ order }), variant, look)
 	if npc == nil then
 		return
+	end
+	if regular ~= nil then
+		self:_regulars("Attach", npc, regular) -- BIG-B5 hook
 	end
 	self._npcs[npc] = true
 	self._npcCount += 1
 	table.insert(self._line, npc)
 	npc:Start()
+end
+
+-- BIG-B5 hook: calls RegularsService[method]; any failure means a normal customer (nil).
+function CustomerService:_regulars(method: string, ...: any): any
+	local ok, result = pcall(function(...)
+		local regulars = Knit.GetService("RegularsService") :: any
+		return regulars[method](regulars, ...)
+	end, ...)
+	if not ok then
+		warnThrottled("regulars", `[CustomerService] Regulars {method} failed: {result}`)
+		return nil
+	end
+	return result
 end
 
 -- True while the server-wide Rush Hour runs (set by CafeRatingService).
@@ -922,6 +940,7 @@ function CustomerService:_onTakeOrderTriggered(npc: Npc.Npc, player: Player)
 	-- sees the same order, so an open tablet always still matches.
 	if not npc.OrderRolled then
 		local order, scripted = self:_pickOrderFor(player)
+		order = self:_regulars("OrderFor", npc, player, order, scripted) or order -- BIG-B5 hook: a regular's favourite
 		local spec, reason = OrderSpec.FromOrderItem(order)
 		if spec == nil then
 			warnOnce("order", `[CustomerService] Order rejected by OrderSpec ({reason}): {order.Category}/{order.Item}`)
