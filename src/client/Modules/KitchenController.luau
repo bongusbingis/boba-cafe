@@ -5,6 +5,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
 
 ---> Dependencies
 
@@ -524,15 +525,29 @@ end
 -- Optional timing tap after pour stations. The server opens the window and
 -- owns the clock; this only draws the meter from the server's view and
 -- reports back how long the player watched it. Skipping it changes nothing.
--- Built from Styles tokens only (DEC-013): GREEN fills, OFFWHITE surfaces,
--- Fredoka labels, PromptButton-style radius and stroke.
+-- UI-REVISION: a titled HUD card in OrderQueue's chrome (9-slice panel, GREEN_LIGHT
+-- border, GREEN Banner), a GRAY pill track with the GREEN zone and GOLD sweet spot,
+-- a GREEN_DEEP marker, a GREEN_LIGHT hint that names the player's input, and a
+-- PromptButton-style "Pour" button. Pops in and out on a UIScale.
 
 local POUR_GUI_NAME = "PourMeter"
-local POUR_POSITION = UDim2.fromScale(0.5, 0.68)
-local POUR_SIZE = UDim2.fromScale(0.34, 0.14)
+local POUR_POSITION = UDim2.fromScale(0.5, 0.66)
+local POUR_SIZE = UDim2.fromScale(0.265, 0.175) -- OrderQueue's footprint
+local POUR_ASPECT = 2.23008
+local POUR_MIN_SIZE = Vector2.new(240, 108)
+local POUR_MAX_SIZE = Vector2.new(360, 162)
+local POUR_BASE_IMAGE = "http://www.roblox.com/asset/?id=13473433246"
+local POUR_BORDER_IMAGE = "http://www.roblox.com/asset/?id=13382163077"
+local POUR_BANNER_BACK = "http://www.roblox.com/asset/?id=13369767169"
+local POUR_BANNER_FRONT = "http://www.roblox.com/asset/?id=13369762471"
+local POUR_OPEN_TWEEN = TweenInfo.new(0.22, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+local POUR_CLOSE_TWEEN = TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+local POUR_PRESS_TWEEN = TweenInfo.new(0.08, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 
 type PourState = {
 	Gui: ScreenGui?,
+	Scale: UIScale?,
+	Hint: TextLabel?,
 	Track: Frame?,
 	Zone: Frame?,
 	PerfectZone: Frame?,
@@ -546,6 +561,8 @@ type PourState = {
 
 local pour: PourState = {
 	Gui = nil,
+	Scale = nil,
+	Hint = nil,
 	Track = nil,
 	Zone = nil,
 	PerfectZone = nil,
@@ -574,9 +591,40 @@ local function hidePourMeter()
 		pour.Heartbeat = nil
 	end
 	pour.WindowId = nil
-	if pour.Gui then
-		pour.Gui.Enabled = false
+	local gui = pour.Gui
+	if gui == nil or not gui.Enabled then
+		return
 	end
+	local scale = pour.Scale
+	if scale == nil then
+		gui.Enabled = false
+		return
+	end
+	local tween = TweenService:Create(scale, POUR_CLOSE_TWEEN, { Scale = 0 })
+	tween.Completed:Connect(function(state)
+		-- A window that opened again mid-close keeps the gui up.
+		if state == Enum.PlaybackState.Completed and pour.WindowId == nil then
+			gui.Enabled = false
+		end
+	end)
+	tween:Play()
+end
+
+-- The hint names the input the player is using right now.
+local function pourHintText(): string
+	local last = UserInputService:GetLastInputType()
+	if last == Enum.UserInputType.Touch then
+		return "Tap Pour in the green!"
+	elseif string.find(last.Name, "Gamepad") ~= nil then
+		return "Press A in the green!"
+	end
+	return "Press E or Space in the green!"
+end
+
+local function addPourCorner(parent: GuiObject, radius: UDim)
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = radius
+	corner.Parent = parent
 end
 
 local function tapPourMeter()
@@ -602,23 +650,110 @@ local function buildPourMeter(): ScreenGui
 	gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 	gui.Enabled = false
 
+	-- Outer frame: OrderQueue geometry (aspect, min/max pixel size, ZIndex 10).
 	local panel = Instance.new("Frame")
+	panel.Name = "Panel"
 	panel.AnchorPoint = Vector2.new(0.5, 0.5)
 	panel.Position = POUR_POSITION
 	panel.Size = POUR_SIZE
 	panel.BackgroundTransparency = 1
+	panel.ZIndex = 10
 	panel.Parent = gui
 
+	local aspect = Instance.new("UIAspectRatioConstraint")
+	aspect.AspectRatio = POUR_ASPECT
+	aspect.Parent = panel
+
+	local sizeLimit = Instance.new("UISizeConstraint")
+	sizeLimit.MinSize = POUR_MIN_SIZE
+	sizeLimit.MaxSize = POUR_MAX_SIZE
+	sizeLimit.Parent = panel
+
+	local scale = Instance.new("UIScale")
+	scale.Scale = 0
+	scale.Parent = panel
+
+	local base = Instance.new("ImageLabel")
+	base.Name = "Base"
+	base.AnchorPoint = Vector2.new(0.5, 0.5)
+	base.Position = UDim2.fromScale(0.5, 0.5)
+	base.Size = UDim2.fromScale(1, 1)
+	base.BackgroundTransparency = 1
+	base.Image = POUR_BASE_IMAGE
+	base.ScaleType = Enum.ScaleType.Slice
+	base.SliceCenter = Rect.new(104, 96, 408, 416)
+	base.Parent = panel
+
+	local border = Instance.new("ImageLabel")
+	border.Name = "Border"
+	border.AnchorPoint = Vector2.new(0.5, 0.5)
+	border.Position = UDim2.fromScale(0.5, 0.5)
+	border.Size = UDim2.fromScale(0.970972, 0.938198)
+	border.BackgroundTransparency = 1
+	border.Image = POUR_BORDER_IMAGE
+	border.ImageColor3 = Styles.GREEN_LIGHT
+	border.Parent = base
+
+	-- Banner (Components/Buttons/Banner) in GREEN, sized as OrderQueue's.
+	local banner = Instance.new("Frame")
+	banner.Name = "Banner"
+	banner.AnchorPoint = Vector2.new(0.5, 0.5)
+	banner.Position = UDim2.fromScale(0.5, 0.21)
+	banner.Size = UDim2.fromScale(0.8, 0.371931)
+	banner.BackgroundTransparency = 1
+	banner.ZIndex = 10
+	banner.Parent = base
+
+	local bannerBack = Instance.new("ImageLabel")
+	bannerBack.AnchorPoint = Vector2.new(0.5, 0)
+	bannerBack.Position = UDim2.fromScale(0.5, 0.1)
+	bannerBack.Size = UDim2.fromScale(1, 0.875)
+	bannerBack.BackgroundTransparency = 1
+	bannerBack.Image = POUR_BANNER_BACK
+	bannerBack.ImageColor3 = Styles.GREEN
+	bannerBack.ZIndex = 8
+	bannerBack.Parent = banner
+
+	local bannerFront = Instance.new("ImageLabel")
+	bannerFront.AnchorPoint = Vector2.new(0.5, 0)
+	bannerFront.Position = UDim2.fromScale(0.5, 0)
+	bannerFront.Size = UDim2.fromScale(0.845523, 0.758506)
+	bannerFront.BackgroundTransparency = 1
+	bannerFront.Image = POUR_BANNER_FRONT
+	bannerFront.ImageColor3 = Styles.GREEN
+	bannerFront.ZIndex = 11
+	bannerFront.Parent = banner
+
+	local bannerText = Instance.new("TextLabel")
+	bannerText.AnchorPoint = Vector2.new(0, 0.5)
+	bannerText.Position = UDim2.fromScale(0, 0.5)
+	bannerText.Size = UDim2.fromScale(1, 0.8)
+	bannerText.BackgroundTransparency = 1
+	bannerText.FontFace = Styles.FONT_FREDOKA
+	bannerText.Text = "Pour Timing"
+	bannerText.TextColor3 = Color3.new(1, 1, 1)
+	bannerText.TextScaled = true
+	bannerText.ZIndex = 12
+	bannerText.Parent = bannerFront
+
+	local content = Instance.new("Frame")
+	content.Name = "Content"
+	content.AnchorPoint = Vector2.new(0.5, 0)
+	content.Position = UDim2.fromScale(0.5, 0.39)
+	content.Size = UDim2.fromScale(0.84, 0.52)
+	content.BackgroundTransparency = 1
+	content.Parent = base
+
 	local track = Instance.new("Frame")
+	track.Name = "Track"
 	track.AnchorPoint = Vector2.new(0.5, 0)
-	track.Position = UDim2.fromScale(0.5, 0)
-	track.Size = UDim2.fromScale(1, 0.38)
-	track.BackgroundColor3 = Styles.GREEN_DEEP
+	track.Position = UDim2.fromScale(0.5, 0.04)
+	track.Size = UDim2.fromScale(1, 0.24)
+	track.BackgroundColor3 = Styles.GRAY
 	track.BorderSizePixel = 0
-	local trackCorner = Instance.new("UICorner")
-	trackCorner.CornerRadius = Styles.CORNER_CARD
-	trackCorner.Parent = track
-	track.Parent = panel
+	track.ClipsDescendants = true
+	addPourCorner(track, Styles.CORNER_BUTTON)
+	track.Parent = content
 
 	local config = KitchenConfig.POUR_METER
 
@@ -638,35 +773,92 @@ local function buildPourMeter(): ScreenGui
 	perfectZone.BorderSizePixel = 0
 	perfectZone.Parent = zone
 
+	-- The marker rides over the track (not inside it) so it can stand taller than it.
+	local markerLane = Instance.new("Frame")
+	markerLane.Name = "MarkerLane"
+	markerLane.AnchorPoint = Vector2.new(0.5, 0.5)
+	markerLane.Position = UDim2.fromScale(0.5, 0.04 + 0.12)
+	markerLane.Size = UDim2.fromScale(1, 0.42)
+	markerLane.BackgroundTransparency = 1
+	markerLane.ZIndex = 3
+	markerLane.Parent = content
+
 	local marker = Instance.new("Frame")
+	marker.Name = "Marker"
 	marker.AnchorPoint = Vector2.new(0.5, 0.5)
 	marker.Position = UDim2.fromScale(0, 0.5)
-	marker.Size = UDim2.fromScale(0.025, 1)
-	marker.BackgroundColor3 = Styles.OFFWHITE
+	marker.Size = UDim2.fromScale(0.03, 1)
+	marker.BackgroundColor3 = Styles.GREEN_DEEP
 	marker.BorderSizePixel = 0
 	marker.ZIndex = 3
-	marker.Parent = track
+	addPourCorner(marker, Styles.CORNER_FULL)
+	local markerStroke = Instance.new("UIStroke")
+	markerStroke.Color = Styles.OFFWHITE
+	markerStroke.Thickness = 2
+	markerStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	markerStroke.Parent = marker
+	marker.Parent = markerLane
 
+	local hint = Instance.new("TextLabel")
+	hint.Name = "Hint"
+	hint.AnchorPoint = Vector2.new(0.5, 0)
+	hint.Position = UDim2.fromScale(0.5, 0.39)
+	hint.Size = UDim2.fromScale(1, 0.2)
+	hint.BackgroundTransparency = 1
+	hint.FontFace = Styles.FONT_FREDOKA
+	hint.Text = pourHintText()
+	hint.TextColor3 = Styles.GREEN_LIGHT
+	hint.TextScaled = true
+	hint.Parent = content
+	local hintLimit = Instance.new("UITextSizeConstraint")
+	hintLimit.MaxTextSize = 24
+	hintLimit.Parent = hint
+
+	-- PromptButton anatomy: radius 0.25, fill-lerp stroke 3, white label at max 24.
 	local tapButton = Instance.new("TextButton")
+	tapButton.Name = "PourButton"
 	tapButton.AnchorPoint = Vector2.new(0.5, 1)
 	tapButton.Position = UDim2.fromScale(0.5, 1)
-	tapButton.Size = UDim2.fromScale(1, 0.5)
+	tapButton.Size = UDim2.fromScale(0.5, 0.36)
 	tapButton.AutoButtonColor = false
 	tapButton.BackgroundColor3 = Styles.GREEN
-	tapButton.FontFace = Styles.FONT_FREDOKA
-	tapButton.Text = "TAP!"
-	tapButton.TextColor3 = Color3.new(1, 1, 1)
-	tapButton.TextScaled = true
-	local tapCorner = Instance.new("UICorner")
-	tapCorner.CornerRadius = Styles.CORNER_BUTTON
-	tapCorner.Parent = tapButton
+	tapButton.BorderSizePixel = 0
+	tapButton.Text = ""
+	addPourCorner(tapButton, UDim.new(0.25, 0))
 	local tapStroke = Instance.new("UIStroke")
 	tapStroke.Color = Styles.GREEN:Lerp(Color3.new(0, 0, 0), 0.15)
 	tapStroke.Thickness = 3
+	tapStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 	tapStroke.Parent = tapButton
-	tapButton.Parent = panel
+	local tapScale = Instance.new("UIScale")
+	tapScale.Parent = tapButton
+	local tapLabel = Instance.new("TextLabel")
+	tapLabel.AnchorPoint = Vector2.new(0.5, 0.5)
+	tapLabel.Position = UDim2.fromScale(0.5, 0.5)
+	tapLabel.Size = UDim2.fromScale(0.85, 0.6)
+	tapLabel.BackgroundTransparency = 1
+	tapLabel.FontFace = Styles.FONT_FREDOKA
+	tapLabel.Text = "Pour"
+	tapLabel.TextColor3 = Color3.new(1, 1, 1)
+	tapLabel.TextScaled = true
+	tapLabel.Parent = tapButton
+	local tapLimit = Instance.new("UITextSizeConstraint")
+	tapLimit.MaxTextSize = 24
+	tapLimit.Parent = tapLabel
+	tapButton.Parent = content
+	tapButton.MouseEnter:Connect(function()
+		TweenService:Create(tapScale, POUR_PRESS_TWEEN, { Scale = 1.07 }):Play()
+	end)
+	tapButton.MouseLeave:Connect(function()
+		TweenService:Create(tapScale, POUR_PRESS_TWEEN, { Scale = 1 }):Play()
+	end)
+	tapButton.MouseButton1Down:Connect(function()
+		TweenService:Create(tapScale, POUR_PRESS_TWEEN, { Scale = 0.93 }):Play()
+	end)
 	tapButton.Activated:Connect(tapPourMeter)
 
+	pour.Scale = scale
+	pour.Hint = hint
 	pour.Track = track
 	pour.Zone = zone
 	pour.PerfectZone = perfectZone
@@ -705,6 +897,16 @@ local function showPourMeter(view: any)
 	pour.OpenedAt = os.clock()
 	pour.Period = view.Period or config.PERIOD_SECONDS
 	pour.Duration = view.Duration or config.DURATION_SECONDS
+	if pour.Hint then
+		pour.Hint.Text = pourHintText()
+	end
+	if pour.Scale then
+		local wasOpen = gui.Enabled
+		if not wasOpen then
+			pour.Scale.Scale = 0.6
+		end
+		TweenService:Create(pour.Scale, POUR_OPEN_TWEEN, { Scale = 1 }):Play()
+	end
 	gui.Enabled = true
 	unbindPourTap()
 	ContextActionService:BindActionAtPriority(POUR_TAP_ACTION, function(_actionName, inputState)
@@ -736,17 +938,17 @@ local function showPourFeedback(tier: string)
 	local strokeColor: Color3
 
 	if tier == "Perfect" then
-		text = "Perfect Pour!"
+		text = "Perfect pour!"
 		textColor = Styles.GOLD
-		strokeColor = Styles.GOLD:Lerp(Color3.new(0, 0, 0), 0.35)
+		strokeColor = Styles.GOLD_DEEP
 	elseif tier == "Good" then
-		text = "Good Pour"
+		text = "Good pour"
 		textColor = Styles.GREEN
-		strokeColor = Styles.GREEN:Lerp(Color3.new(0, 0, 0), 0.35)
+		strokeColor = Styles.GREEN_DEEP
 	elseif tier == "Poor" then
-		text = "Messy Pour!"
-		textColor = Color3.fromRGB(255, 110, 80)
-		strokeColor = Color3.fromRGB(120, 30, 20)
+		text = "Messy pour"
+		textColor = Styles.CORAL
+		strokeColor = Styles.CORAL:Lerp(Color3.new(0, 0, 0), 0.3)
 	else
 		return
 	end
