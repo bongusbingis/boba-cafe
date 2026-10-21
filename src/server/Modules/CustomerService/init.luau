@@ -901,6 +901,20 @@ function CustomerService:_onAtPickup(npc: Npc.Npc)
 		return
 	end
 	self:_ensureNpcPrompt(npc, "Serve", npc.LabelText)
+	-- TAKEOVER-REVIEW-FIX P3-3: the ticket was built at submit, before pickup patience started, so it had no
+	-- PatienceEnd and the bar stayed hidden. Re-send it now that StartPatience has run.
+	local holder = self._assignee[npc]
+	local held = if holder ~= nil then self._tickets[holder] else nil
+	if holder ~= nil and held ~= nil then
+		for slot, ticket in held do
+			if ticket.NpcModel == npc.Model then
+				ticket.PatienceEnd = npc.Model:GetAttribute("PatienceEnd")
+				ticket.PatienceTotal = npc.PatienceTotal
+				self:_fireTicket(holder, ticket, slot)
+				break
+			end
+		end
+	end
 end
 
 function CustomerService:_ensureNpcPrompt(npc: Npc.Npc, actionText: string, objectText: string)
