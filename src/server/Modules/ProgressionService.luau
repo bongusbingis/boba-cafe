@@ -82,6 +82,49 @@ end
 
 ---> public
 
+-- Pure helpers (exposed for specs).
+
+-- Level and XP into that level after adding `add` XP to `level` with `xp` into it.
+function ProgressionService.Predict(level: number, xp: number, add: number): (number, number)
+	local after, into = level, xp + add
+	while after < Progression.MAX_LEVEL and into >= Progression.XpToNext(after) do
+		into -= Progression.XpToNext(after)
+		after += 1
+	end
+	if after >= Progression.MAX_LEVEL then
+		into = 0
+	end
+	return after, into
+end
+
+-- Level-up toast (FEEDBACK-VOICE 6): new drinks and the nametag reward first, at most two unlocks.
+function ProgressionService.LevelUpText(level: number): string
+	local all = unlocksAt(level)
+	local picked: { string } = {}
+	for _, line in all do
+		if string.find(line, "^New drink") or string.find(line, "^New nametag") then
+			table.insert(picked, line)
+		end
+	end
+	for _, line in all do
+		if #picked >= 2 then
+			break
+		end
+		if table.find(picked, line) == nil then
+			table.insert(picked, line)
+		end
+	end
+	local text = `Level up! You are now level {level}`
+	for index = 1, math.min(#picked, 2) do
+		text ..= ` · {picked[index]}`
+	end
+	return text
+end
+
+function ProgressionService.UnlocksAt(level: number): { string }
+	return unlocksAt(level)
+end
+
 function ProgressionService:GetLevel(player: Player): number
 	local level = player:GetAttribute("Level")
 	return if typeof(level) == "number" then level else 1
@@ -150,15 +193,46 @@ function ProgressionService:_onLevelUp(player: Player, level: number, proxy: any
 				Properties = {},
 			})
 		end
-		local text = `Level up! You are now level {level}`
-		if reward ~= nil then
-			text ..= ` · New nametag: {reward.Name}`
-		end
+		local text = ProgressionService.LevelUpText(level)
 		Knit.GetService("DialogService"):Notify(player, { Text = text, SoundEnabled = true } :: any)
 	end)
 	if not ok then
 		warn(`[ProgressionService] Level-up step failed: {err}`)
 	end
+end
+
+-- Grants the shift XP and fills the card fields (Xp, LevelBefore, LevelAfter, XpIntoLevel,
+-- XpForLevel, NextUnlock). AddXp can apply synchronously when the profile is already loaded,
+-- so the prediction starts from a snapshot taken before it (REVIEW-FIX P2-1).
+function ProgressionService:_applyShiftXp(player: Player, summary: any)
+	local levelBefore = self:GetLevel(player)
+	local shiftXp = ShiftConfig.SHIFT_XP + ShiftConfig.SHIFT_XP_PER_STAR * summary.Stars
+	local earned = self._shiftXp[player] or 0 -- serve XP, already boosted
+	self._shiftXp[player] = 0
+	local cached = self._state[player]
+	local snapshot = if cached ~= nil then { Level = cached.Level, XP = cached.XP } else nil
+	local granted = self:AddXp(player, shiftXp, true)
+	summary.Xp = earned + granted
+	summary.LevelBefore = levelBefore
+	summary.LevelAfter = levelBefore
+
+	local after, into
+	if snapshot ~= nil then
+		after, into = ProgressionService.Predict(snapshot.Level, snapshot.XP, granted)
+	else
+		-- No cache before AddXp: whatever is cached now already includes `granted` (or it is still loading).
+		local state = self._state[player]
+		if state == nil then
+			return
+		end
+		after, into = state.Level, state.XP
+	end
+	summary.LevelAfter = after
+	if after < Progression.MAX_LEVEL then
+		summary.XpIntoLevel = math.floor(into)
+		summary.XpForLevel = Progression.XpToNext(after)
+	end
+	summary.NextUnlock = nextUnlock(after)
 end
 
 ---> lifecycle
@@ -187,35 +261,7 @@ function ProgressionService:KnitStart()
 
 	Knit.GetService("ShiftService").ShiftEnding:Connect(function(player, summary)
 		local ok, err = pcall(function()
-			local levelBefore = self:GetLevel(player)
-			local shiftXp = ShiftConfig.SHIFT_XP + ShiftConfig.SHIFT_XP_PER_STAR * summary.Stars
-			local earned = self._shiftXp[player] or 0 -- serve XP, already boosted
-			self._shiftXp[player] = 0
-			local granted = self:AddXp(player, shiftXp, true)
-			local total = earned + granted
-			summary.Xp = total
-			summary.LevelBefore = levelBefore
-			-- AddXp finishes after the profile loads; predict from the cache for the card.
-			local state = self._state[player]
-			local after = levelBefore
-			local xpInto = 0
-			if state ~= nil then
-				local xp = state.XP + granted
-				after = state.Level
-				while after < Progression.MAX_LEVEL and xp >= Progression.XpToNext(after) do
-					xp -= Progression.XpToNext(after)
-					after += 1
-				end
-				xpInto = xp
-			end
-			summary.LevelAfter = after
-			if state ~= nil then
-				if after < Progression.MAX_LEVEL then
-					summary.XpIntoLevel = math.floor(xpInto)
-					summary.XpForLevel = Progression.XpToNext(after)
-				end
-				summary.NextUnlock = nextUnlock(after)
-			end
+			self:_applyShiftXp(player, summary)
 		end)
 		if not ok then
 			warn(`[ProgressionService] Shift XP failed: {err}`)
