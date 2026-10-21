@@ -19,6 +19,7 @@ local Packages = ReplicatedStorage:WaitForChild("Packages")
 local Knit = require(Packages.Knit)
 local GoodSignal = require(Packages.GoodSignal)
 local ShiftConfig = require(ReplicatedStorage.Shared.Configuration.ShiftConfig)
+local InventoryItemDefinitions = require(ReplicatedStorage.Shared.Configuration.InventoryItemDefinitions)
 
 ---> types
 
@@ -42,6 +43,8 @@ export type ShiftState = {
 	BestCombo: number,
 	Completed: number, -- shifts completed before this one (profile stat)
 	Loaded: boolean, -- Target has been read from the profile
+	PrevBestCombo: number?, -- stored personal bests before this shift (nil = unknown)
+	PrevBestShiftPay: number?,
 }
 
 export type SetClockedInResult = {
@@ -57,6 +60,14 @@ local TOGGLE_COOLDOWN_SECONDS = 2
 local READ_TIMEOUT_SECONDS = 5
 local COUNT_ATTRIBUTE = "ShiftCount"
 local TARGET_ATTRIBUTE = "ShiftTarget"
+local NUDGE_TEXT = "You can afford a capsule! Check the Shop."
+local NUDGE_DELAY_SECONDS = 1.5 -- lets the star bonus land before the balance is read
+local NUDGE_POLL_SECONDS = 1
+local NUDGE_NICK_WAIT_SECONDS = 45
+local NUDGE_DRAIN_SECONDS = 1
+local NEW_BEST_MIN_COMBO = 2
+local CARD_OPEN_ATTRIBUTE = "ShiftCardOpen"
+local NICK_PENDING_ATTRIBUTE = "NicknamePending"
 
 ---> service
 
@@ -77,6 +88,7 @@ local ShiftService = Knit.CreateService({
 	_toggleDebounces = {} :: { [number]: boolean },
 	_states = {} :: { [Player]: ShiftState },
 	_customers = nil :: any,
+	_capsuleNudged = {} :: { [Player]: boolean },
 })
 
 ---> private
@@ -136,6 +148,35 @@ function ShiftService:_readCompleted(player: Player): number?
 	return nil
 end
 
+-- Stored personal bests (BestCombo, BestShiftPay); nil when unreadable.
+function ShiftService:_readBests(player: Player): (number?, number?)
+	local data = Knit.GetService("DataService")
+	local pcallOk, awaitOk, profile = pcall(function()
+		return data:GetDataAsync(player):timeout(READ_TIMEOUT_SECONDS):await()
+	end)
+	if pcallOk and awaitOk and typeof(profile) == "table" then
+		local combo = (profile :: any).BestCombo
+		local pay = (profile :: any).BestShiftPay
+		return if typeof(combo) == "number" then combo else nil, if typeof(pay) == "number" then pay else nil
+	end
+	warn(`[ShiftService] Could not read personal bests for {player.Name}; no new-best lines.`)
+	return nil, nil
+end
+
+-- Lowest capsule price from the definitions (Price strings such as " 75"); nil when none parse.
+function ShiftService.CheapestCapsulePrice(): number?
+	local cheapest: number? = nil
+	for _, capsule in pairs(InventoryItemDefinitions.Capsules :: any) do
+		if typeof(capsule) == "table" and typeof(capsule.Price) == "string" then
+			local price = tonumber((capsule.Price:gsub("%s", "")))
+			if price ~= nil and price > 0 and (cheapest == nil or price < cheapest) then
+				cheapest = price
+			end
+		end
+	end
+	return cheapest
+end
+
 function ShiftService:_beginShift(player: Player)
 	local state = newState(ShiftConfig.SHIFT_SIZE, 1, false)
 	self._states[player] = state
@@ -151,6 +192,12 @@ function ShiftService:_beginShift(player: Player)
 					state.Target = ShiftConfig.FIRST_SHIFT_SIZE
 				end
 			end
+			local bestCombo, bestPay = self:_readBests(player)
+			if self._states[player] ~= state then
+				return
+			end
+			state.PrevBestCombo = bestCombo
+			state.PrevBestShiftPay = bestPay
 			state.Loaded = true
 			self:_publish(player, state)
 			self:_checkEnd(player, state)
@@ -188,14 +235,32 @@ function ShiftService:_endShift(player: Player, state: ShiftState)
 		Bonus = bonus,
 		BestCombo = state.BestCombo,
 		First = first,
+		NewBestCombo = false,
+		NewBestShiftPay = false,
 		Seconds = if first then ShiftConfig.CARD_SECONDS_FIRST else ShiftConfig.CARD_SECONDS_LATER,
 		Xp = nil :: number?,
 		LevelBefore = nil :: number?,
 		LevelAfter = nil :: number?,
 	}
 
+	-- New-best flags need a stored best above 0, so a first-ever shift never shows them.
+	local prevCombo, prevPay = state.PrevBestCombo, state.PrevBestShiftPay
+	if prevCombo ~= nil and prevCombo > 0 and state.BestCombo >= NEW_BEST_MIN_COMBO and state.BestCombo > prevCombo then
+		summary.NewBestCombo = true
+	end
+	if prevPay ~= nil and prevPay > 0 and state.Pay > prevPay then
+		summary.NewBestShiftPay = true
+	end
+
 	-- Reset first so a failure below never leaves the shift stuck.
-	self._states[player] = newState(ShiftConfig.SHIFT_SIZE, state.Completed + 1, true)
+	local nextState = newState(ShiftConfig.SHIFT_SIZE, state.Completed + 1, true)
+	if prevCombo ~= nil then
+		nextState.PrevBestCombo = math.max(prevCombo, state.BestCombo)
+	end
+	if prevPay ~= nil then
+		nextState.PrevBestShiftPay = math.max(prevPay, state.Pay)
+	end
+	self._states[player] = nextState
 	self:_publish(player, self._states[player])
 
 	pcall(function()
@@ -212,7 +277,82 @@ function ShiftService:_endShift(player: Player, state: ShiftState)
 	pcall(function()
 		Knit.GetService("QuestService"):AdvanceQuest(player, "ShiftsCompleted", 1)
 	end)
+	-- Card-open flag for the nickname prompt (ONBOARD-NICK); the card is client-timed.
+	pcall(function()
+		player:SetAttribute(CARD_OPEN_ATTRIBUTE, true)
+		task.delay(summary.Seconds, function()
+			pcall(function()
+				if player.Parent ~= nil then
+					player:SetAttribute(CARD_OPEN_ATTRIBUTE, nil)
+				end
+			end)
+		end)
+	end)
 	self.Client.ShiftEnded:Fire(player, summary)
+
+	-- After the card is sent: monotonic best writes, then the capsule nudge.
+	local bestCombo, bestPay = state.BestCombo, state.Pay
+	task.spawn(function()
+		pcall(function()
+			self:_writeBests(player, bestCombo, bestPay)
+		end)
+	end)
+	task.spawn(function()
+		pcall(function()
+			self:_capsuleNudge(player)
+		end)
+	end)
+end
+
+-- Raises the stored bests; never lowers them.
+function ShiftService:_writeBests(player: Player, combo: number, pay: number)
+	local ok, awaitOk, proxy = pcall(function()
+		return Knit.GetService("DataService"):GetDataAsync(player):timeout(READ_TIMEOUT_SECONDS):await()
+	end)
+	if not ok or not awaitOk or typeof(proxy) ~= "table" then
+		return
+	end
+	local data: any = proxy
+	if combo >= NEW_BEST_MIN_COMBO and combo > (tonumber(data.BestCombo) or 0) then
+		data:SetValue({ "BestCombo" }, combo)
+	end
+	if pay > (tonumber(data.BestShiftPay) or 0) then
+		data:SetValue({ "BestShiftPay" }, pay)
+	end
+end
+
+-- One capsule-affordable toast per session, after the nickname prompt (if any) has closed.
+function ShiftService:_capsuleNudge(player: Player)
+	if self._capsuleNudged[player] then
+		return
+	end
+	local price = ShiftService.CheapestCapsulePrice()
+	if price == nil then
+		return
+	end
+	task.wait(NUDGE_DELAY_SECONDS)
+	local waited = 0
+	while player:GetAttribute(NICK_PENDING_ATTRIBUTE) == true and waited < NUDGE_NICK_WAIT_SECONDS do
+		task.wait(NUDGE_POLL_SECONDS)
+		waited += NUDGE_POLL_SECONDS
+	end
+	task.wait(NUDGE_DRAIN_SECONDS)
+	if player.Parent == nil or self._capsuleNudged[player] or not self:IsClockedIn(player) then
+		return
+	end
+	local ok, awaitOk, proxy = pcall(function()
+		return Knit.GetService("DataService"):GetDataAsync(player):timeout(READ_TIMEOUT_SECONDS):await()
+	end)
+	if not ok or not awaitOk or typeof(proxy) ~= "table" then
+		return
+	end
+	local currency = (proxy :: any).Currency
+	local bucks = if typeof(currency) == "table" then currency.BobaBucks else nil
+	if typeof(bucks) ~= "number" or bucks < price then
+		return
+	end
+	self._capsuleNudged[player] = true
+	Knit.GetService("DialogService"):Notify(player, { Text = NUDGE_TEXT } :: any)
 end
 
 ---> public
@@ -323,6 +463,7 @@ end
 function ShiftService:PlayerRemoving(player: Player)
 	self._states[player] = nil
 	self._toggleDebounces[player.UserId] = nil
+	self._capsuleNudged[player] = nil
 end
 
 return ShiftService

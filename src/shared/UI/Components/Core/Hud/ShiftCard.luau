@@ -41,12 +41,17 @@ local function buildLines(summary): { string }
 		pay ..= ` · Tips {summary.Tips}`
 	end
 	local lines = {
-		string.rep("★", summary.Stars or 0),
+		string.rep("★", summary.Stars or 0)
+			.. (if summary.NewBestShiftPay == true then " · Best shift ever!" else ""),
 		served,
 		pay,
 	}
 	if (summary.BestCombo or 0) >= 2 then
-		table.insert(lines, `Best combo x {summary.BestCombo}`)
+		if summary.NewBestCombo == true then
+			table.insert(lines, `New best combo! x {summary.BestCombo}`)
+		else
+			table.insert(lines, `Best combo x {summary.BestCombo}`)
+		end
 	end
 	if summary.Xp ~= nil then
 		local progress = ""

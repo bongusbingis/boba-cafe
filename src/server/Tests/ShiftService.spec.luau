@@ -224,4 +224,54 @@ return function()
 			service._states[player] = nil
 		end)
 	end)
+
+	describe("personal bests and capsule price", function()
+		local function endWith(prevCombo: number?, prevPay: number?, combo: number, pay: number)
+			local player = makePlayer(9300 + combo)
+			local state = {
+				Resolved = 5,
+				Target = 5,
+				Served = 5,
+				Walkouts = 0,
+				Perfects = 5,
+				Pay = pay,
+				Tips = 0,
+				BestCombo = combo,
+				Completed = 1,
+				Loaded = true,
+				PrevBestCombo = prevCombo,
+				PrevBestShiftPay = prevPay,
+			}
+			service._states[player] = state
+			local captured = nil
+			local connection = service.ShiftEnding:Connect(function(_, summary)
+				captured = summary
+			end)
+			service:_endShift(player, state)
+			connection:Disconnect()
+			service._states[player] = nil
+			return captured
+		end
+
+		it("flags a new best only above a stored best", function()
+			local summary = endWith(3, 40, 5, 60)
+			expect(summary.NewBestCombo).to.equal(true)
+			expect(summary.NewBestShiftPay).to.equal(true)
+		end)
+
+		it("never flags a first-ever shift or an unknown best", function()
+			local first = endWith(0, 0, 5, 60)
+			expect(first.NewBestCombo).to.equal(false)
+			expect(first.NewBestShiftPay).to.equal(false)
+			local unknown = endWith(nil, nil, 5, 60)
+			expect(unknown.NewBestCombo).to.equal(false)
+			expect(unknown.NewBestShiftPay).to.equal(false)
+		end)
+
+		it("reads the cheapest capsule price from definitions", function()
+			local price = service.CheapestCapsulePrice()
+			expect(typeof(price)).to.equal("number")
+			expect(price > 0).to.equal(true)
+		end)
+	end)
 end

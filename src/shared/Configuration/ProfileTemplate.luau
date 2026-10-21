@@ -103,6 +103,8 @@ export type ProfileTemplate = {
 	XP: number,
 	DailyRewards: DailyRewardData,
 	Quests: QuestData,
+	BestCombo: number,
+	BestShiftPay: number,
 }
 
 return {
@@ -165,4 +167,6 @@ return {
 		ActiveQuests = {},
 		FreeRerollsRemaining = 0,
 	},
+	BestCombo = 0,
+	BestShiftPay = 0,
 }
