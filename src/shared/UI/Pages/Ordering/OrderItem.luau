@@ -27,7 +27,7 @@ local Styles = require(UI.Styles)
 
 ---> constants
 local REMOVE_ICON = "http://www.roblox.com/asset/?id=13934199293"
-local DESC_FONT = Font.new("rbxasset://fonts/families/Nunito.json", Enum.FontWeight.Bold, Enum.FontStyle.Normal)
+local DESC_FONT = Styles.FONT_FREDOKA
 
 ---> private
 local c = React.createElement

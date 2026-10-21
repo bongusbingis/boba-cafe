@@ -549,12 +549,16 @@ return function(props: {
 					AnchorPoint = Vector2.new(0.5, 0.5),
 					AutoLocalize = false,
 					BackgroundTransparency = 1,
-					FontFace = Font.new("rbxasset://fonts/families/SourceSansPro.json"),
+					-- UI-REVISION: Fredoka like the rest of the terminal; wraps instead of
+					-- shrinking to one line; keeps the customer's request when tapped.
+					ClearTextOnFocus = false,
+					FontFace = Styles.FONT_FREDOKA,
 					Position = UDim2.fromScale(0.502242, 0.497798),
 					Size = UDim2.fromScale(0.932735, 0.941467),
 					Text = noteText,
 					TextColor3 = Color3.new(1, 1, 1),
 					TextScaled = true,
+					TextWrapped = true,
 					TextXAlignment = Enum.TextXAlignment.Left,
 					TextYAlignment = Enum.TextYAlignment.Top,
 				}, {

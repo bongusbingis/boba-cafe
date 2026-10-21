@@ -80,10 +80,13 @@ return function(props: {
 			}),
 		}),
 
+		-- UI-REVISION: the label toggles too; the box alone was a ~4% wide tap target.
 		Label = c(Pane, {
-			ClassName = "TextLabel",
+			ClassName = "TextButton",
+			OnClick = props.OnToggle,
 			Native = {
 				AnchorPoint = Vector2.new(0, 0.5),
+				AutoButtonColor = false,
 				BackgroundTransparency = 1,
 				FontFace = Styles.FONT_FREDOKA,
 				Position = UDim2.fromScale(0.06, 0.5),

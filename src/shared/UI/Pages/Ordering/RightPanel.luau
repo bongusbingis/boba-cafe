@@ -165,13 +165,14 @@ return function(props)
 			}),
 			Text = c(Pane, {
 				ClassName = "TextLabel",
+				MaxTextSize = 25,
 				Native = {
 					BackgroundTransparency = 1,
 					FontFace = Styles.FONT_FREDOKA,
 					LayoutOrder = 2,
 					Size = UDim2.fromScale(1, 0.6),
 					Text = props.NpcOrderText,
-					TextColor3 = Color3.fromRGB(50, 50, 50),
+					TextColor3 = Color3.new(),
 					TextScaled = true,
 					TextWrapped = true,
 					TextXAlignment = Enum.TextXAlignment.Left,
