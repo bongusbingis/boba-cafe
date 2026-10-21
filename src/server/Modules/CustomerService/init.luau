@@ -56,6 +56,8 @@ local Styles = require(Shared.UI.Styles)
 
 local WORLD_WAIT_SECONDS = 10 -- total budget for resolving the authored world in KnitStart
 local PACING_TICK_SECONDS = 1
+local COMBO_MILESTONES = { [3] = true, [5] = true, [10] = true } -- TUNING: combo values that get a callout toast
+local TEAM_PROGRESS_FROM = 5 -- TUNING: show Team N/10 on the serve toast from this chain length
 local SERVED_COUNT_TIMEOUT_SECONDS = 5 -- budget for reading Statistics.CustomersServed
 local CUSTOMERS_FOLDER_NAME = "Customers"
 -- Players get their own group so NPCs can pass through them. NPCs still collide
@@ -160,6 +162,7 @@ local CustomerService = Knit.CreateService({
 	_combo = {} :: { [Player]: number }, -- consecutive Perfect serves (session memory only)
 	_lastOrder = {} :: { [Player]: Rules.OrderItem }, -- last order per barista (no repeats)
 	_teamChain = 0, -- consecutive successful serves server-wide (session memory only)
+	_firstServe = {} :: { [Player]: boolean }, -- barista -> served 0 customers when last assigned (session memory)
 	_teamComboUntil = 0, -- os.clock() deadline of the active Team Combo (0 = none)
 	_npcSeq = 0, -- makes ticket Ids unique per NPC
 	_order = nil :: any,
@@ -416,18 +419,22 @@ end
 -- One more successful serve (NPC or real-player) or, with `grade` nil, a walkout. Completing a chain
 -- opens the window, or refreshes it to a full window when one is already open (DEC-036 C4).
 -- No yield: the end timer and the announcement are deferred.
-function CustomerService:RecordTeamServe(grade: Rules.ServeGrade?)
+function CustomerService:RecordTeamServe(grade: Rules.ServeGrade?, server: Player?): boolean
 	local chain, triggered = Rules.NextTeamChain(self._teamChain, grade, TeamComboConfig.CHAIN_TARGET)
 	self._teamChain = chain
 	if not triggered then
-		return
+		return false
 	end
 
 	local deadline = os.clock() + TeamComboConfig.DURATION_SECONDS
 	self._teamComboUntil = deadline
-	self:_notifyTeamCombo(
-		`Team Combo! +{math.round(TeamComboConfig.PAY_BONUS * 100)}% pay for {TeamComboConfig.DURATION_SECONDS} seconds!`
-	)
+	local bonusText =
+		`+{math.round(TeamComboConfig.PAY_BONUS * 100)}% pay for {TeamComboConfig.DURATION_SECONDS} seconds!`
+	if server ~= nil then
+		self:_notifyTeamCombo(`{server.DisplayName} completed the Team Combo! {bonusText}`)
+	else
+		self:_notifyTeamCombo(`Team Combo! {bonusText}`)
+	end
 	task.delay(TeamComboConfig.DURATION_SECONDS, function()
 		if self._teamComboUntil ~= deadline then
 			return -- refreshed by a newer chain, whose own timer ends it
@@ -435,6 +442,7 @@ function CustomerService:RecordTeamServe(grade: Rules.ServeGrade?)
 		self._teamComboUntil = 0
 		self:_notifyTeamCombo("Team Combo is over.")
 	end)
+	return true
 end
 
 -- The variant for a new NPC: Rules.PickVariant at the highest clocked-in level. Contained:
@@ -537,6 +545,7 @@ end
 -- 5 times). Returns the order and whether it is scripted.
 function CustomerService:_pickOrderFor(player: Player): (Rules.OrderItem, boolean)
 	local served = self:_readServedCount(player)
+	self._firstServe[player] = if served == 0 then true else nil
 	if served < CustomerConfig.FIRST_SESSION_COUNT then
 		local scripted = CustomerConfig.FIRST_SESSION_ORDERS[served + 1]
 		return {
@@ -818,7 +827,10 @@ function CustomerService:_onServeTriggered(npc: Npc.Npc, player: Player)
 	end)
 	local newCombo = Rules.NextCombo(combo, grade)
 	self._combo[player] = newCombo
-	self:RecordTeamServe(grade)
+	local teamDone = self:RecordTeamServe(grade, player)
+	local teamChain = self._teamChain
+	local isFirstServe = self._firstServe[player] == true and npc.Scripted
+	self._firstServe[player] = nil
 
 	local text = `+{pay} · {grade}`
 	if npc.Variant ~= nil then
@@ -830,7 +842,31 @@ function CustomerService:_onServeTriggered(npc: Npc.Npc, player: Player)
 	if newCombo >= 2 then
 		text ..= ` · Combo ×{newCombo}`
 	end
+	if teamChain >= TEAM_PROGRESS_FROM then
+		text ..= ` · Team {teamChain}/{TeamComboConfig.CHAIN_TARGET}`
+	end
 	self._dialog:Notify(player, { Title = "Order served!", Description = text })
+	task.defer(function()
+		pcall(function()
+			if COMBO_MILESTONES[newCombo] and not teamDone and not isFirstServe then
+				local nextBonus =
+					math.round(math.min(newCombo * CustomerConfig.COMBO_STEP, CustomerConfig.COMBO_CAP) * 100)
+				local comboText = `Combo ×{newCombo}! Next serve +{nextBonus}% pay`
+				self._dialog:Notify(player, { Title = "Combo", Description = comboText, Text = comboText } :: any)
+			end
+			if isFirstServe then
+				task.delay(0.2, function()
+					pcall(function()
+						local firstText = `Your first order! +{pay} Boba Bucks`
+						self._dialog:Notify(
+							player,
+							{ Title = "First order", Description = firstText, Text = firstText } :: any
+						)
+					end)
+				end)
+			end
+		end)
+	end)
 	self:_showServePay(npc, pay)
 
 	npc.Rescue = rescue
@@ -1025,6 +1061,7 @@ function CustomerService:PlayerAdded(player: Player)
 end
 
 function CustomerService:PlayerRemoving(player: Player)
+	self._firstServe[player] = nil
 	local connection = self._characterConnections[player]
 	if connection ~= nil then
 		connection:Disconnect()
