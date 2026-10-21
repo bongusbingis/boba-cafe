@@ -20,6 +20,8 @@ local GATES_PATH = { "AreaLimits", "BreakGates" }
 local GATES_TIMEOUT_SECONDS = 10
 local LOCAL_FOLDER_NAME = "AreaLimitsLocal"
 local TEMPLATE_NAME = "Gate_Template" -- parked template part, never cloned
+local CLOCKED_IN_ATTRIBUTE = "ClockedIn" -- owned by ShiftService
+local WELCOME_TEXT = "Welcome to Boba Cafe! Follow the gold glow to make your first drink."
 
 ---> Controller
 
@@ -54,7 +56,29 @@ local function applyGates(gates: Instance)
 	folder.Parent = Workspace
 end
 
+local welcomeShown = false
+
+local function tryWelcome()
+	if welcomeShown or LocalPlayer:GetAttribute(CLOCKED_IN_ATTRIBUTE) ~= true then
+		return
+	end
+	Knit.GetController("DataController"):GetDataAsync():andThen(function(playerData)
+		if welcomeShown or LocalPlayer:GetAttribute(CLOCKED_IN_ATTRIBUTE) ~= true then
+			return
+		end
+		local stats = playerData.Statistics
+		if not stats or stats.ShiftsCompleted ~= 0 then
+			return
+		end
+		welcomeShown = true
+		Knit.GetController("DialogController"):Toast(WELCOME_TEXT)
+	end)
+end
+
 function AreaController:KnitStart()
+	LocalPlayer:GetAttributeChangedSignal(CLOCKED_IN_ATTRIBUTE):Connect(tryWelcome)
+	tryWelcome()
+
 	local gates = WorldPath.waitFor(ReplicatedStorage, GATES_PATH, GATES_TIMEOUT_SECONDS)
 	if not gates then
 		-- Never block or kick: missing content means no gates.
