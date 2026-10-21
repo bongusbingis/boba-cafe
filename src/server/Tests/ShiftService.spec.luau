@@ -285,13 +285,14 @@ return function()
 	end)
 
 	describe("Shift streak bonus", function()
-		local function endShiftOnce(player: any, completed: number)
+		local function endShiftOnce(player: any, completed: number, served: number?)
+			local servedCount = if served == nil then 10 else served
 			local state = {
 				Resolved = 10,
 				Target = 10,
-				Served = 10,
-				Walkouts = 0,
-				Perfects = 10,
+				Served = servedCount,
+				Walkouts = 10 - servedCount,
+				Perfects = servedCount,
 				Pay = 0,
 				Tips = 0,
 				BestCombo = 0,
@@ -323,6 +324,18 @@ return function()
 			local fourth = endShiftOnce(player, 4)
 			expect(fourth.ShiftStreak).to.equal(4)
 			expect(fourth.StreakBonus).to.equal(0)
+			service:PlayerRemoving(player)
+		end)
+
+		it("an all-walkout shift breaks the streak and pays no streak bonus (TAKEOVER-REVIEW-FIX P3-9)", function()
+			local player = makePlayer(9403)
+			endShiftOnce(player, 1)
+			endShiftOnce(player, 2)
+			local empty = endShiftOnce(player, 3, 0)
+			expect(empty.ShiftStreak).to.equal(0)
+			expect(empty.StreakBonus).to.equal(0)
+			local after = endShiftOnce(player, 4)
+			expect(after.ShiftStreak).to.equal(1)
 			service:PlayerRemoving(player)
 		end)
 

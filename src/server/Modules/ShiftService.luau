@@ -276,7 +276,8 @@ function ShiftService:_endShift(player: Player, state: ShiftState)
 	-- No clean server-side chest grant exists (TreasureHuntService only grants via a
 	-- physical ClaimChest with distance/cooldown/badge side effects), so every
 	-- STREAK_LENGTH-th shift end grants the chest's average BB value instead.
-	local streak = (self._streaks[player] or 0) + 1
+	-- TAKEOVER-REVIEW-FIX P3-9: a shift with no serve (all walkouts) breaks the streak instead of advancing it.
+	local streak = if state.Served > 0 then (self._streaks[player] or 0) + 1 else 0
 	self._streaks[player] = streak
 	local streakBonus = 0
 	if streak % ShiftConfig.STREAK_LENGTH == 0 then
