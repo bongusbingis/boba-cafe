@@ -443,6 +443,17 @@ ticket = {
 **Depends on:** DataService, CurrencyService, CapsuleService, BadgeService, StatisticsService, DialogService.
 **Consumers:** EventService (Treasure Frenzy).
 
+### Cafe Upgrades (BIG-B2)
+**Purpose:** BobaBucks sink and server pride: players buy server-wide cafe upgrades (Potted Plants, Fairy Lights, Tip Jar, Jukebox) at a board whose plaque names the buyers.
+**Owner modules:** `server/Modules/CafeUpgradeService/` (`init`, `Builders`), `shared/Configuration/CafeUpgradeConfig.luau`, `server/Tests/CafeUpgradeService.spec.luau`
+**Key invariants:**
+- Per-server state, never saved (DEC-058 Opus-set): a new server starts bare. Prices, levels and the tip-jar chance live in `CafeUpgradeConfig`.
+- No authored content. `KnitStart` builds `workspace.CafeUpgrades` (BuiltBy `Opus-B2`) with the board and each bought level's models, placed from `CafeUpgradeConfig.ORIGIN` * `PLACEMENT` (rough; Jack adjusts).
+- Purchase: board prompt, then server-driven `ActionPrompt` (one button per upgrade) and `ButtonPrompt` confirm. `TryPurchaseAsync` spends through `CurrencyService:TrySpendAsync`; a per-upgrade pending lock and the expected-level check stop two buyers paying for one level. A distance check runs before the spend.
+- Tip Jar: the level is the workspace attribute `CafeTipJarLevel`. The NPC serve path (`CustomerService:_onServeTriggered`) rolls `CafeUpgradeConfig.TipJarExtra` synchronously (no yield) and adds the extra to `Tip` and pay.
+**Depends on:** CurrencyService, DialogService, AnalyticsEvents.
+**Consumers:** CustomerService (tip jar).
+
 ### Leaderboards
 **Purpose:** Five monthly OrderedDataStore boards, in-world SurfaceGuis and top-player statues.
 **Owner modules:** `server/Modules/LeaderboardService.luau`, `shared/Configuration/LeaderboardConfig.luau`, `server/Modules/CurrencyService.luau` (`LEADERBOARD_EXCLUDED_REASONS`), `server/Tests/LeaderboardService.spec.luau`

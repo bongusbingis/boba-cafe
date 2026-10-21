@@ -47,6 +47,7 @@ local CustomerConfig = require(Shared.Configuration.CustomerConfig)
 local RatingConfig = require(Shared.Configuration.RatingConfig)
 local SeatingConfig = require(Shared.Configuration.SeatingConfig)
 local TeamComboConfig = require(Shared.Configuration.TeamComboConfig)
+local CafeUpgradeConfig = require(Shared.Configuration.CafeUpgradeConfig)
 local Progression = require(Shared.Configuration.Progression)
 local OrderSpec = require(Shared.Ordering.OrderSpec)
 local WorldPath = require(Shared.Utility.WorldPath)
@@ -58,6 +59,7 @@ local Styles = require(Shared.UI.Styles)
 ---> constants
 
 local WORLD_WAIT_SECONDS = 10 -- total budget for resolving the authored world in KnitStart
+local TIP_JAR_RANDOM = Random.new() -- BIG-B2 tip jar rolls
 local PACING_TICK_SECONDS = 1
 local COMBO_MILESTONES = { [3] = true, [5] = true, [10] = true } -- TUNING: combo values that get a callout toast
 local TEAM_PROGRESS_FROM = 5 -- TUNING: show Team N/10 on the serve toast from this chain length
@@ -1156,6 +1158,15 @@ function CustomerService:_onServeTriggered(npc: Npc.Npc, player: Player)
 	if pourTip > 0 then
 		tip += pourTip
 		pay += pourTip
+	end
+	-- BIG-B2 Cafe Upgrades tip jar: a synchronous attribute read and roll, no yield.
+	local jarTip = CafeUpgradeConfig.TipJarExtra(
+		workspace:GetAttribute(CafeUpgradeConfig.TIP_JAR_LEVEL_ATTRIBUTE),
+		TIP_JAR_RANDOM:NextNumber()
+	)
+	if jarTip > 0 then
+		tip += jarTip
+		pay += jarTip
 	end
 	self._currency:Modify(player, "BobaBucks", pay, "Gameplay")
 	pcall(function()
