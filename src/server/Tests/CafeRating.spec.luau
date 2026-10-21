@@ -117,5 +117,26 @@ return function()
 
 			expect(CafeRatingService._rush).to.equal(true)
 		end)
+
+		it("publishes RushEndsAt for an earned rush", function()
+			CafeRatingService._partyActive = false
+			CafeRatingService._rush = false
+			CafeRatingService._rushEndsAt = nil
+			CafeRatingService._partyCooldownEnd = nil
+			CafeRatingService._rating = 100
+			CafeRatingService._lastRushEnd = nil
+
+			CafeRatingService:_checkRush()
+			CafeRatingService:_publish()
+
+			local ends = workspace:GetAttribute("RushEndsAt")
+			expect(typeof(ends)).to.equal("number")
+			expect(ends > workspace:GetServerTimeNow()).to.equal(true)
+
+			CafeRatingService._rush = false
+			CafeRatingService._rushEndsAt = nil
+			CafeRatingService:_publish()
+			expect(workspace:GetAttribute("RushEndsAt")).to.equal(nil)
+		end)
 	end)
 end

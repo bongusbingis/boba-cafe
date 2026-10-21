@@ -17,6 +17,7 @@ local CafeRatingService = Knit.CreateService({
 	Client = {},
 	_rating = RatingConfig.START,
 	_rush = false,
+	_rushEndsAt = nil :: number?,
 	_lastRushEnd = nil :: number?,
 	_partyActive = false,
 	_partyEndTime = nil :: number?,
@@ -43,6 +44,7 @@ function CafeRatingService:_publish()
 	workspace:SetAttribute("CafeRating", self._rating)
 	workspace:SetAttribute("RushHour", self._rush)
 	workspace:SetAttribute("BobaParty", self._partyActive)
+	workspace:SetAttribute("RushEndsAt", self._rushEndsAt)
 end
 
 function CafeRatingService:_notifyAll(text: string)
@@ -71,6 +73,8 @@ end
 function CafeRatingService:StartOrExtendBobaParty(buyer: Player?): (boolean, string?)
 	if self._partyActive then
 		self._partyEndTime = (self._partyEndTime or os.clock()) + RatingConfig.BOBA_PARTY_EXTENSION_SECONDS
+		self._rushEndsAt = workspace:GetServerTimeNow() + (self._partyEndTime - os.clock())
+		self:_publish()
 		local text = if buyer
 			then `{buyer.Name} extended the Boba Party by 10 minutes!`
 			else "Boba Party was extended by 10 minutes!"
@@ -85,6 +89,7 @@ function CafeRatingService:StartOrExtendBobaParty(buyer: Player?): (boolean, str
 	self._partyCooldownEnd = nil
 	workspace:SetAttribute("BobaPartyCooldownEndsAt", nil)
 	self._rush = true
+	self._rushEndsAt = workspace:GetServerTimeNow() + RatingConfig.BOBA_PARTY_SECONDS
 	workspace:SetAttribute("RushHour", true)
 	workspace:SetAttribute("BobaParty", true)
 	self:_publish()
@@ -109,6 +114,7 @@ function CafeRatingService:StartOrExtendBobaParty(buyer: Player?): (boolean, str
 
 		self._partyActive = false
 		self._rush = false
+		self._rushEndsAt = nil
 		self._partyEndTime = nil
 		workspace:SetAttribute("RushHour", false)
 		workspace:SetAttribute("BobaParty", false)
@@ -145,12 +151,14 @@ function CafeRatingService:_checkRush()
 		return -- stays at 100 inside the gap
 	end
 	self._rush = true
+	self._rushEndsAt = workspace:GetServerTimeNow() + RatingConfig.RUSH_SECONDS
 	self:_notifyAll("Rush Hour! More customers and double pay!")
 	task.delay(RatingConfig.RUSH_SECONDS, function()
 		if self._partyActive then
 			return
 		end
 		self._rush = false
+		self._rushEndsAt = nil
 		self._rating = RatingConfig.AFTER_RUSH
 		self._lastRushEnd = os.clock()
 		self:_publish()

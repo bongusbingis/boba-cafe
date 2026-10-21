@@ -1,0 +1,5 @@
+PASS  src/server/Modules/CafeRatingService.luau  selene new=0 (baseline[HEAD]=0 now=0)  stylua=ok
+PASS  src/shared/UI/Components/Core/Hud/CafeRating.luau  selene new=0 (baseline[HEAD]=0 now=0)  stylua=ok
+PASS  src/server/Tests/CafeRating.spec.luau  selene new=0 (baseline[HEAD]=0 now=0)  stylua=ok
+PASS  rojo build -> /mnt/c/Users/jackc/AppData/Local/Temp/boba-gate/gate-build.rbxl
+GATE: PASS

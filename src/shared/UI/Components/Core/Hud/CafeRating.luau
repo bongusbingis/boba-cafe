@@ -35,6 +35,9 @@ return function()
 	local rating, setRating = React.useState(50)
 	local rush, setRush = React.useState(false)
 	local clockedIn, setClockedIn = React.useState(true)
+	local endsAt, setEndsAt = React.useState(nil)
+	local party, setParty = React.useState(false)
+	local _tick, setTick = React.useState(0)
 
 	if RunService:IsRunning() then
 		React.useEffect(function()
@@ -43,12 +46,17 @@ return function()
 				local value = workspace:GetAttribute("CafeRating")
 				setRating(if typeof(value) == "number" then value else 50)
 				setRush(workspace:GetAttribute("RushHour") == true)
+				local ends = workspace:GetAttribute("RushEndsAt")
+				setEndsAt(if typeof(ends) == "number" then ends else nil)
+				setParty(workspace:GetAttribute("BobaParty") == true)
 				setClockedIn(player:GetAttribute("ClockedIn") ~= false)
 			end
 			refresh()
 			local conns = {
 				workspace:GetAttributeChangedSignal("CafeRating"):Connect(refresh),
 				workspace:GetAttributeChangedSignal("RushHour"):Connect(refresh),
+				workspace:GetAttributeChangedSignal("RushEndsAt"):Connect(refresh),
+				workspace:GetAttributeChangedSignal("BobaParty"):Connect(refresh),
 				player:GetAttributeChangedSignal("ClockedIn"):Connect(refresh),
 			}
 			return function()
@@ -59,8 +67,43 @@ return function()
 		end, {})
 	end
 
+	local hasCountdown = rush and endsAt ~= nil
+	if RunService:IsRunning() then
+		React.useEffect(function()
+			if not hasCountdown then
+				return nil
+			end
+			local alive = true
+			task.spawn(function()
+				while alive do
+					task.wait(1)
+					if alive then
+						setTick(function(n)
+							return n + 1
+						end)
+					end
+				end
+			end)
+			return function()
+				alive = false
+			end
+		end, { rush, endsAt })
+	end
+
 	if not clockedIn then
 		return nil
+	end
+
+	local remaining = 0
+	if hasCountdown then
+		remaining = math.ceil(endsAt - workspace:GetServerTimeNow())
+	end
+	local bannerText = "Cafe Rating"
+	if rush then
+		bannerText = if party then "Boba Party!" else "Rush Hour!"
+		if remaining > 0 then
+			bannerText ..= string.format(" %d:%02d", math.floor(remaining / 60), remaining % 60)
+		end
 	end
 
 	local alpha = math.clamp(rating / 100, 0, 1)
@@ -111,7 +154,7 @@ return function()
 		}),
 
 		Title = c(Banner, {
-			Text = if rush then "Rush Hour!" else "Cafe Rating",
+			Text = bannerText,
 			Color = Styles.GREEN,
 			Position = UDim2.fromScale(0.5, 0.3),
 			Size = UDim2.fromScale(0.7, 0.55),
