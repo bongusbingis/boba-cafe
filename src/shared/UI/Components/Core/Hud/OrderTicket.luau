@@ -114,6 +114,28 @@ local function resolveOrderSpec(order)
 	return result
 end
 
+---> Patience bar
+
+-- Thin patience bar (same colours as RecipeCard). Used by the second ticket and
+-- by any collapsed ticket.
+local function patienceBar(patience: number, layoutOrder: number)
+	return c("Frame", {
+		LayoutOrder = layoutOrder,
+		BackgroundColor3 = Styles.GRAY,
+		BorderSizePixel = 0,
+		Size = UDim2.new(1, 0, 0, 6),
+	}, {
+		Fill = c("Frame", {
+			BackgroundColor3 = if patience < 0.25
+				then Styles.RED
+				elseif patience < 0.5 then Styles.GOLD_MID
+				else Styles.GREEN,
+			BorderSizePixel = 0,
+			Size = UDim2.fromScale(math.clamp(patience, 0, 1), 1),
+		}),
+	})
+end
+
 ---> Item Row
 
 -- Renders a single order item: its name and any customisation lines beneath it.
@@ -313,6 +335,14 @@ return function(props: { stacked: boolean?, slot: number?, layoutOrder: number? 
 		end, { character })
 	end
 
+	-- A new order (different Id, or non-nil after nil) re-opens a collapsed ticket.
+	local orderKey = if order ~= nil then (order.Id or order) else nil
+	React.useEffect(function()
+		if orderKey ~= nil and canCollapse then
+			setCollapsed(false)
+		end
+	end, { orderKey })
+
 	-- Nothing to show when the player has no active order
 	if not order then
 		return nil
@@ -373,23 +403,9 @@ return function(props: { stacked: boolean?, slot: number?, layoutOrder: number? 
 		or nil
 
 	-- The second ticket shows its patience bar (same colours as RecipeCard).
-	local secondPatience = if isSecond and typeof(patience) == "number"
-		then c("Frame", {
-			LayoutOrder = 3,
-			BackgroundColor3 = Styles.GRAY,
-			BorderSizePixel = 0,
-			Size = UDim2.new(1, 0, 0, 6),
-		}, {
-			Fill = c("Frame", {
-				BackgroundColor3 = if patience < 0.25
-					then Styles.RED
-					elseif patience < 0.5 then Styles.GOLD_MID
-					else Styles.GREEN,
-				BorderSizePixel = 0,
-				Size = UDim2.fromScale(math.clamp(patience, 0, 1), 1),
-			}),
-		})
-		else nil
+	local secondPatience = if isSecond and typeof(patience) == "number" then patienceBar(patience, 3) else nil
+	-- Collapsed tickets (both slots) keep the patience bar directly under the header.
+	local collapsedPatience = if collapsed and typeof(patience) == "number" then patienceBar(patience, 1) else nil
 
 	-- "Ready for pick up" footer, shown once the order has been deposited
 	local readyFooter = readyNode
@@ -466,13 +482,18 @@ return function(props: { stacked: boolean?, slot: number?, layoutOrder: number? 
 				BackgroundTransparency = 1,
 				FontFace = Styles.FONT_FREDOKA,
 				Size = UDim2.fromScale(1, 1),
-				Text = if isSecond then "Order Ticket 2" else "Order Ticket",
+				Text = if collapsed and typeof(order.Label) == "string"
+					then order.Label
+					elseif isSecond then "Order Ticket 2"
+					else "Order Ticket",
 				TextColor3 = Styles.OFFWHITE,
 				TextSize = 15,
+				TextTruncate = Enum.TextTruncate.AtEnd,
 			}),
 		}),
 
 		-- Item list, recipe card and footer hide while collapsed to the header
+		PatienceCollapsed = collapsedPatience,
 		Items = if collapsed
 			then nil
 			else c(
