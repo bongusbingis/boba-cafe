@@ -31,7 +31,7 @@ local CLOCKED_IN_ATTRIBUTE = "ClockedIn" -- owned by the server's ShiftService
 local COUNT_TWEEN = TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 local POP_SCALE = 1.07
 local CLOCK_OUT_TITLE = "Clock Out?"
-local CLOCK_OUT_TEXT = "Your shift progress resets."
+local CLOCK_OUT_TEXT = "Your shift progress is saved. Clock back in to pick up where you left off."
 
 ---> styles
 local Styles = require(UI.Styles)

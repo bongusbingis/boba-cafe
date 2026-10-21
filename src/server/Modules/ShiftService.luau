@@ -87,6 +87,7 @@ local ShiftService = Knit.CreateService({
 
 	_toggleDebounces = {} :: { [number]: boolean },
 	_states = {} :: { [Player]: ShiftState },
+	_paused = {} :: { [Player]: ShiftState }, -- loaded shift kept across a clock out (session only)
 	_customers = nil :: any,
 	_capsuleNudged = {} :: { [Player]: boolean },
 	_streaks = {} :: { [Player]: number }, -- session-only consecutive shifts completed
@@ -394,9 +395,18 @@ function ShiftService:SetClockedIn(player: Player, clockedIn: boolean)
 	end
 	player:SetAttribute(CLOCKED_IN_ATTRIBUTE, clockedIn)
 	if clockedIn then
-		self:_beginShift(player)
+		local paused = self._paused[player]
+		self._paused[player] = nil
+		if paused ~= nil and paused.Loaded then
+			-- Resume where the barista left off (progress, stars and bests intact).
+			self._states[player] = paused
+			self:_publish(player, paused)
+		else
+			self:_beginShift(player)
+		end
 	else
-		-- Shift paused, nothing banked (pay is already banked per serve).
+		-- Shift paused, not reset: the state waits for the next clock in this session.
+		self._paused[player] = self._states[player]
 		self._states[player] = nil
 		self:_publish(player, nil)
 	end
@@ -487,6 +497,7 @@ end
 
 function ShiftService:PlayerRemoving(player: Player)
 	self._states[player] = nil
+	self._paused[player] = nil
 	self._toggleDebounces[player.UserId] = nil
 	self._capsuleNudged[player] = nil
 	self._streaks[player] = nil

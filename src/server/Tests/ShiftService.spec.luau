@@ -83,6 +83,21 @@ return function()
 			expect(fired[1]).to.equal(true)
 			expect(fired[2]).to.equal(false)
 		end)
+
+		it("should keep a loaded shift across clock out and back in", function()
+			local player = makePlayer(1006)
+			player:SetAttribute("ClockedIn", false)
+			local state = { Resolved = 2, Target = 5, Loaded = true }
+			service._states[player] = state
+			player:SetAttribute("ClockedIn", true) -- so the next call is a real change
+			service:SetClockedIn(player, false)
+			expect(service._states[player]).to.equal(nil)
+			service:SetClockedIn(player, true)
+			expect(service._states[player]).to.equal(state)
+			expect(player:GetAttribute("ShiftCount")).to.equal(2)
+			service._states[player] = nil
+			service._paused[player] = nil
+		end)
 	end)
 
 	describe("PlayerAdded", function()
