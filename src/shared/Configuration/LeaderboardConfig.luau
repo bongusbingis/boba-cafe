@@ -9,6 +9,9 @@ export type BoardDefinition = {
 	ModelName: string,
 	Metric: string,
 	Hidden: boolean?,
+	-- All-time OrderedDataStore behind the Global board. Set only where the pre-revival (main, a476819) all-time
+	-- store holds the same metric, so its history keeps showing; otherwise GetAllTimeKey uses AllTime_<board>.
+	AllTimeStore: string?,
 }
 
 local LeaderboardConfig = {
@@ -26,7 +29,10 @@ local LeaderboardConfig = {
 			BoardName = "Most Boba Bucks",
 			ModelName = "Most Boba Bucks",
 			Metric = "BobaBucks",
+			AllTimeStore = "MostBobaBucks_V3_01", -- pre-revival Global store (same metric)
 		},
+		-- PENDING JACK: the pre-revival Global stores MostStaffPoints_V3_01 (staff points, not orders) and
+		-- MostActive_V3_01 (seconds, not minutes) hold different units, so they are left untouched, not merged.
 		OrdersServed = {
 			BoardName = "Most Orders Served",
 			ModelName = "Most Staff Points",
@@ -41,6 +47,7 @@ local LeaderboardConfig = {
 			BoardName = "Top Donators",
 			ModelName = "Top Donators",
 			Metric = "Robux",
+			AllTimeStore = "TopDonators_V3_01", -- pre-revival Global store (same metric)
 		},
 	} :: { [string]: BoardDefinition },
 }
@@ -52,8 +59,13 @@ function LeaderboardConfig.GetMonthKey(boardType: string, timestamp: number?): s
 	return os.date("%Y_%m_", t) .. boardType
 end
 
---- TAKEOVER-REVIEW-FIX P2-4: the all-time OrderedDataStore key behind the Global boards (never resets).
+--- TAKEOVER-REVIEW-FIX P2-4: the all-time OrderedDataStore key behind the Global boards (never resets). Reuses
+--- the pre-revival store where the board defines AllTimeStore, so existing player totals are not orphaned.
 function LeaderboardConfig.GetAllTimeKey(boardType: string): string
+	local def = LeaderboardConfig.BOARDS[boardType]
+	if def ~= nil and def.AllTimeStore ~= nil then
+		return def.AllTimeStore
+	end
 	return "AllTime_" .. boardType
 end
 
