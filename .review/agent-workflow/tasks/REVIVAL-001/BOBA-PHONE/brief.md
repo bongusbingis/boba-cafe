@@ -1,6 +1,6 @@
 # BOBA-PHONE: deferred brief (pick-up document)
 
-Status: **DEFERRED** by Jack, 2026-10-19: "I'd rather defer it so that we can focus on the task as a whole (gameplay especially) rather than a faithful port of something that's already proven in legacy code ... document it explicitly so that another agent can pick it up down the line (since it's a relatively easy port)".
+Status: **packet written** (`packets/BOBA-PHONE.md`, 2026-10-21; Jack: port faithfully, wire to current gameplay). Previously DEFERRED by Jack, 2026-10-19: "I'd rather defer it so that we can focus on the task as a whole (gameplay especially) rather than a faithful port of something that's already proven in legacy code ... document it explicitly so that another agent can pick it up down the line (since it's a relatively easy port)".
 Pick it up after the gameplay milestones Prime is driving, or when Jack asks. Prime owns scheduling. The first step is that an Architect turns this brief into `packets/BOBA-PHONE.md`.
 
 ## What Jack decided (source of truth: `.review/agent-workflow/decisions.md`)
