@@ -1,5 +1,6 @@
 ---> Services
 
+local ContextActionService = game:GetService("ContextActionService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -556,7 +557,18 @@ local pour: PourState = {
 	Heartbeat = nil,
 }
 
+-- TAKEOVER-REVIEW-FIX P2-2: keyboard and gamepad can tap the meter too. Bound only while a window is open, at a
+-- priority above the default character controls, so Space/ButtonA don't jump and E doesn't hit a prompt mid-pour.
+local POUR_TAP_ACTION = "PourMeterTap"
+local POUR_TAP_INPUTS = { Enum.KeyCode.E, Enum.KeyCode.Space, Enum.KeyCode.ButtonA, Enum.KeyCode.ButtonR2 }
+local POUR_TAP_PRIORITY = Enum.ContextActionPriority.High.Value + 50
+
+local function unbindPourTap()
+	ContextActionService:UnbindAction(POUR_TAP_ACTION)
+end
+
 local function hidePourMeter()
+	unbindPourTap()
 	if pour.Heartbeat then
 		pour.Heartbeat:Disconnect()
 		pour.Heartbeat = nil
@@ -694,6 +706,14 @@ local function showPourMeter(view: any)
 	pour.Period = view.Period or config.PERIOD_SECONDS
 	pour.Duration = view.Duration or config.DURATION_SECONDS
 	gui.Enabled = true
+	unbindPourTap()
+	ContextActionService:BindActionAtPriority(POUR_TAP_ACTION, function(_actionName, inputState)
+		if inputState ~= Enum.UserInputState.Begin or pour.WindowId == nil then
+			return Enum.ContextActionResult.Pass
+		end
+		tapPourMeter()
+		return Enum.ContextActionResult.Sink
+	end, false, POUR_TAP_PRIORITY, table.unpack(POUR_TAP_INPUTS))
 	if pour.Heartbeat then
 		pour.Heartbeat:Disconnect()
 	end
