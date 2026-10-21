@@ -624,6 +624,12 @@ function Npc.Leave(self: Npc, reason: string, grade: string?)
 		if thanked then
 			self:_playTrack("Wave", false, Enum.AnimationPriority.Action)
 		end
+		-- UI-REVISION: the order and its patience bar are over; only the leaving line
+		-- (and the "+N BB" popup, which takes the card's spot) stay above the head.
+		local bubble = self._bubbleUI
+		if bubble ~= nil then
+			bubble.Card.Visible = false
+		end
 		self:_say(if thanked then "LeavingServed" else "Leaving")
 	end
 	if grade == "Perfect" then

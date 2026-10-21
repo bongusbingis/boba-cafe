@@ -38,6 +38,7 @@ local PhysicsService = game:GetService("PhysicsService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
 
 local Packages = ReplicatedStorage:WaitForChild("Packages")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -1307,11 +1308,14 @@ function CustomerService:_showServePay(npc: Npc.Npc, pay: number, grade: Rules.S
 	if head == nil then
 		return
 	end
+	-- UI-REVISION: appears where the (now hidden) order card was, under the leaving
+	-- line, then rises a stud and a half and fades, like the pour feedback.
+	local startOffset = Vector3.new(0, 3.5, 0)
 	local gui = Instance.new("BillboardGui")
 	gui.Name = "ServePay"
 	gui.Adornee = head
 	gui.Size = UDim2.fromOffset(120, 40)
-	gui.StudsOffset = Vector3.new(0, 4.5, 0)
+	gui.StudsOffset = startOffset
 	gui.AlwaysOnTop = true
 	gui.MaxDistance = 80
 	gui:SetAttribute("Grade", grade)
@@ -1329,6 +1333,11 @@ function CustomerService:_showServePay(npc: Npc.Npc, pay: number, grade: Rules.S
 	payStroke.Parent = payLabel
 	payLabel.Parent = gui
 	gui.Parent = npc.Model
+	local rise = TweenInfo.new(1.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+	local fade = TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.In, 0, false, 1)
+	TweenService:Create(gui, rise, { StudsOffset = startOffset + Vector3.new(0, 1.5, 0) }):Play()
+	TweenService:Create(payLabel, fade, { TextTransparency = 1 }):Play()
+	TweenService:Create(payStroke, fade, { Transparency = 1 }):Play()
 	task.delay(1.5, function()
 		pcall(function()
 			gui:Destroy()
