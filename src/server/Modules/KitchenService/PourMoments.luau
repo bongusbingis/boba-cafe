@@ -39,6 +39,7 @@ export type PourMoments = {
 	_unlocked: { [Player]: boolean },
 	_pendingThreads: { [Player]: thread },
 	_pendingCancels: { [Player]: () -> () },
+	_pendingFinish: { [Player]: (PourMeter.PourTier?) -> () },
 	Start: (self: PourMoments) -> (),
 	AwaitPour: (self: PourMoments, player: Player, recipeData: RecipeData, model: Model?) -> PourMeter.PourTier?,
 	ReportTap: (self: PourMoments, player: Player, windowId: any, claimedElapsed: any) -> PourMeter.PourTier?,
@@ -71,6 +72,7 @@ function PourMoments.new(service: KitchenService): PourMoments
 		_unlocked = {},
 		_pendingThreads = {},
 		_pendingCancels = {},
+		_pendingFinish = {},
 	}, PourMoments) :: any
 end
 
@@ -82,6 +84,7 @@ function PourMoments:_cancelPending(player: Player)
 	end
 	self._windows[player] = nil
 	self._pendingThreads[player] = nil
+	self._pendingFinish[player] = nil
 end
 
 -- A first serve unlocks the meter for that player. Walkouts do not count.
@@ -145,26 +148,33 @@ function PourMoments:AwaitPour(player: Player, recipeData: RecipeData, model: Mo
 	self._pendingThreads[player] = currentThread
 
 	local cleaned = false
+	local cancelSelf: (() -> ())? = nil
 	local timeoutTask: thread? = nil
 	local unequipConn: RBXScriptConnection? = nil
 	local walkCheckTask: thread? = nil
+
+	-- Never task.cancel the thread cleanup is running on: the timeout and walk-away
+	-- watchers call finish() from inside themselves (TAKEOVER-FIX 1). The handle is
+	-- cleared first and the cancel is pcall'd, so cleanup can never throw and strand
+	-- the awaiting thread (which would pin InteractionRunner's station lock).
+	local function stopThread(handle: thread?)
+		if handle == nil or handle == coroutine.running() then
+			return
+		end
+		pcall(task.cancel, handle)
+	end
 
 	local function cleanup()
 		if cleaned then
 			return
 		end
 		cleaned = true
-		if timeoutTask then
-			task.cancel(timeoutTask)
-			timeoutTask = nil
-		end
+		local timeoutHandle, walkHandle = timeoutTask, walkCheckTask
+		timeoutTask = nil
+		walkCheckTask = nil
 		if unequipConn then
 			unequipConn:Disconnect()
 			unequipConn = nil
-		end
-		if walkCheckTask then
-			task.cancel(walkCheckTask)
-			walkCheckTask = nil
 		end
 		if self._windows[player] == window then
 			self._windows[player] = nil
@@ -172,65 +182,64 @@ function PourMoments:AwaitPour(player: Player, recipeData: RecipeData, model: Mo
 		if self._pendingThreads[player] == currentThread then
 			self._pendingThreads[player] = nil
 		end
-		self._pendingCancels[player] = nil
+		if self._pendingCancels[player] ~= nil and self._pendingCancels[player] == cancelSelf then
+			self._pendingCancels[player] = nil
+		end
+		stopThread(timeoutHandle)
+		stopThread(walkHandle)
 	end
 
-	self._pendingCancels[player] = function()
+	-- The single resolve path. Idempotent; resumes the awaiting thread exactly once.
+	local resumed = false
+	local function finish(tier: PourMeter.PourTier?)
 		cleanup()
+		if resumed then
+			return
+		end
+		resumed = true
 		if coroutine.status(currentThread) == "suspended" then
-			task.spawn(currentThread, nil)
+			task.spawn(currentThread, tier)
 		end
 	end
 
-	-- Timeout fallback: after duration + latency allowance, resolve as "Poor"
+	cancelSelf = function()
+		finish(nil)
+	end
+	self._pendingCancels[player] = cancelSelf
+	self._pendingFinish[player] = finish
+
+	-- Timeout fallback: no tap in time resolves as "Poor" (Jack-confirmed, every pour station).
 	local timeoutSeconds = window.Duration + config.LATENCY_ALLOWANCE_SECONDS
 	timeoutTask = task.delay(timeoutSeconds, function()
-		if not cleaned and self._windows[player] == window then
-			cleanup()
-			if coroutine.status(currentThread) == "suspended" then
-				task.spawn(currentThread, "Poor")
-			end
-		end
+		finish("Poor")
 	end)
 
-	-- Monitor tool un-equip
-	unequipConn = initialTool.AncestryChanged:Connect(function(_, parent)
+	-- Un-equip, death (character removed) or a swapped tool cancels the pour.
+	unequipConn = initialTool.AncestryChanged:Connect(function()
 		local character = player.Character
-		if parent == nil or parent ~= character then
-			if not cleaned then
-				cleanup()
-				if coroutine.status(currentThread) == "suspended" then
-					task.spawn(currentThread, nil)
-				end
-			end
+		if character == nil or initialTool.Parent ~= character or not initialTool:IsDescendantOf(game) then
+			finish(nil)
 		end
 	end)
 
-	-- Monitor walking away
+	-- Walking away (or losing the root part) cancels the pour.
 	local stationPart = model and model.PrimaryPart
 	if stationPart then
 		walkCheckTask = task.spawn(function()
 			while not cleaned do
 				task.wait(0.2)
 				if cleaned then
-					break
+					return
 				end
 				local character = player.Character
 				local hrp = character and character:FindFirstChild("HumanoidRootPart")
 				if not hrp or not hrp:IsA("BasePart") then
-					cleanup()
-					if coroutine.status(currentThread) == "suspended" then
-						task.spawn(currentThread, nil)
-					end
-					break
+					finish(nil)
+					return
 				end
-				local dist = (hrp.Position - stationPart.Position).Magnitude
-				if dist > KitchenConfig.MAX_INTERACTION_DISTANCE then
-					cleanup()
-					if coroutine.status(currentThread) == "suspended" then
-						task.spawn(currentThread, nil)
-					end
-					break
+				if (hrp.Position - stationPart.Position).Magnitude > KitchenConfig.MAX_INTERACTION_DISTANCE then
+					finish(nil)
+					return
 				end
 			end
 		end)
@@ -238,6 +247,10 @@ function PourMoments:AwaitPour(player: Player, recipeData: RecipeData, model: Mo
 
 	local tier: PourMeter.PourTier? = coroutine.yield()
 	cleanup()
+	resumed = true
+	if self._pendingFinish[player] == finish then
+		self._pendingFinish[player] = nil
+	end
 
 	if not tier then
 		return nil
@@ -277,9 +290,9 @@ function PourMoments:ReportTap(player: Player, windowId: any, claimedElapsed: an
 	end
 	local config = pourConfig()
 	local tier, _ = PourMeter.Resolve(window, claimedElapsed, os.clock(), config.LATENCY_ALLOWANCE_SECONDS)
-	local thread = self._pendingThreads[player]
-	if thread and coroutine.status(thread) == "suspended" then
-		task.spawn(thread, tier)
+	local finish = self._pendingFinish[player]
+	if finish then
+		finish(tier)
 	end
 	return tier
 end
