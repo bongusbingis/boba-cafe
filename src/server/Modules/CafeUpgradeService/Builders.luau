@@ -335,25 +335,51 @@ function Builders.Board(cf: CFrame): (Model, ProximityPrompt, TextLabel)
 	stroke.Parent = frame
 	frame.Parent = gui
 
-	local title = Instance.new("TextLabel")
+	-- UI-REVISION: the title is the Banner ribbon (Components/Buttons/Banner images,
+	-- GREEN), as on the dialogs and OrderQueue, instead of a flat green bar.
+	local title = Instance.new("Frame")
 	title.Name = "Title"
-	title.BackgroundColor3 = Styles.GREEN
-	title.BorderSizePixel = 0
-	title.Position = UDim2.fromScale(0.05, 0.04)
-	title.Size = UDim2.fromScale(0.9, 0.16)
-	title.FontFace = Styles.FONT_FREDOKA
-	title.TextScaled = true
-	title.TextColor3 = Color3.new(1, 1, 1)
-	title.Text = "Cafe Upgrades"
-	local titleCorner = Instance.new("UICorner")
-	titleCorner.CornerRadius = Styles.CORNER_BUTTON
-	titleCorner.Parent = title
+	title.AnchorPoint = Vector2.new(0.5, 0)
+	title.BackgroundTransparency = 1
+	title.Position = UDim2.fromScale(0.5, 0.02)
+	title.Size = UDim2.fromScale(0.86, 0.2)
 	title.Parent = frame
+
+	local ribbonBack = Instance.new("ImageLabel")
+	ribbonBack.AnchorPoint = Vector2.new(0.5, 0)
+	ribbonBack.BackgroundTransparency = 1
+	ribbonBack.Image = "http://www.roblox.com/asset/?id=13369767169"
+	ribbonBack.ImageColor3 = Styles.GREEN
+	ribbonBack.Position = UDim2.fromScale(0.5, 0.1)
+	ribbonBack.Size = UDim2.fromScale(1, 0.875)
+	ribbonBack.Parent = title
+
+	local ribbonFront = Instance.new("ImageLabel")
+	ribbonFront.AnchorPoint = Vector2.new(0.5, 0)
+	ribbonFront.BackgroundTransparency = 1
+	ribbonFront.Image = "http://www.roblox.com/asset/?id=13369762471"
+	ribbonFront.ImageColor3 = Styles.GREEN
+	ribbonFront.Position = UDim2.fromScale(0.5, 0)
+	ribbonFront.Size = UDim2.fromScale(0.845523, 0.758506)
+	ribbonFront.ZIndex = 2
+	ribbonFront.Parent = title
+
+	local titleText = Instance.new("TextLabel")
+	titleText.AnchorPoint = Vector2.new(0, 0.5)
+	titleText.BackgroundTransparency = 1
+	titleText.Position = UDim2.fromScale(0, 0.5)
+	titleText.Size = UDim2.fromScale(1, 0.8)
+	titleText.FontFace = Styles.FONT_FREDOKA
+	titleText.TextScaled = true
+	titleText.TextColor3 = Color3.new(1, 1, 1)
+	titleText.Text = "Cafe Upgrades"
+	titleText.ZIndex = 3
+	titleText.Parent = ribbonFront
 
 	local hint = Instance.new("TextLabel")
 	hint.Name = "Hint"
 	hint.BackgroundTransparency = 1
-	hint.Position = UDim2.fromScale(0.05, 0.22)
+	hint.Position = UDim2.fromScale(0.05, 0.23)
 	hint.Size = UDim2.fromScale(0.9, 0.08)
 	hint.FontFace = Styles.FONT_FREDOKA
 	hint.TextScaled = true
