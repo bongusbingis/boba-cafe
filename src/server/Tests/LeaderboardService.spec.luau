@@ -293,6 +293,20 @@ return function()
 			end)
 		end)
 
+		it("feeds the all-time store too, so Global boards never reset monthly (TAKEOVER-REVIEW-FIX P2-4)", function()
+			local fakePlayer: any = { UserId = 101, Name = "BaristaAlice" }
+			LeaderboardService:IncrementStat(fakePlayer, "OrdersServed", 6)
+			LeaderboardService:FlushAll()
+			expect(LeaderboardService:GetTopEntries("OrdersServed", 1)[1].Value).to.equal(6)
+			expect(LeaderboardService:GetTopEntries("OrdersServed", 1, true)[1].Value).to.equal(6)
+
+			-- A later month's store starts empty; the all-time store keeps the total.
+			local nextMonth = os.time({ year = 2099, month = 1, day = 15, hour = 12 })
+			local nextKey = LeaderboardConfig.GetMonthKey("OrdersServed", nextMonth)
+			expect(mockStores[nextKey]).to.equal(nil)
+			expect(mockStores[LeaderboardConfig.GetAllTimeKey("OrdersServed")]._data["101"]).to.equal(6)
+		end)
+
 		it("ignores increments to hidden boards", function()
 			local fakePlayer: any = { UserId = 102, Name = "BaristaBob" }
 			LeaderboardService:IncrementStat(fakePlayer, "MostTips", 50)

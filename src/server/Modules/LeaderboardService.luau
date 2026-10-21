@@ -81,10 +81,33 @@ function LeaderboardService:_getUsername(userId: number): string
 	return `User_{userId}`
 end
 
+-- TAKEOVER-REVIEW-FIX P2-4: a pending key is a board type (this month's store) or ALL_TIME_PREFIX .. board type
+-- (the all-time store behind the Global boards). Each is its own pending delta, so a retry of one never re-adds
+-- the other.
+local ALL_TIME_PREFIX = "AllTime:"
+
+local function storeKeyFor(pendingKey: string): string
+	if string.sub(pendingKey, 1, #ALL_TIME_PREFIX) == ALL_TIME_PREFIX then
+		return LeaderboardConfig.GetAllTimeKey(string.sub(pendingKey, #ALL_TIME_PREFIX + 1))
+	end
+	return LeaderboardConfig.GetMonthKey(pendingKey)
+end
+
+function LeaderboardService:_addPending(userId: number, boardType: string, delta: number)
+	local userBoards = self._pending[userId]
+	if not userBoards then
+		userBoards = {}
+		self._pending[userId] = userBoards
+	end
+	userBoards[boardType] = (userBoards[boardType] or 0) + delta
+	local allTimeKey = ALL_TIME_PREFIX .. boardType
+	userBoards[allTimeKey] = (userBoards[allTimeKey] or 0) + delta
+end
+
 function LeaderboardService:_updatePlayerStat(userId: number, boardType: string, delta: number): boolean
-	local monthKey = LeaderboardConfig.GetMonthKey(boardType)
+	local storeKey = storeKeyFor(boardType)
 	local ok, err = pcall(function()
-		local store = self:_getOrderedDataStore(monthKey)
+		local store = self:_getOrderedDataStore(storeKey)
 		if not store then
 			return
 		end
@@ -500,12 +523,7 @@ function LeaderboardService:IncrementStat(player: Player, boardType: string, del
 		return
 	end
 
-	local userBoards = self._pending[player.UserId]
-	if not userBoards then
-		userBoards = {}
-		self._pending[player.UserId] = userBoards
-	end
-	userBoards[boardType] = (userBoards[boardType] or 0) + delta
+	self:_addPending(player.UserId, boardType, delta)
 end
 
 --- Credits a granted donation to Top Donators. Unlike IncrementStat this records even while the board is
@@ -518,12 +536,7 @@ function LeaderboardService:CreditDonation(player: Player, robux: number)
 	if typeof(robux) ~= "number" or robux <= 0 then
 		return
 	end
-	local userBoards = self._pending[player.UserId]
-	if not userBoards then
-		userBoards = {}
-		self._pending[player.UserId] = userBoards
-	end
-	userBoards.TopDonators = (userBoards.TopDonators or 0) + math.floor(robux)
+	self:_addPending(player.UserId, "TopDonators", math.floor(robux))
 end
 
 --- Flushes all batched increments now. Used on shutdown and by tests.
@@ -531,17 +544,21 @@ function LeaderboardService:FlushAll()
 	self:_flushPending(nil)
 end
 
---- Queries the current month's OrderedDataStore and returns the top entries with cached usernames.
+--- Queries the current month's OrderedDataStore (or the all-time one when `allTime`) and returns the top
+--- entries with cached usernames.
 function LeaderboardService:GetTopEntries(
 	boardType: string,
-	limit: number?
+	limit: number?,
+	allTime: boolean?
 ): { { UserId: number, Name: string, Value: number } }
 	local topLimit = limit or LeaderboardConfig.TOP_LIMIT
-	local monthKey = LeaderboardConfig.GetMonthKey(boardType)
+	local storeKey = if allTime
+		then LeaderboardConfig.GetAllTimeKey(boardType)
+		else LeaderboardConfig.GetMonthKey(boardType)
 	local entries: { { UserId: number, Name: string, Value: number } } = {}
 
 	local ok, err = pcall(function()
-		local store = self:_getOrderedDataStore(monthKey)
+		local store = self:_getOrderedDataStore(storeKey)
 		if not store then
 			return
 		end
@@ -567,8 +584,31 @@ function LeaderboardService:GetTopEntries(
 	return entries
 end
 
---- Resolves Workspace.Assets.LeaderboardsFolder.Monthly (or OldScriptables) and updates all SurfaceGuis.
---- Automatically renames legacy "Most Staff Points" board to "Most Orders Served".
+--- Updates every board model in `folder`. Each board's store is read at most once per call, and only when a
+--- model for it exists. Renames the legacy "Most Staff Points" model to "Most Orders Served".
+function LeaderboardService:_refreshFolder(folder: Instance, allTime: boolean)
+	for boardType, boardDef in LeaderboardConfig.BOARDS do
+		local entries: { { UserId: number, Name: string, Value: number } }? = nil
+		for _, child in folder:GetChildren() do
+			if child:IsA("Model") and (child.Name == boardDef.BoardName or child.Name == boardDef.ModelName) then
+				if child.Name ~= boardDef.BoardName then
+					child.Name = boardDef.BoardName
+				end
+				if entries == nil then
+					-- Hidden boards (DEC-035 Q4) are never queried; their SurfaceGui is disabled at runtime.
+					entries = if boardDef.Hidden
+						then {}
+						else self:GetTopEntries(boardType, LeaderboardConfig.TOP_LIMIT, allTime)
+				end
+				self:_updateBoardGui(child, boardDef, entries)
+			end
+		end
+	end
+end
+
+--- Resolves Workspace.Assets.LeaderboardsFolder.Monthly (or OldScriptables) and .Global, and updates all
+--- SurfaceGuis. Monthly boards read this month's store; Global ("All Time") boards read the all-time store
+--- (TAKEOVER-REVIEW-FIX P2-4).
 function LeaderboardService:RefreshBoards()
 	local monthlyFolder = if self.LeaderboardsFolder
 		then self.LeaderboardsFolder:FindFirstChild("Monthly")
@@ -576,39 +616,15 @@ function LeaderboardService:RefreshBoards()
 	if not monthlyFolder then
 		monthlyFolder = WorldPath.find(Workspace, { "OldScriptables", "LeaderboardsFolder", "Monthly" })
 	end
-	if not monthlyFolder then
-		return
-	end
-
-	for boardType, boardDef in LeaderboardConfig.BOARDS do
-		-- Hidden boards (DEC-035 Q4) are never queried; their SurfaceGui is disabled at runtime.
-		local entries = if boardDef.Hidden then {} else self:GetTopEntries(boardType, LeaderboardConfig.TOP_LIMIT)
-
-		for _, child in monthlyFolder:GetChildren() do
-			if child:IsA("Model") and (child.Name == boardDef.BoardName or child.Name == boardDef.ModelName) then
-				if child.Name ~= boardDef.BoardName then
-					child.Name = boardDef.BoardName
-				end
-				self:_updateBoardGui(child, boardDef, entries)
-			end
-		end
+	if monthlyFolder then
+		self:_refreshFolder(monthlyFolder, false)
 	end
 
 	local globalFolder = if self.LeaderboardsFolder
 		then self.LeaderboardsFolder:FindFirstChild("Global")
 		else WorldPath.find(Workspace, { "Assets", "LeaderboardsFolder", "Global" })
 	if globalFolder then
-		for boardType, boardDef in LeaderboardConfig.BOARDS do
-			local entries = if boardDef.Hidden then {} else self:GetTopEntries(boardType, LeaderboardConfig.TOP_LIMIT)
-			for _, child in globalFolder:GetChildren() do
-				if child:IsA("Model") and (child.Name == boardDef.BoardName or child.Name == boardDef.ModelName) then
-					if child.Name ~= boardDef.BoardName then
-						child.Name = boardDef.BoardName
-					end
-					self:_updateBoardGui(child, boardDef, entries)
-				end
-			end
-		end
+		self:_refreshFolder(globalFolder, true)
 	end
 end
 

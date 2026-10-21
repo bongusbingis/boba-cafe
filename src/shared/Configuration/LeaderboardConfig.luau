@@ -52,4 +52,9 @@ function LeaderboardConfig.GetMonthKey(boardType: string, timestamp: number?): s
 	return os.date("%Y_%m_", t) .. boardType
 end
 
+--- TAKEOVER-REVIEW-FIX P2-4: the all-time OrderedDataStore key behind the Global boards (never resets).
+function LeaderboardConfig.GetAllTimeKey(boardType: string): string
+	return "AllTime_" .. boardType
+end
+
 return LeaderboardConfig
