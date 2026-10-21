@@ -41,7 +41,6 @@ local LeaderboardConfig = {
 			BoardName = "Top Donators",
 			ModelName = "Top Donators",
 			Metric = "Robux",
-			Hidden = true, -- DEC-035 Q4
 		},
 	} :: { [string]: BoardDefinition },
 }
