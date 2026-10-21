@@ -488,9 +488,9 @@ Push with the existing API only (no new toast visual):
 - Direct: `SmallNotification.Push({ Text = "...", Image = "rbxassetid://..."? })` (`SmallNotification.luau:76-78`).
 - From server: `DialogService:Notify(player, notification)` forwards to the same `Push`.
 
-Behaviour: panel springs open from 0 to 135 px with `{mass 1, tension 280, friction 35}`, waits 0.8 s, fades text in, holds 5 s, fades out, waits 0.35 s, closes, waits 0.9 s; a new push replaces the current one immediately (`SmallNotification.luau:129-179`). Panel is the 9-slice image, inner tinted border `Color3.fromRGB(124,103,89)`, icon `Fit` aspect 1 size (0.55,0.55), centred `OFFWHITE` Fredoka text (lines 197-246). Rotating hint toasts post every 60 s (lines 99-113).
+Behaviour: panel springs open from 0 to 135 px with `{mass 1, tension 280, friction 35}`, waits 0.8 s, fades text in, holds 5 s, fades out, waits 0.35 s, closes, waits 0.9 s; a new push while a toast shows is queued (cap 3, oldest hint dropped first) and shown next; the hold is 2 s while others are waiting; hints skip their turn while a toast is active/queued or within 20 s of a gameplay toast (`SmallNotification.luau`, `HOLD_BUSY`, `HINT_QUIET_SECONDS`). Panel is the 9-slice image, inner tinted border `Color3.fromRGB(124,103,89)`, icon `Fit` aspect 1 size (0.55,0.55), centred `OFFWHITE` Fredoka text (lines 197-246). Rotating hint toasts post every 60 s (lines 99-113).
 
-**Payload warning:** the component renders only `Text` (and optional `Image`). Callers that send `Title` and `Description` (`Ordering/init.luau:284-287`, `server/Scripts/PromoCodes.server.luau:172`, `server/Modules/SpillService/Spill.luau:244-247`) produce an empty label. Send `Text`. See 9.8.
+**Payload (now normalised):** `Push` builds `Text` from `Title`/`Description` when `Text` is missing (joined with a space after `! ? . :`, else `": "`). The component renders only `Text` (and optional `Image`). Callers that send `Title` and `Description` (`Ordering/init.luau:284-287`, `server/Scripts/PromoCodes.server.luau:172`, `server/Modules/SpillService/Spill.luau:244-247`) produce an empty label. Send `Text`. See 9.8.
 
 Kitchen toast rules (client): cooldown 1.5 s per distinct message (`KitchenController.luau:30,314-316`); wording is "Next: <step label>" (`client/Modules/KitchenGuidance.luau:148`) and "Clock In to use the kitchen. Tap the clock button." (`KitchenController.luau:395`).
 
@@ -647,7 +647,7 @@ Counts are from the whole `src` tree as of the commit above. "Replicate" names t
 - Replicate: thickness 5, black, hidden on grid pages and visible on list pages.
 
 ### 9.8 Toast payload mismatch
-`SmallNotification` reads `current.Text` only (`SmallNotification.luau:239`). `DialogController:Notify` and `DialogService:Notify` are typed `{Title, Description, Image, SoundEnabled}`. Three callers send `Title`/`Description` and so render a blank label: `U:Pages/Ordering/init.luau:284-287`, `server/Scripts/PromoCodes.server.luau:172`, `server/Modules/SpillService/Spill.luau:244-247`. The working path is `DialogController:Toast(text)` (`AppDialogs.luau:247`). `Stories/SmallNotification.story.luau:25-41` also sends `Title`/`Text`. Replicate: send `Text`.
+`SmallNotification` reads `current.Text` only (`SmallNotification.luau:239`). `DialogController:Notify` and `DialogService:Notify` are typed `{Title, Description, Image, SoundEnabled}`. Three callers send `Title`/`Description` and so render a blank label: `U:Pages/Ordering/init.luau:284-287`, `server/Scripts/PromoCodes.server.luau:172`, `server/Modules/SpillService/Spill.luau:244-247`. The working path is `DialogController:Toast(text)` (`AppDialogs.luau:247`). `Stories/SmallNotification.story.luau:25-41` also sends `Title`/`Text`. Status: normalised in `SmallNotification.Push` (GAMEPLAY-TOASTS); callers may still send `Title`/`Description`.
 
 ### 9.9 Close handling
 - `Shop` and `Inventory` pass `OnClose = function() props.ClosePage() end` (2).

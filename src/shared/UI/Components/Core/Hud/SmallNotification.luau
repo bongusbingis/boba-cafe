@@ -2,8 +2,8 @@
 	SmallNotification
 	Toast-style notification card that springs in above the bottom-left HUD buttons.
 	Each notification slides in, fades its content in, holds for 5 seconds, then slides back out.
-	If a new notification is pushed mid-animation, the current one is interrupted and
-	replaced immediately by the new one.
+	If a new notification is pushed while one is showing, it is queued (max 3) and shown
+	next; queued toasts hold for a shorter time. Hints never interrupt gameplay toasts.
 
 	External API (call from any client script):
 		SmallNotification.Push({
@@ -61,20 +61,66 @@ local HINTS = {
 }
 
 local HOLD_DURATION = 5
+local HOLD_BUSY = 2 -- TUNING: hold seconds when more toasts are queued
+local HINT_QUIET_SECONDS = 20 -- TUNING: hints skip their turn this long after a gameplay toast
+local QUEUE_CAP = 3
 local SPRING_SLIDE = { mass = 1, tension = 280, friction = 35 } -- bouncy "Back" feel
 local SPRING_FADE = { mass = 1, tension = 10000, friction = 150 }
 
 ---> notification type
 export type Notification = {
 	Text: string,
+	Title: string?,
+	Description: string?,
+	_hint: boolean?,
 	Image: string?,
 	SoundEnabled: boolean?,
 }
 
 local module = {}
 
+---> module-level state shared with the component (single instance)
+local idleSince: number? = os.clock()
+local lastGameplayAt: number? = nil
+local warnedNoText = false
+
+local function endsWithPunctuation(text: string): boolean
+	local last = string.sub(text, -1)
+	return last == "!" or last == "?" or last == "." or last == ":"
+end
+
+local function isNonEmptyString(value): boolean
+	return typeof(value) == "string" and value ~= ""
+end
+
 function module.Push(notification: Notification)
-	pushEvent:Fire(notification)
+	local copy = table.clone(notification)
+	if not isNonEmptyString(copy.Text) then
+		local title, description = copy.Title, copy.Description
+		if isNonEmptyString(title) and isNonEmptyString(description) then
+			local sep = endsWithPunctuation(title) and " " or ": "
+			copy.Text = title .. sep .. description
+		elseif isNonEmptyString(title) then
+			copy.Text = title
+		elseif isNonEmptyString(description) then
+			copy.Text = description
+		else
+			if not warnedNoText then
+				warnedNoText = true
+				warn("[SmallNotification] toast with no text")
+			end
+			return
+		end
+	end
+	pushEvent:Fire(copy)
+end
+
+---> seconds since the panel became fully idle (no active toast, empty queue); 0 while busy
+function module.IdleFor(): number
+	if idleSince == nil then
+		return 0
+	end
+	return os.clock() - idleSince
 end
 
 module.Component = function()
@@ -85,6 +131,9 @@ module.Component = function()
 
 	local activeEntry, setActiveEntry = React.useState(nil :: NotificationEntry?)
 	local nextEntryId = React.useRef(0)
+	local activeRef = React.useRef(nil :: NotificationEntry?) -- synchronous mirror of activeEntry
+	local queueRef = React.useRef({} :: { Notification })
+	local showNextRef = React.useRef(nil :: ((Notification) -> ())?)
 
 	---> spring: sizeY drives card height (0 → CARD_HEIGHT)
 	---> spring: opacity drives content transparency (1 = invisible, 0 = visible)
@@ -101,9 +150,15 @@ module.Component = function()
 			while true do
 				for _, hint in HINTS do
 					task.wait(60)
-					pushEvent:Fire({
-						Text = hint,
-					})
+					local busy = activeRef.current ~= nil
+						or #queueRef.current > 0
+						or (lastGameplayAt ~= nil and os.clock() - lastGameplayAt < HINT_QUIET_SECONDS)
+					if not busy then
+						pushEvent:Fire({
+							Text = hint,
+							_hint = true,
+						})
+					end
 				end
 			end
 		end)
@@ -114,19 +169,45 @@ module.Component = function()
 
 	---> listen for newly pushed notifications
 	React.useEffect(function()
-		local conn = pushEvent.Event:Connect(function(notification: Notification)
+		local function show(notification: Notification)
 			nextEntryId.current += 1
-			setActiveEntry({
+			local entry = {
 				Id = nextEntryId.current,
 				Data = notification,
-			})
+			}
+			activeRef.current = entry
+			setActiveEntry(entry)
+		end
+		showNextRef.current = show
+
+		local conn = pushEvent.Event:Connect(function(notification: Notification)
+			idleSince = nil
+			if not notification._hint then
+				lastGameplayAt = os.clock()
+			end
+			if activeRef.current == nil then
+				show(notification)
+				return
+			end
+			local queue = queueRef.current
+			if #queue >= QUEUE_CAP then
+				local drop = 1
+				for i, queued in queue do
+					if queued._hint then
+						drop = i
+						break
+					end
+				end
+				table.remove(queue, drop)
+			end
+			table.insert(queue, notification)
 		end)
 		return function()
 			conn:Disconnect()
 		end
 	end, {})
 
-	---> animate the active notification; new pushes interrupt by replacing activeEntry
+	---> animate the active notification; queued pushes replace it when it finishes
 	React.useEffect(function()
 		if not activeEntry then
 			return
@@ -154,7 +235,7 @@ module.Component = function()
 
 			-- fade content in
 			api.start({ Opacity = 0, config = SPRING_FADE })
-			task.wait(HOLD_DURATION) -- hold
+			task.wait(if #queueRef.current > 0 then HOLD_BUSY else HOLD_DURATION) -- hold
 
 			-- fade content out
 			api.start({ Opacity = 1, config = SPRING_FADE })
@@ -164,13 +245,17 @@ module.Component = function()
 			api.start({ SizeY = 0, config = SPRING_SLIDE })
 			task.wait(0.9)
 
-			-- clear only if this is still the active entry (it may have been replaced)
-			setActiveEntry(function(prev)
-				if prev and prev.Id == currentEntryId then
-					return nil
+			-- advance only if this is still the active entry
+			if activeRef.current and activeRef.current.Id == currentEntryId then
+				local nextData = table.remove(queueRef.current, 1)
+				if nextData and showNextRef.current then
+					showNextRef.current(nextData)
+				else
+					activeRef.current = nil
+					idleSince = os.clock()
+					setActiveEntry(nil)
 				end
-				return prev
-			end)
+			end
 		end)
 
 		return function()
@@ -222,7 +307,7 @@ module.Component = function()
 				AnchorPoint = Vector2.new(0.5, 0.45),
 				BackgroundTransparency = 1,
 				Image = current.Image or "rbxassetid://138404484604568",
-				ImageTransparency = 0,--styles.Opacity,
+				ImageTransparency = 0, --styles.Opacity,
 				Position = UDim2.fromScale(0.5, 0),
 				ScaleType = Enum.ScaleType.Fit,
 				Size = ICON_SIZE,
