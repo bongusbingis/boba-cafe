@@ -56,6 +56,9 @@ local CustomerConfig = {
 	REGISTER_TAKE_ORDER_GRACE_SECONDS = 30, -- DEC-058 agent-set, Jack to tune: "Take Order" leaves at least this long to enter it
 	-- An NPC still in line after this long gives up quietly (no walkout, no rating change): clears a Rush backlog.
 	QUEUE_PATIENCE_SECONDS = 120, -- DEC-058 agent-set, Jack to tune
+	-- TAKEOVER-REVIEW-FIX P2-3: with nobody clocked in, patience is paused; after this long the waiting NPCs go
+	-- home quietly (no walkout, no rating change) so a crowd never stays forever.
+	EMPTY_CAFE_DISMISS_SECONDS = 60, -- DEC-058 agent-set, Jack to tune
 
 	---> order pool: the M1 slice (design 4.4 and 7)
 	-- PENDING JACK Q3: whether boba keeps 3 sizes. If not, this is a config-only change.

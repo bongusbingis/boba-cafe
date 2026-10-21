@@ -17,7 +17,8 @@ return {
 	RUSH_SECONDS = 120, -- DEC-024 (E8)
 	RUSH_NPC_MULT = 5.0, -- PROPOSED (Jack)
 	RUSH_CAP_BONUS = 34, -- PROPOSED (Jack): max 50 concurrent NPCs (16 SERVER_CAP + 34)
-	RUSH_MIN_TARGET = 25, -- Guarantees at least 25 customers during rush hour even with 1 barista
+	RUSH_MIN_TARGET = 25, -- Rush floor ceiling: the floor is min(this, RUSH_MIN_PER_BARISTA x baristas)
+	RUSH_MIN_PER_BARISTA = 8, -- DEC-058 agent-set, Jack to tune: rush floor per clocked-in barista (0 baristas = no rush crowd)
 	RUSH_SPAWN_GAP_SECONDS = 0.2, -- Rapid spawning during rush hour instead of 3.0s
 	RUSH_SPAWN_BURST = 3, -- Spawn up to 3 customers per pacing tick
 	RUSH_QUEUE_CAP = 35, -- Allow line to hold up to 35 customers during rush hour (up from 6)

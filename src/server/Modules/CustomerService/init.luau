@@ -169,6 +169,7 @@ local CustomerService = Knit.CreateService({
 	_npcPickupSpot = {} :: { [Npc.Npc]: BasePart }, -- NPC -> claimed pickup spot
 	_activeOrderingNpc = {} :: { [Player]: Npc.Npc }, -- barista -> NPC whose order is currently being taken
 	_baristas = 0, -- clocked-in players, refreshed every pacing tick
+	_emptySince = nil :: number?, -- os.clock() when the barista count last dropped to 0 (P2-3 dismiss)
 	_lastSpawnClock = 0,
 	_characterConnections = {} :: { [Player]: RBXScriptConnection },
 	_tickets = {} :: { [Player]: { [number]: { [string]: any } } }, -- barista -> slot -> live ticket (at most Progression.SlotsFor(level))
@@ -562,8 +563,12 @@ end
 -- Rules.PacingTarget, scaled by Rush Hour (x NPC mult, cap + bonus).
 function CustomerService:_pacingTarget(): number
 	local target = Rules.PacingTarget(self._baristas)
+	if self._baristas <= 0 then
+		return 0 -- TAKEOVER-REVIEW-FIX P2-3: no rush crowd into an empty cafe
+	end
 	if self:IsRushHour() or (self:_stressMode() == "Run" and workspace:GetAttribute("B4StressRush") == true) then
-		local rushMin = RatingConfig.RUSH_MIN_TARGET or 25
+		local rushMin =
+			math.min(RatingConfig.RUSH_MIN_TARGET or 25, (RatingConfig.RUSH_MIN_PER_BARISTA or 8) * self._baristas)
 		local rushScaled = math.max(rushMin, math.ceil(target * RatingConfig.RUSH_NPC_MULT))
 		target = math.min(CustomerConfig.SERVER_CAP + RatingConfig.RUSH_CAP_BONUS, rushScaled)
 	end
@@ -662,6 +667,28 @@ function CustomerService:_safeWatchPlayer(player: Player)
 	end
 end
 
+-- TAKEOVER-REVIEW-FIX P2-3: patience is paused while nobody is clocked in. After EMPTY_CAFE_DISMISS_SECONDS of
+-- that, every waiting NPC leaves quietly ("LineGaveUp": no walkout, no rating change). Non-yielding.
+function CustomerService:_dismissIfEmpty()
+	if self._baristas > 0 then
+		self._emptySince = nil
+		return
+	end
+	local now = os.clock()
+	if self._emptySince == nil then
+		self._emptySince = now
+		return
+	end
+	if now - self._emptySince < (CustomerConfig.EMPTY_CAFE_DISMISS_SECONDS or 60) then
+		return
+	end
+	for npc in self._npcs do
+		if not npc.Left then
+			npc:Leave("LineGaveUp")
+		end
+	end
+end
+
 function CustomerService:_pacingLoop()
 	while true do
 		-- The barista count asks ShiftService, so it can throw too: one failure skips
@@ -672,6 +699,7 @@ function CustomerService:_pacingLoop()
 			if stress ~= nil then
 				self:_stressTick(stress)
 			end
+			self:_dismissIfEmpty()
 			local burst = if self:IsRushHour() then (RatingConfig.RUSH_SPAWN_BURST or 3) else 1
 			for _ = 1, burst do
 				self:_spawnIfNeeded()
