@@ -22,7 +22,24 @@ local CafeRatingService = Knit.CreateService({
 	_partyActive = false,
 	_partyEndTime = nil :: number?,
 	_partyCooldownEnd = nil :: number?,
+	_partyBuyer = nil :: string?,
 })
+
+--- D5: DisplayName when it is a non-empty string, else Name when a string, else nil.
+local function buyerName(buyer: Player?): string?
+	if buyer == nil then
+		return nil
+	end
+	local display = (buyer :: any).DisplayName
+	if typeof(display) == "string" and display ~= "" then
+		return display
+	end
+	local name = (buyer :: any).Name
+	if typeof(name) == "string" then
+		return name
+	end
+	return nil
+end
 
 --- Pure: clamp(rating + delta / max(1, baristas), 0, 100).
 function CafeRatingService.Apply(rating: number, delta: number, baristas: number): number
@@ -45,10 +62,16 @@ function CafeRatingService:_publish()
 	workspace:SetAttribute("RushHour", self._rush)
 	workspace:SetAttribute("BobaParty", self._partyActive)
 	workspace:SetAttribute("RushEndsAt", self._rushEndsAt)
+	workspace:SetAttribute("BobaPartyBuyer", self._partyBuyer)
 end
 
 function CafeRatingService:_notifyAll(text: string)
-	local dialog = Knit.GetService("DialogService")
+	local ok, dialog = pcall(function()
+		return Knit.GetService("DialogService")
+	end)
+	if not ok or not dialog then
+		return
+	end
 	for _, player in Players:GetPlayers() do
 		pcall(function()
 			dialog:Notify(player, { Title = "Cafe Rating", Description = text, Text = text } :: any)
@@ -70,15 +93,44 @@ function CafeRatingService:_notifyParty(text: string)
 	end
 end
 
+--- D6: one thank-you toast to every player except the buyer, on start and each extension.
+function CafeRatingService:_promptThanks(buyer: Player?, name: string)
+	local ok, dialog = pcall(function()
+		return Knit.GetService("DialogService")
+	end)
+	if not ok or not dialog then
+		return
+	end
+	local text = `Thank {name} with an emote!`
+	for _, player in Players:GetPlayers() do
+		if player ~= buyer then
+			pcall(function()
+				dialog:Notify(player, { Title = "Boba Party", Description = text, Text = text } :: any)
+			end)
+		end
+	end
+end
+
 function CafeRatingService:StartOrExtendBobaParty(buyer: Player?): (boolean, string?)
 	if self._partyActive then
 		self._partyEndTime = (self._partyEndTime or os.clock()) + RatingConfig.BOBA_PARTY_EXTENSION_SECONDS
 		self._rushEndsAt = workspace:GetServerTimeNow() + (self._partyEndTime - os.clock())
+		if buyer ~= nil then
+			local extender = buyerName(buyer)
+			if extender ~= nil then
+				self._partyBuyer = extender
+			end
+		end
 		self:_publish()
+		local extenderName = buyerName(buyer) or "Someone"
 		local text = if buyer
-			then `{buyer.Name} extended the Boba Party by 10 minutes!`
+			then `{extenderName} extended the Boba Party by 10 minutes!`
 			else "Boba Party was extended by 10 minutes!"
 		self:_notifyParty(text)
+		local thanks = buyerName(buyer)
+		if thanks ~= nil then
+			self:_promptThanks(buyer, thanks)
+		end
 		return true
 	end
 
@@ -90,14 +142,20 @@ function CafeRatingService:StartOrExtendBobaParty(buyer: Player?): (boolean, str
 	workspace:SetAttribute("BobaPartyCooldownEndsAt", nil)
 	self._rush = true
 	self._rushEndsAt = workspace:GetServerTimeNow() + RatingConfig.BOBA_PARTY_SECONDS
+	self._partyBuyer = buyerName(buyer)
 	workspace:SetAttribute("RushHour", true)
 	workspace:SetAttribute("BobaParty", true)
 	self:_publish()
 
+	local starterName = buyerName(buyer) or "Someone"
 	local text = if buyer
-		then `{buyer.Name} started a Boba Party! 10 minutes of Rush Hour!`
+		then `{starterName} started a Boba Party! 10 minutes of Rush Hour!`
 		else "Boba Party started! 10 minutes of Rush Hour!"
 	self:_notifyParty(text)
+	local thanks = buyerName(buyer)
+	if thanks ~= nil then
+		self:_promptThanks(buyer, thanks)
+	end
 
 	task.spawn(function()
 		while self._partyActive do
@@ -115,6 +173,7 @@ function CafeRatingService:StartOrExtendBobaParty(buyer: Player?): (boolean, str
 		self._partyActive = false
 		self._rush = false
 		self._rushEndsAt = nil
+		self._partyBuyer = nil
 		self._partyEndTime = nil
 		workspace:SetAttribute("RushHour", false)
 		workspace:SetAttribute("BobaParty", false)

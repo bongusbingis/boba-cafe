@@ -13,6 +13,7 @@ local Packages = ReplicatedStorage:WaitForChild("Packages")
 local Knit = require(Packages.Knit)
 local ActionRegistry = require(script.ActionRegistry)
 local InteractionRunner = require(script.InteractionRunner)
+local PourMoments = require(script.PourMoments)
 local PromptBuilder = require(script.PromptBuilder)
 local Recipes = require(ReplicatedStorage.Shared.Kitchen.Recipes)
 local KitchenConfig = require(ReplicatedStorage.Shared.Configuration.KitchenConfig)
@@ -33,9 +34,14 @@ local KitchenService = Knit.CreateService({
 	Name = "KitchenService",
 	Client = {
 		InteractionFailed = Knit.CreateSignal(),
+		-- BIG-B7 skill moment: server -> client with the meter view to draw,
+		-- then server -> client with (windowId, perfect) after a tap.
+		PourWindowOpened = Knit.CreateSignal(),
+		PourResolved = Knit.CreateSignal(),
 	},
 	_runner = nil :: any,
 	_registry = nil :: any,
+	_pours = nil :: any,
 	_prompts = {} :: { [string]: { ProximityPrompt } },
 	_shiftService = nil :: any,
 })
@@ -111,13 +117,15 @@ function KitchenService:KnitInit()
 	registry.Load(script.Actions)
 	self._registry = registry
 
+	self._pours = PourMoments.new(self)
 	self._runner = InteractionRunner.new(registry, function(player: Player, reason: string)
 		self.Client.InteractionFailed:Fire(player, reason)
-	end)
+	end, nil, self._pours)
 end
 
 function KitchenService:KnitStart()
 	self._shiftService = Knit.GetService("ShiftService")
+	self._pours:Start()
 
 	local kitchen = waitForKitchen()
 	if not kitchen then
@@ -177,6 +185,23 @@ function KitchenService:SetItemEnabled(itemName: string, enabled: boolean)
 	for _, prompt in prompts do
 		prompt.Enabled = enabled
 	end
+end
+
+-- BIG-B7 skill moment: the client reports its tap; the server grades it with
+-- the shared PourMeter logic (the server owns the clock) and marks the held
+-- drink's PerfectPours attribute on a perfect tap. Missing windows grade false.
+function KitchenService.Client:ReportPourTap(player: Player, windowId: number, claimedElapsed: number): any
+	return self.Server:ReportPourTap(player, windowId, claimedElapsed)
+end
+
+function KitchenService:ReportPourTap(player: Player, windowId: number, claimedElapsed: number): any
+	return self._pours:ReportTap(player, windowId, claimedElapsed)
+end
+
+-- BIG-B7 skill moment: the flat BobaBuck tip for a set of served tools. The
+-- serve lane adds this to the payout before it destroys the tools.
+function KitchenService:GetPourTip(tools: { Instance }): number
+	return self._pours:TipForTools(tools)
 end
 
 return KitchenService

@@ -29,11 +29,18 @@ local QuestService = Knit.CreateService({
 	Name = "QuestService",
 	Client = {
 		QuestsUpdated = Knit.CreateSignal(),
+		WeeklyQuestsUpdated = Knit.CreateSignal(),
 		GetQuests = function(self, player: Player)
 			return self.Server:GetQuests(player)
 		end,
+		GetWeeklyQuests = function(self, player: Player)
+			return self.Server:GetWeeklyQuests(player)
+		end,
 		ClaimQuest = function(self, player: Player, questIndex: number)
 			return self.Server:ClaimQuest(player, questIndex)
+		end,
+		ClaimWeeklyQuest = function(self, player: Player, questIndex: number)
+			return self.Server:ClaimWeeklyQuest(player, questIndex)
 		end,
 		RerollQuest = function(self, player: Player, questIndex: number)
 			return self.Server:RerollQuest(player, questIndex)
@@ -51,6 +58,10 @@ end
 
 function QuestService:_getCurrentDay(): number
 	return QuestConfig.GetCurrentDay(self:_now())
+end
+
+function QuestService:_getCurrentWeek(): number
+	return QuestConfig.GetCurrentWeek(self:_now())
 end
 
 function QuestService:_hasPass(player: Player, passId: number): boolean
@@ -92,18 +103,56 @@ function QuestService:_ensureDailyQuests(player: Player, playerData: any): { Que
 		local slotCount = QuestConfig.BASE_SLOTS + (if hasBonusSlot then 1 else 0)
 		local freeRerolls = if self:_hasPass(player, QuestConfig.FREE_REROLL_PASS) then 1 else 0
 
-		activeQuests = QuestConfig.GenerateDailyQuests(currentDay, slotCount)
+		-- Rollover race fix: _hasPass yields (PlayerOwnsPassAsync), so a
+		-- concurrent ensure may have already rolled the day over while this
+		-- call was suspended. Re-read before overwriting so the loser adopts
+		-- the winner's fresh quests instead of wiping them with a stale
+		-- regeneration. The re-check and the writes below have no yields
+		-- between them, so this adoption is atomic.
+		local latest = playerData.Quests.ActiveQuests
+		if playerData.Quests.AssignedDay == currentDay and typeof(latest) == "table" and #latest > 0 then
+			activeQuests = latest
+		else
+			activeQuests = QuestConfig.GenerateDailyQuests(currentDay, slotCount)
 
-		playerData:SetValue({ "Quests", "AssignedDay" }, currentDay)
-		playerData:SetValue({ "Quests", "ActiveQuests" }, activeQuests)
-		playerData:SetValue({ "Quests", "FreeRerollsRemaining" }, freeRerolls)
+			playerData:SetValue({ "Quests", "AssignedDay" }, currentDay)
+			playerData:SetValue({ "Quests", "ActiveQuests" }, activeQuests)
+			playerData:SetValue({ "Quests", "FreeRerollsRemaining" }, freeRerolls)
 
-		pcall(function()
-			self.Client.QuestsUpdated:Fire(player, activeQuests)
-		end)
+			pcall(function()
+				self.Client.QuestsUpdated:Fire(player, activeQuests)
+			end)
+		end
 	end
 
 	return activeQuests
+end
+
+function QuestService:_ensureWeeklyQuests(player: Player, playerData: any): { QuestEntry }
+	if typeof(playerData.WeeklyQuests) ~= "table" then
+		playerData.WeeklyQuests = {
+			AssignedWeek = 0,
+			ActiveQuests = {},
+		}
+	end
+
+	local currentWeek = self:_getCurrentWeek()
+	local weekly = playerData.WeeklyQuests
+	if weekly.AssignedWeek ~= currentWeek or typeof(weekly.ActiveQuests) ~= "table" or #weekly.ActiveQuests == 0 then
+		-- Pure generation with no yields between the check and the writes,
+		-- so unlike the daily path there is no check-then-act window here.
+		local activeQuests = QuestConfig.GenerateWeeklyQuests(currentWeek, QuestConfig.WEEKLY_SLOT_COUNT)
+
+		playerData:SetValue({ "WeeklyQuests", "AssignedWeek" }, currentWeek)
+		playerData:SetValue({ "WeeklyQuests", "ActiveQuests" }, activeQuests)
+
+		pcall(function()
+			self.Client.WeeklyQuestsUpdated:Fire(player, activeQuests)
+		end)
+		return activeQuests
+	end
+
+	return weekly.ActiveQuests
 end
 
 function QuestService:GetQuests(player: Player): { QuestEntry }
@@ -114,25 +163,29 @@ function QuestService:GetQuests(player: Player): { QuestEntry }
 	return self:_ensureDailyQuests(player, playerData)
 end
 
-function QuestService:AdvanceQuest(player: Player, questType: string, amount: number?): boolean
-	local actualAmount = amount or 1
-	if actualAmount <= 0 then
-		return false
-	end
-
+function QuestService:GetWeeklyQuests(player: Player): { QuestEntry }
 	local playerData = self:_getPlayerData(player)
 	if not playerData then
-		return false
+		return {}
 	end
+	return self:_ensureWeeklyQuests(player, playerData)
+end
 
-	local activeQuests = self:_ensureDailyQuests(player, playerData)
+-- Advances every non-completed entry of the given quest type in one quest
+-- list. Returns whether anything changed plus the newly completed and
+-- halfway entries for notifications.
+local function advanceQuestList(
+	questList: { QuestEntry },
+	questType: string,
+	amount: number
+): (boolean, { QuestEntry }, { QuestEntry })
 	local changed = false
 	local newlyCompleted = {}
 	local halfwayEntries = {}
 
-	for _, quest in activeQuests do
+	for _, quest in questList do
 		if quest.Type == questType and not quest.Completed then
-			quest.Progress = math.min(quest.Target, quest.Progress + actualAmount)
+			quest.Progress = math.min(quest.Target, quest.Progress + amount)
 			if quest.Progress >= quest.Target then
 				quest.Completed = true
 				table.insert(newlyCompleted, quest)
@@ -150,10 +203,44 @@ function QuestService:AdvanceQuest(player: Player, questType: string, amount: nu
 		end
 	end
 
+	return changed, newlyCompleted, halfwayEntries
+end
+
+function QuestService:AdvanceQuest(player: Player, questType: string, amount: number?): boolean
+	local actualAmount = amount or 1
+	if actualAmount <= 0 then
+		return false
+	end
+
+	local playerData = self:_getPlayerData(player)
+	if not playerData then
+		return false
+	end
+
+	local activeQuests = self:_ensureDailyQuests(player, playerData)
+	local weeklyQuests = self:_ensureWeeklyQuests(player, playerData)
+
+	local changed, newlyCompleted, halfwayEntries = advanceQuestList(activeQuests, questType, actualAmount)
+	local weeklyChanged, weeklyCompleted, weeklyHalfway = advanceQuestList(weeklyQuests, questType, actualAmount)
+	for _, quest in weeklyCompleted do
+		table.insert(newlyCompleted, quest)
+	end
+	for _, quest in weeklyHalfway do
+		table.insert(halfwayEntries, quest)
+	end
+	changed = changed or weeklyChanged
+
 	if changed then
 		playerData:SetValue({ "Quests", "ActiveQuests" }, activeQuests)
 		pcall(function()
 			self.Client.QuestsUpdated:Fire(player, activeQuests)
+		end)
+	end
+
+	if weeklyChanged then
+		playerData:SetValue({ "WeeklyQuests", "ActiveQuests" }, weeklyQuests)
+		pcall(function()
+			self.Client.WeeklyQuestsUpdated:Fire(player, weeklyQuests)
 		end)
 	end
 
@@ -289,6 +376,93 @@ function QuestService:ClaimQuest(player: Player, questIndex: number): (boolean, 
 	return success, errReason
 end
 
+-- Q6-CHAINS: claims a completed weekly quest. The reward is 1 Regular Pet
+-- Capsule granted through CapsuleService:GrantEarnedCapsule, the same
+-- inventory grant path as the first-shift starter capsule. The capsule is
+-- granted BEFORE the quest is marked claimed so a full capsule inventory
+-- (InventoryFull) does not consume the claim; questLocks serializes
+-- concurrent claims for the player so grant-then-mark stays idempotent.
+function QuestService:ClaimWeeklyQuest(player: Player, questIndex: number): (boolean, string?)
+	if not isValidQuestIndex(questIndex) then
+		return false, "InvalidQuestIndex"
+	end
+
+	if questLocks[player.UserId] then
+		return false, "ClaimInProgress"
+	end
+	questLocks[player.UserId] = true
+
+	local ok, success, errReason = pcall(function()
+		local playerData = self:_getPlayerData(player)
+		if not playerData then
+			return false, "DataNotLoaded"
+		end
+
+		local weeklyQuests = self:_ensureWeeklyQuests(player, playerData)
+		if questIndex > #weeklyQuests then
+			return false, "QuestNotFound"
+		end
+
+		local quest = weeklyQuests[questIndex]
+		if not quest then
+			return false, "QuestNotFound"
+		end
+
+		if not quest.Completed then
+			return false, "QuestNotCompleted"
+		end
+
+		if quest.Claimed then
+			return false, "AlreadyClaimed"
+		end
+
+		local capsuleName = quest.RewardCapsule or QuestConfig.WEEKLY_CAPSULE_NAME
+		local capsuleService = self:_getService("CapsuleService")
+		if capsuleService and capsuleService.GrantEarnedCapsule then
+			local granted, grantErr = capsuleService:GrantEarnedCapsule(player, capsuleName)
+			if not granted then
+				return false, grantErr or "CapsuleGrantFailed"
+			end
+		end
+
+		quest.Claimed = true
+		playerData:SetValue({ "WeeklyQuests", "ActiveQuests" }, weeklyQuests)
+
+		if (quest.RewardBobaBucks or 0) > 0 then
+			local currencyService = self:_getService("CurrencyService")
+			if currencyService then
+				currencyService:Modify(player, "BobaBucks", quest.RewardBobaBucks, "QuestReward")
+			end
+		end
+
+		if (quest.RewardXP or 0) > 0 then
+			local progressionService = self:_getService("ProgressionService")
+			if progressionService then
+				if progressionService.AddXP then
+					progressionService:AddXP(player, quest.RewardXP)
+				elseif progressionService.AddXp then
+					progressionService:AddXp(player, quest.RewardXP)
+				end
+			end
+		end
+
+		pcall(function()
+			self.Client.WeeklyQuestsUpdated:Fire(player, weeklyQuests)
+		end)
+
+		return true, nil
+	end)
+
+	questLocks[player.UserId] = nil
+
+	if not ok then
+		warn(`[QuestService] ClaimWeeklyQuest error for {player.Name}: {success}`)
+		return false, tostring(success)
+	end
+
+	return success, errReason
+end
+
 function QuestService:RerollQuest(player: Player, questIndex: number): (boolean, string?)
 	if not isValidQuestIndex(questIndex) then
 		return false, "InvalidQuestIndex"
@@ -403,6 +577,7 @@ function QuestService:KnitStart()
 			local ok, playerData = dataService:GetDataAsync(player):timeout(DATA_TIMEOUT_SECONDS):await()
 			if ok and playerData and player.Parent then
 				self:_ensureDailyQuests(player, playerData)
+				self:_ensureWeeklyQuests(player, playerData)
 			end
 		end)
 	end)
@@ -412,6 +587,7 @@ function QuestService:KnitStart()
 			local ok, playerData = dataService:GetDataAsync(player):timeout(DATA_TIMEOUT_SECONDS):await()
 			if ok and playerData and player.Parent then
 				self:_ensureDailyQuests(player, playerData)
+				self:_ensureWeeklyQuests(player, playerData)
 			end
 		end)
 	end

@@ -43,6 +43,11 @@ local PAGES: { OpenableMenu.Page } = {
 		Content = c(require(script.InventoryComponent), { ItemType = "Particles" }),
 	},
 	{
+		Key = "Titles",
+		Label = "Titles",
+		Content = c(require(script.Titles)),
+	},
+	{
 		Key = "Collection",
 		Label = "My Collection",
 		ButtonColor = Styles.GOLD,

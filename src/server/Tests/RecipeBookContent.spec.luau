@@ -63,7 +63,7 @@ return function()
 		end)
 
 		it("grab text stays", function()
-			expect(find(Content.build(nil, 1), "Grab it from the display.") ~= nil).to.equal(true)
+			expect(find(Content.build(nil, 1), "1. Fudge Brownie") ~= nil).to.equal(true)
 		end)
 
 		it("level 1 lists Espresso and Mango Boba locked, in level order", function()

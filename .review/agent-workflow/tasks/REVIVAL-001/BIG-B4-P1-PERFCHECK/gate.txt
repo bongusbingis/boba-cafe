@@ -1,0 +1,9 @@
+PASS  src/shared/Configuration/SeatingConfig.luau  selene new=0 (baseline[empty]=0 now=0)  stylua=ok
+PASS  src/server/Modules/CustomerService/init.luau  selene new=0 (baseline[HEAD]=0 now=0)  stylua=ok
+PASS  rojo build -> /mnt/c/Users/jackc/AppData/Local/Temp/boba-gate/gate-build.rbxlx
+GATE: PASS
+
+rojo build default.project.json -o /tmp/boba-b4p1-out.rbxlx (WSL /tmp, outside repo):
+Building project 'boba-cafe'
+Built project to boba-b4p1-out.rbxlx
+-rw-r--r-- 1 jackc jackc 4076160 Oct 20 18:40 /tmp/boba-b4p1-out.rbxlx

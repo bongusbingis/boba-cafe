@@ -39,6 +39,7 @@ return function(props)
 	end, {})
 	local page, setPage = React.useState("Recipes")
 
+	local focusItem = if typeof(props.Args) == "table" then props.Args[1] else nil
 	local isRecipes = page == "Recipes"
 	local isTips = page == "Tips"
 
@@ -74,7 +75,7 @@ return function(props)
 				TextColor3 = Styles.OFFWHITE,
 				TextSize = px(35),
 				TextWrapped = true,
-				Text = if isRecipes then Content.build(nil, level) else Content.Tips,
+				Text = if isRecipes then Content.build(focusItem, level) else Content.Tips,
 				RichText = true,
 			},
 		}),

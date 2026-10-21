@@ -30,13 +30,22 @@ return function()
 		return player
 	end
 
+	local originalShiftEnded = service.Client.ShiftEnded
+
 	beforeEach(function()
 		service._toggleDebounces = {}
 		service.Client.Server = service
+		service.Client.ShiftEnded = {
+			Fire = function(_self, _player, _summary) end,
+		}
 	end)
 
 	afterEach(function()
 		service._toggleDebounces = {}
+	end)
+
+	afterAll(function()
+		service.Client.ShiftEnded = originalShiftEnded
 	end)
 
 	describe("IsClockedIn / SetClockedIn", function()
@@ -272,6 +281,56 @@ return function()
 			local price = service.CheapestCapsulePrice()
 			expect(typeof(price)).to.equal("number")
 			expect(price > 0).to.equal(true)
+		end)
+	end)
+
+	describe("Shift streak bonus", function()
+		local function endShiftOnce(player: any, completed: number)
+			local state = {
+				Resolved = 10,
+				Target = 10,
+				Served = 10,
+				Walkouts = 0,
+				Perfects = 10,
+				Pay = 0,
+				Tips = 0,
+				BestCombo = 0,
+				Completed = completed,
+				Loaded = true,
+			}
+			service._states[player] = state
+			local captured = nil
+			local connection = service.ShiftEnding:Connect(function(_, summary)
+				captured = summary
+			end)
+			service:_endShift(player, state)
+			connection:Disconnect()
+			service._states[player] = nil
+			return captured
+		end
+
+		it("grants the streak bonus on every 3rd consecutive shift end", function()
+			local player = makePlayer(9401)
+			local first = endShiftOnce(player, 1)
+			local second = endShiftOnce(player, 2)
+			local third = endShiftOnce(player, 3)
+			expect(first.ShiftStreak).to.equal(1)
+			expect(first.StreakBonus).to.equal(0)
+			expect(second.ShiftStreak).to.equal(2)
+			expect(second.StreakBonus).to.equal(0)
+			expect(third.ShiftStreak).to.equal(3)
+			expect(third.StreakBonus).to.equal(30)
+			local fourth = endShiftOnce(player, 4)
+			expect(fourth.ShiftStreak).to.equal(4)
+			expect(fourth.StreakBonus).to.equal(0)
+			service:PlayerRemoving(player)
+		end)
+
+		it("clears the streak on PlayerRemoving", function()
+			local player = makePlayer(9402)
+			endShiftOnce(player, 1)
+			service:PlayerRemoving(player)
+			expect(service._streaks[player]).to.equal(nil)
 		end)
 	end)
 end

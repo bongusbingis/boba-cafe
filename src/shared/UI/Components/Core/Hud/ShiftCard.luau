@@ -9,8 +9,10 @@
 
 ---> Services
 
+local Debris = game:GetService("Debris")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local SoundService = game:GetService("SoundService")
 
 ---> Dependencies
 
@@ -20,6 +22,8 @@ local UI = Shared:WaitForChild("UI")
 
 local Knit = require(Packages.Knit)
 local React = require(Packages.React)
+local ShiftConfig = require(Shared.Configuration.ShiftConfig)
+local WorldPath = require(Shared.Utility.WorldPath)
 
 local Styles = require(UI.Styles)
 local Banner = require(UI.Components.Buttons.Banner)
@@ -30,6 +34,11 @@ local Pane = require(UI.Components.Pane)
 local c = React.createElement
 local BASE_IMAGE = "http://www.roblox.com/asset/?id=13473433246"
 local BORDER_IMAGE = "http://www.roblox.com/asset/?id=13382163077"
+
+local STAR_NOTE_SPEEDS = { 1, 1.2599, 1.4983 } -- PlaybackSpeed for note 1, 2, 3 (root, major third, fifth)
+local STAR_NOTE_GAP = 0.2
+local STAR_NOTE_MAX = 3
+local STAR_NOTE_LIFETIME = 3
 
 local function buildLines(summary): { string }
 	local served = `Served {summary.Served or 0}`
@@ -53,6 +62,15 @@ local function buildLines(summary): { string }
 			table.insert(lines, `Best combo x {summary.BestCombo}`)
 		end
 	end
+	if summary.ShiftStreak ~= nil then
+		local streak = summary.ShiftStreak
+		if (summary.StreakBonus or 0) > 0 then
+			table.insert(lines, `Streak {streak} · +{summary.StreakBonus} BB streak bonus!`)
+		else
+			local remaining = ShiftConfig.STREAK_LENGTH - (streak % ShiftConfig.STREAK_LENGTH)
+			table.insert(lines, `Streak {streak} · streak bonus in {remaining}`)
+		end
+	end
 	if summary.Xp ~= nil then
 		local progress = ""
 		if summary.XpIntoLevel ~= nil and summary.XpForLevel ~= nil then
@@ -74,6 +92,34 @@ local function buildLines(summary): { string }
 	return lines
 end
 
+local function playStarJingle(stars: any)
+	if typeof(stars) ~= "number" then
+		return
+	end
+	local count = math.clamp(math.floor(stars), 0, STAR_NOTE_MAX)
+	if count < 1 then
+		return
+	end
+	task.spawn(function()
+		for index = 1, count do
+			pcall(function()
+				local sound = WorldPath.find(SoundService, { "SFX", "UI", "StarNote" })
+					or WorldPath.find(SoundService, { "UISounds", "StarNote" })
+				if sound and sound:IsA("Sound") then
+					local note = sound:Clone()
+					note.PlaybackSpeed = STAR_NOTE_SPEEDS[index]
+					note.Parent = sound.Parent
+					note:Play()
+					Debris:AddItem(note, STAR_NOTE_LIFETIME)
+				end
+			end)
+			if index < count then
+				task.wait(STAR_NOTE_GAP)
+			end
+		end
+	end)
+end
+
 ---> Component
 
 return function()
@@ -83,6 +129,7 @@ return function()
 		React.useEffect(function()
 			local conn = Knit.GetService("ShiftService").ShiftEnded:Connect(function(newSummary)
 				setSummary(newSummary)
+				playStarJingle(if typeof(newSummary) == "table" then newSummary.Stars else nil)
 			end)
 
 			return function()

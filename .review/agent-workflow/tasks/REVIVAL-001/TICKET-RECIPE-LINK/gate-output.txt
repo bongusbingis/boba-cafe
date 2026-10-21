@@ -1,0 +1,6 @@
+PASS  src/shared/UI/Components/Core/Hud/OrderTicket.luau  selene new=0 (baseline[HEAD]=6 now=6)  stylua=ok
+PASS  src/shared/UI/Components/Core/Hud/init.luau  selene new=0 (baseline[HEAD]=0 now=0)  stylua=ok
+PASS  src/shared/UI/Pages/Recipes/init.luau  selene new=0 (baseline[HEAD]=3 now=2)  stylua=ok
+PASS  src/shared/UI/Pages/Recipes/Content.luau  selene new=0 (baseline[HEAD]=0 now=0)  stylua=ok
+PASS  rojo build -> /mnt/c/Users/jackc/AppData/Local/Temp/boba-gate/gate-build.rbxl
+GATE: PASS

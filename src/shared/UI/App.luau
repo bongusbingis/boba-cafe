@@ -6,6 +6,7 @@ local UI = Shared:WaitForChild("UI")
 
 ---> dependencies
 local React = require(Packages.React)
+local Knit = require(Packages.Knit)
 
 ---> components
 local Page = require(UI.Components.Core.Page)
@@ -43,6 +44,40 @@ local function App()
 		end)
 	end
 
+	React.useEffect(function()
+		local ok, orderController = pcall(function()
+			return Knit.GetController("OrderController")
+		end)
+		if not ok or not orderController then
+			return
+		end
+
+		local conn1 = orderController.OpenOrderingRequested:Connect(function(npcOrderData)
+			local pages = UI:FindFirstChild("Pages")
+			local orderingPage = pages and pages:FindFirstChild("Ordering")
+			if orderingPage then
+				handleSetCurrentPage(orderingPage, npcOrderData)
+			end
+		end)
+
+		local conn2 = orderController.CloseOrderingRequested:Connect(function()
+			setCurrentPage(function(existingPage)
+				local pages = UI:FindFirstChild("Pages")
+				local orderingPage = pages and pages:FindFirstChild("Ordering")
+				if existingPage == orderingPage then
+					closeCurrentPageIfExists()
+					return nil
+				end
+				return existingPage
+			end)
+		end)
+
+		return function()
+			conn1:Disconnect()
+			conn2:Disconnect()
+		end
+	end, {})
+
 	local pageToRender = currentPage
 		and c(Page, {
 			IsVisible = true,
@@ -54,7 +89,6 @@ local function App()
 					else
 						handleSetCurrentPage(currentPage)
 					end
-					--handleSetCurrentPage(typeof(newPage) == "Instance" and newPage or currentPage)
 				end,
 			}),
 			OnClosing = function(callbackFunction)

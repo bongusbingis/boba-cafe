@@ -23,6 +23,8 @@ export type SizeWeight = { Size: string, Weight: number }
 local Progression = require(script.Parent.Progression)
 
 local CustomerConfig = {
+	ASSIGNMENT_MODE = "Dedicated", -- "Dedicated": barista takes order at register, ticket assigned to them
+
 	---> pacing (design 4.2)
 	-- NPCs present = min(SERVER_CAP, slots + line), where
 	--   slots = clocked-in baristas * SLOTS_PER_BARISTA
@@ -45,6 +47,9 @@ local CustomerConfig = {
 	PATIENCE_GRAB_BONUS_SECONDS = 10, -- TUNING: any category not listed above (food you grab)
 	PATIENCE_YELLOW_FRACTION = 0.5, -- TUNING: the bar turns yellow at or below this fraction left
 	PATIENCE_RED_FRACTION = 0.25, -- TUNING: the bar turns red at or below this fraction left
+	PATIENCE_RAMP_FIRST_SHIFT = 3, -- PROPOSED (REVIVAL-001 C6, DEC-053): first session shift that is trimmed
+	PATIENCE_RAMP_TRIM_PER_SHIFT = 0.05, -- PROPOSED (REVIVAL-001 C6, DEC-053): extra trim per shift from the first trimmed one
+	PATIENCE_RAMP_MAX_TRIM = 0.10, -- PROPOSED (REVIVAL-001 C6, DEC-053): the trim never exceeds this
 
 	---> order pool: the M1 slice (design 4.4 and 7)
 	-- PENDING JACK Q3: whether boba keeps 3 sizes. If not, this is a config-only change.

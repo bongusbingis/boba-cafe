@@ -18,6 +18,20 @@ QuestConfig.BONUS_SLOT_PASSES = { 219650999, 12385834 }
 QuestConfig.FREE_REROLL_PASS = 219650999
 QuestConfig.REROLL_COST_BOBABUCKS = 20 -- DEC-037 Q11b
 
+-- Q6-CHAINS (PROPOSED, Jack adjusts): 3 weekly quests at 3-5x daily targets.
+-- Reward is 1 Regular Pet Capsule via CapsuleService:GrantEarnedCapsule
+-- (the same inventory grant path as the first-shift starter capsule).
+QuestConfig.WEEKLY_SLOT_COUNT = 3
+QuestConfig.WEEKLY_POOL = {
+	"BobaOrdered",
+	"CustomersServed",
+	"SpillsCleaned",
+	"ShiftsCompleted",
+}
+QuestConfig.WEEKLY_MULTIPLIER_MIN = 3
+QuestConfig.WEEKLY_MULTIPLIER_MAX = 5
+QuestConfig.WEEKLY_CAPSULE_NAME = "Regular Pet Capsule"
+
 QuestConfig.TYPE_ORDER = {
 	"BobaOrdered",
 	"CustomersServed",
@@ -64,6 +78,19 @@ function QuestConfig.GetCurrentDay(now: number?): number
 	return math.floor((now or os.time()) / 86400)
 end
 
+-- Q6-CHAINS (PROPOSED): weekly cadence. No existing weekly boundary was found
+-- in the codebase (daily systems use UTC-day arithmetic), so this resets on
+-- Monday 00:00 server local time. Returns a stable week index derived from
+-- the most recent server-local Monday midnight.
+function QuestConfig.GetCurrentWeek(nowSeconds: number?): number
+	local t = nowSeconds or os.time()
+	local parts = os.date("*t", t) :: any
+	local mondayOffset = (parts.wday + 5) % 7 -- 0 for Monday .. 6 for Sunday
+	local sinceMidnight = parts.hour * 3600 + parts.min * 60 + parts.sec
+	local mondayMidnight = t - mondayOffset * 86400 - sinceMidnight
+	return math.floor(mondayMidnight / 604800)
+end
+
 function QuestConfig.GetQuestTitle(entry: QuestEntry): string
 	local template = QuestConfig.TEMPLATES[entry.Type]
 	if template then
@@ -108,6 +135,51 @@ function QuestConfig.GenerateDailyQuests(
 			Claimed = false,
 			RewardBobaBucks = template.BobaBucks[targetIndex],
 			RewardXP = template.XP[targetIndex],
+		})
+	end
+	return quests
+end
+
+-- Q6-CHAINS (PROPOSED): 3 weekly quests drawn from WEEKLY_POOL at 3-5x
+-- their daily targets. Reward is a capsule (RewardCapsule); BobaBucks/XP are 0.
+function QuestConfig.GenerateWeeklyQuests(
+	weekNumber: number,
+	slotCount: number?,
+	rngOrSeed: (Random | number)?
+): { QuestEntry }
+	local actualRng: Random
+	if typeof(rngOrSeed) == "Random" then
+		actualRng = rngOrSeed
+	elseif typeof(rngOrSeed) == "number" then
+		actualRng = Random.new(rngOrSeed)
+	else
+		actualRng = Random.new(weekNumber)
+	end
+
+	local pool = table.clone(QuestConfig.WEEKLY_POOL)
+	for i = #pool, 2, -1 do
+		local j = actualRng:NextInteger(1, i)
+		pool[i], pool[j] = pool[j], pool[i]
+	end
+
+	local count = math.clamp(slotCount or QuestConfig.WEEKLY_SLOT_COUNT, 1, #pool)
+	local quests: { QuestEntry } = {}
+	for i = 1, count do
+		local questType = pool[i]
+		local template = QuestConfig.TEMPLATES[questType]
+		local targetIndex = actualRng:NextInteger(1, #template.Targets)
+		local multiplier = actualRng:NextInteger(QuestConfig.WEEKLY_MULTIPLIER_MIN, QuestConfig.WEEKLY_MULTIPLIER_MAX)
+		local target = template.Targets[targetIndex] * multiplier
+		table.insert(quests, {
+			Id = string.format("w%d_%s_%d", weekNumber, questType, target),
+			Type = questType,
+			Target = target,
+			Progress = 0,
+			Completed = false,
+			Claimed = false,
+			RewardBobaBucks = 0,
+			RewardXP = 0,
+			RewardCapsule = QuestConfig.WEEKLY_CAPSULE_NAME,
 		})
 	end
 	return quests

@@ -107,3 +107,44 @@ Open items:
 - Live update on the Level attribute; TICKET-RECIPE-LINK focus keeps pool order.
 - Text-only change inside the existing Label: no new token, Instance or layout.
 - New pure spec for Content.build.
+
+## Extension: Espresso L7 + Mango L8
+
+Approval: Jack, 2026-10-20 (DEC-057, "3. yes": Espresso L7 and Mango L8 join B1 phase 1). Depends on the `BIG-B1-P2-POOL.md` "Extension" (pool entries 6 Espresso and 7 Mango Boba); the builder does both in one run. Hot Cocoa Classic and Strawberry Tapioca stay OUT and get no pool entry, so they are never listed. Evidence: `.review/agent-workflow/tasks/REVIVAL-001/BIG-B1-P3-RECIPEBOOK/ext-espresso-mango/`.
+
+### E1. How Taro/Strawberry were wired (verified in `git show ee9a515`)
+- `Content.build(focusItem, level)` walks `CustomerConfig.ORDER_POOL`, dedupes by `entry.Key`, heads each block with `entry.Label`, puts `MinLevel > level` entries in `locked` (sorted by MinLevel, then pool index), and builds unlocked steps from `OrderSpec.Steps`. `init.luau` passes `Content.build(nil, level)` from the `Level` attribute.
+- Everything is data-driven, so **`Content.luau` and `init.luau` need no edit**. The new entries appear automatically:
+  - Espresso unlocked: `<b>Espresso</b>`, `1. Medium Cup`, `2. Espresso` (coffee branch with `Size = "Medium"`, Iced/Sugar false, so there are no Ice/Sugar rows).
+  - Mango Boba unlocked: `<b>Mango Boba</b>`, `1. Medium Clear Cup`, `2. Milk`, `3. Mango Syrup`, `4. Normal Tapioca`.
+  - Locked: `<font transparency="0.35"><b>Espresso</b>` + `\n` + `<font face="DenkOne">Unlocks at Level 7</font></font>`, and the same for `Mango Boba` with `Level 8`.
+- Order at Level 1: three classics, then locked Taro Boba, Strawberry Boba (L2), Espresso (L7), Mango Boba (L8). At Level 2-6: five unlocked, then locked Espresso and Mango Boba. At Level 7: six unlocked, then locked Mango Boba. At Level 8+: all seven unlocked in pool order.
+
+### E2. Exact edit: `src/server/Tests/RecipeBookContent.spec.luau` (the only file)
+- **Existing case that would fail, so change it:** `level 2 unlocks them` asserts `expect(find(text, "Unlocks at")).to.equal(nil)`, but at Level 2 Espresso and Mango Boba are now locked. Change that one line to `expect(find(text, "Unlocks at Level 2")).to.equal(nil)`. Leave its other two asserts and every other existing case unchanged; they still hold. (`level 1 locks the level-2 drinks` still counts exactly 2 `Unlocks at Level 2`; `focus keeps pool order` at level 2 is unaffected.)
+- Append inside `describe("Content.build (B1)")`:
+  - `level 1 lists Espresso and Mango Boba locked, in level order`: `text = Content.build(nil, 1)`; `count(text, "Unlocks at Level 7")` is 1 and `count(text, "Unlocks at Level 8")` is 1; find indices satisfy `<b>Strawberry Boba</b>` < `<b>Espresso</b>` < `<b>Mango Boba</b>`; `find(text, "Mango Syrup")` is nil.
+  - `level 7 unlocks Espresso only`: `text = Content.build(nil, 7)`; contains `2. Espresso`; `count(text, "Unlocks at")` is 1; contains `Unlocks at Level 8`.
+  - `level 8 unlocks everything`: `text = Content.build(nil, 8)`; contains `2. Espresso` and `3. Mango Syrup`; `find(text, "Unlocks at")` is nil; find index `<b>Strawberry Boba</b>` < `<b>Espresso</b>` < `<b>Mango Boba</b>` (pool order).
+- Use the file's existing `find` / `count` helpers (plain `string.find`).
+
+**Not touched:** `Content.luau`, `init.luau`, `CustomerConfig.luau` (owned by the P2 extension), Styles, and `src/server/Scripts/ActivityScript.server.luau`. There is no new token, Instance or string pattern (DEC-013).
+
+### E3. Gate
+- `wsl bash -lc 'cd /mnt/c/Users/jackc/desktop/boba-cafe && . .review/agent-workflow/tools/wsl/env.sh && gate src/server/Tests/RecipeBookContent.spec.luau'`.
+- The same by hand: `selene src/server/Tests/RecipeBookContent.spec.luau`; `stylua --check src/server/Tests/RecipeBookContent.spec.luau`; `rojo build default.project.json -o <scratchpad>/b1ext-rb.rbxl` (outside the repo).
+- TestEZ in Studio with `TESTS_ENABLED = true` in `src/server/Tests/RunTests.server.luau` (revert before finishing); RecipeBookContent and CustomerService specs pass.
+
+### E4. Studio checks (Jack)
+- S-RB-EXT-1: at Level 1, open the Recipe Book. Expected: dimmed `Espresso` / `Unlocks at Level 7` and `Mango Boba` / `Unlocks at Level 8` below the dimmed L2 drinks; the list scrolls at 844x390 and nothing is clipped.
+- S-RB-EXT-2: keep the book open through the Level 6 -> 7 level-up. Expected: Espresso turns full white with 2 steps (`1. Medium Cup`, `2. Espresso`); Mango Boba stays locked.
+- S-RB-EXT-3: at Level 8. Expected: no `Unlocks at` text; Mango Boba shows 4 steps ending `4. Normal Tapioca`.
+- Place content: none beyond the P2 extension's S-EXT-1/S-EXT-3 (the book is text only).
+
+### E5. Acceptance
+- At Level 1 the book has 4 locked blocks in order Taro, Strawberry, Espresso, Mango Boba; at Level 7, 1 locked block (Mango Boba); at Level 8, none.
+- All RecipeBookContent cases pass (one assert narrowed as in E2).
+- The gate passes with no new findings in the spec file.
+
+### E-Open items
+- None for Jack. The pool weights are PENDING JACK under the P2 extension (E-O2).

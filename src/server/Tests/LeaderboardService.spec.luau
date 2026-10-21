@@ -52,10 +52,12 @@ return function()
 
 		it("handles month rollover formatting correctly", function()
 			local novTimestamp = os.time({ year = 2026, month = 11, day = 1, hour = 0 })
-			expect(LeaderboardConfig.GetMonthKey("OrdersServed", novTimestamp)).to.equal("2026_11_OrdersServed")
+			local expectedNov = os.date("%Y_%m_", novTimestamp) .. "OrdersServed"
+			expect(LeaderboardConfig.GetMonthKey("OrdersServed", novTimestamp)).to.equal(expectedNov)
 
 			local janTimestamp = os.time({ year = 2027, month = 1, day = 15, hour = 0 })
-			expect(LeaderboardConfig.GetMonthKey("OrdersServed", janTimestamp)).to.equal("2027_01_OrdersServed")
+			local expectedJan = os.date("%Y_%m_", janTimestamp) .. "OrdersServed"
+			expect(LeaderboardConfig.GetMonthKey("OrdersServed", janTimestamp)).to.equal(expectedJan)
 		end)
 
 		it("defaults to current timestamp if omitted", function()
@@ -307,10 +309,10 @@ return function()
 				{ UserId = 102, Name = "Bob", Value = 80 },
 			}
 			local text = LeaderboardService:_formatEntriesText(entries)
-			expect(string.find(text, "1. Alice - 100") ~= nil).to.equal(true)
-			expect(string.find(text, "2. Bob - 80") ~= nil).to.equal(true)
-			expect(string.find(text, "3. ---") ~= nil).to.equal(true)
-			expect(string.find(text, "10. ---") ~= nil).to.equal(true)
+			expect(string.find(text, "1. Alice - 100", 1, true) ~= nil).to.equal(true)
+			expect(string.find(text, "2. Bob - 80", 1, true) ~= nil).to.equal(true)
+			expect(string.find(text, "3. ---", 1, true) ~= nil).to.equal(true)
+			expect(string.find(text, "10. ---", 1, true) ~= nil).to.equal(true)
 		end)
 	end)
 end

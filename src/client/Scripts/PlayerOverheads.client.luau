@@ -142,8 +142,17 @@ local function buildOverhead(player: Player, character: Model)
 	titleLabel.Parent = frame
 	local function refreshTitle()
 		local isVeteran = player:GetAttribute("IsVeteran") == true
+		-- The equipped title is the earned cosmetic the player chose; an empty
+		-- string means explicitly unequipped. The level title is only a fallback
+		-- until ProgressionService has loaded and set EquippedTitle.
+		local rawEquippedTitle = player:GetAttribute("EquippedTitle")
 		local rawLevelTitle = player:GetAttribute("LevelTitle")
-		local levelTitle = if typeof(rawLevelTitle) == "string" and rawLevelTitle ~= "" then rawLevelTitle else nil
+		local levelTitle: string? = nil
+		if typeof(rawEquippedTitle) == "string" then
+			levelTitle = if rawEquippedTitle ~= "" then rawEquippedTitle else nil
+		elseif typeof(rawLevelTitle) == "string" and rawLevelTitle ~= "" then
+			levelTitle = rawLevelTitle
+		end
 
 		if isVeteran and levelTitle then
 			titleLabel.Text = "Veteran • " .. levelTitle
@@ -158,9 +167,11 @@ local function buildOverhead(player: Player, character: Model)
 	end
 	refreshTitle()
 	local titleConn = player:GetAttributeChangedSignal("LevelTitle"):Connect(refreshTitle)
+	local equippedConn = player:GetAttributeChangedSignal("EquippedTitle"):Connect(refreshTitle)
 	local veteranConn = player:GetAttributeChangedSignal("IsVeteran"):Connect(refreshTitle)
 	titleLabel.Destroying:Connect(function()
 		titleConn:Disconnect()
+		equippedConn:Disconnect()
 		veteranConn:Disconnect()
 	end)
 

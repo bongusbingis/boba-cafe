@@ -54,7 +54,7 @@ return function(props)
 			Native = {
 				BackgroundTransparency = 1,
 				LayoutOrder = 1,
-				Size = UDim2.fromScale(1, 0.224875),
+				Size = UDim2.fromScale(1, 0.2),
 			},
 		}, {
 			Title = c(Pane, {
@@ -74,7 +74,7 @@ return function(props)
 
 			Headshot = c(Pane, {
 				ClassName = "ImageLabel",
-                AspectRatio = 1,
+				AspectRatio = 1,
 				Native = {
 					AnchorPoint = Vector2.new(0, 0.5),
 					BackgroundTransparency = 1,
@@ -92,9 +92,9 @@ return function(props)
 					HorizontalAlignment = Enum.HorizontalAlignment.Left,
 					SortOrder = Enum.SortOrder.LayoutOrder,
 				},
-                Padding = {
-                    PaddingLeft = UDim.new(0.075, 0),
-                },
+				Padding = {
+					PaddingLeft = UDim.new(0.075, 0),
+				},
 				Native = {
 					AnchorPoint = Vector2.new(0, 0.5),
 					BackgroundTransparency = 1,
@@ -133,18 +133,64 @@ return function(props)
 			}),
 		}),
 
-		Order = c(Pane, {
+		CustomerRequest = props.NpcOrderText and c(Pane, {
 			ClassName = "Frame",
 			Native = {
 				BackgroundTransparency = 1,
 				LayoutOrder = 2,
-				Size = UDim2.fromScale(1, 0.6),
+				Size = UDim2.fromScale(1, 0.14),
+			},
+			Padding = {
+				PaddingLeft = UDim.new(0.05, 0),
+				PaddingRight = UDim.new(0.05, 0),
+			},
+			ListLayout = {
+				FillDirection = Enum.FillDirection.Vertical,
+				HorizontalAlignment = Enum.HorizontalAlignment.Left,
+				SortOrder = Enum.SortOrder.LayoutOrder,
+			},
+		}, {
+			Title = c(Pane, {
+				ClassName = "TextLabel",
+				Native = {
+					BackgroundTransparency = 1,
+					FontFace = Styles.FONT_FREDOKA,
+					LayoutOrder = 1,
+					Size = UDim2.fromScale(1, 0.4),
+					Text = "Customer Request:",
+					TextColor3 = ORANGE,
+					TextScaled = true,
+					TextXAlignment = Enum.TextXAlignment.Left,
+				},
+			}),
+			Text = c(Pane, {
+				ClassName = "TextLabel",
+				Native = {
+					BackgroundTransparency = 1,
+					FontFace = Styles.FONT_FREDOKA,
+					LayoutOrder = 2,
+					Size = UDim2.fromScale(1, 0.6),
+					Text = props.NpcOrderText,
+					TextColor3 = Color3.fromRGB(50, 50, 50),
+					TextScaled = true,
+					TextWrapped = true,
+					TextXAlignment = Enum.TextXAlignment.Left,
+				},
+			}),
+		}) or nil,
+
+		Order = c(Pane, {
+			ClassName = "Frame",
+			Native = {
+				BackgroundTransparency = 1,
+				LayoutOrder = 3,
+				Size = if props.NpcOrderText then UDim2.fromScale(1, 0.52) else UDim2.fromScale(1, 0.65),
 			},
 			ListLayout = {
 				FillDirection = Enum.FillDirection.Vertical,
 				HorizontalAlignment = Enum.HorizontalAlignment.Center,
 				SortOrder = Enum.SortOrder.LayoutOrder,
-                Padding = UDim.new(0.025, 0),
+				Padding = UDim.new(0.025, 0),
 			},
 		}, {
 			Title = c(Pane, {
@@ -179,17 +225,17 @@ return function(props)
 				AutomaticCanvasSize = Enum.AutomaticSize.Y,
 				BorderSizePixel = 0,
 				BackgroundTransparency = 1,
-				CanvasSize = UDim2.new(),--UDim2.fromScale(1, 2),
+				CanvasSize = UDim2.new(),
 				Position = UDim2.fromScale(0.0549998, 0.343522),
 				ScrollBarImageColor3 = Color3.new(),
 				ScrollBarThickness = 5,
 				ScrollingDirection = Enum.ScrollingDirection.Y,
-				Size = UDim2.fromScale(0.92, 0.9),
+				Size = UDim2.fromScale(0.92, 0.85),
 				LayoutOrder = 3,
 			}, orderChildren),
 
 			Submit = #props.OrderItems > 0 and c(ActionButton, {
-				Text = "Submit",
+				Text = "Submit Order",
 				Color = Styles.GREEN_DIM,
 				AnchorPoint = Vector2.new(0, 0.5),
 				Position = UDim2.fromScale(0.163498, 0),

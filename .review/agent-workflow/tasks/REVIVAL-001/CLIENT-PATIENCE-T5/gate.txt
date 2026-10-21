@@ -1,0 +1,4 @@
+PASS  src/client/Modules/KitchenController.luau  selene new=0 (baseline[HEAD]=0 now=0)  stylua=ok
+PASS  rojo build -> /mnt/c/Users/jackc/AppData/Local/Temp/boba-gate/gate-build.rbxl
+GATE: PASS
+rojo build default.project.json -o /tmp/boba-t5-build.rbxl -> exit 0 (Built project to boba-t5-build.rbxl)

@@ -62,12 +62,18 @@ export type QuestEntry = {
 	Claimed: boolean,
 	RewardBobaBucks: number,
 	RewardXP: number,
+	RewardCapsule: string?,
 }
 
 export type QuestData = {
 	AssignedDay: number,
 	ActiveQuests: { QuestEntry },
 	FreeRerollsRemaining: number,
+}
+
+export type WeeklyQuestData = {
+	AssignedWeek: number,
+	ActiveQuests: { QuestEntry },
 }
 
 export type ProfileTemplate = {
@@ -105,6 +111,8 @@ export type ProfileTemplate = {
 	Quests: QuestData,
 	BestCombo: number,
 	BestShiftPay: number,
+	WeeklyQuests: WeeklyQuestData,
+	InvitedFriends: { [string]: boolean },
 }
 
 return {
@@ -169,4 +177,9 @@ return {
 	},
 	BestCombo = 0,
 	BestShiftPay = 0,
+	WeeklyQuests = {
+		AssignedWeek = 0,
+		ActiveQuests = {},
+	},
+	InvitedFriends = {},
 }

@@ -15,6 +15,7 @@
 
 ---> services
 
+local Debris = game:GetService("Debris")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -26,11 +27,13 @@ local Styles = require(Shared.UI.Styles)
 local Rules = require(script.Parent.Rules)
 local Recipes = require(Shared.Kitchen.Recipes)
 local CustomerDialogue = require(Shared.Configuration.CustomerDialogue)
+local CustomerConfig = require(Shared.Configuration.CustomerConfig)
+local SeatingConfig = require(Shared.Configuration.SeatingConfig)
 local WorldPath = require(Shared.Utility.WorldPath)
 
 ---> types
 
-export type State = "Walking" | "Queued" | "AtCounter" | "Leaving"
+export type State = "Walking" | "Queued" | "AtCounter" | "AtPickup" | "Leaving"
 
 -- The authored world contract, resolved by CustomerService. Path, Queue and Counter
 -- are in numeric order; Queue[1] is the front of the line.
@@ -49,14 +52,29 @@ export type Context = {
 	Parent: Instance, -- folder the NPC models live in
 	QueueIndex: (npc: Npc) -> number, -- 1 = front of the line
 	TryTakeCounter: (npc: Npc) -> number?, -- a counter spot, only for the front NPC when one is free
-	Release: (npc: Npc) -> (), -- free the NPC's place in line and its counter spot
+	Release: (npc: Npc) -> (), -- free the NPC's place in line, counter spot, and pickup spot
+	ReleaseCounter: (npc: Npc) -> (), -- free only the counter spot (called on order submit)
+	ClaimPickupSpot: (npc: Npc) -> BasePart?, -- claim an open spot at the pickup counter
+	ReleasePickupSpot: (npc: Npc) -> (),
 	IsPaused: () -> boolean, -- true while nobody is clocked in
 	OnLeft: (npc: Npc, reason: string) -> (), -- the NPC stopped waiting (once)
-	OnAtCounter: (npc: Npc) -> (), -- the NPC reached its counter spot (assign it)
+	OnAtCounter: (npc: Npc) -> (), -- the NPC reached its counter spot (greeting prompt)
+	OnAtPickup: (npc: Npc) -> (), -- the NPC reached its pickup spot (serve prompt)
 	OnDestroyed: (npc: Npc) -> (),
+	TryClaimSeat: (npcId: string, originPos: Vector3, maxDist: number?) -> Seat?,
+	ReleaseSeat: (seat: Seat, npcId: string) -> (),
+}
+
+export type BubbleUI = {
+	Fill: Frame,
+	Track: Frame,
+	Chip: Frame,
+	Label: TextLabel,
+	Card: Frame,
 }
 
 type NpcFields = {
+	Id: string,
 	Model: Model,
 	Humanoid: Humanoid,
 	Root: BasePart,
@@ -69,12 +87,17 @@ type NpcFields = {
 	State: State,
 	PatienceTotal: number,
 	CounterSpot: number?,
+	PickupSpot: BasePart?,
+	RequestedDrinkText: string?,
 	AssignedUserId: number?, -- the barista holding this NPC's ticket (nil while unassigned)
 	Scripted: boolean, -- first-session order: patience does not tick, serve is always Fast
 	Rescue: boolean, -- served by a non-assignee below RESCUE_FRACTION (set by CustomerService)
 	Left: boolean, -- true once the NPC stopped waiting
+	LeftReason: string?,
+	Thanked: boolean?,
 	_ctx: Context,
 	_bar: Frame,
+	_bubbleUI: BubbleUI?,
 	_patienceEnd: number,
 	_fallbacks: number, -- PivotTo fallbacks in a row
 	_destroyed: boolean,
@@ -94,6 +117,12 @@ local ROOT_HEIGHT_STUDS = 3 -- default R15 root part centre above the floor
 local BUBBLE_SIZE = UDim2.fromOffset(200, 64)
 local BUBBLE_OFFSET = Vector3.new(0, 3.5, 0) -- above the head
 local BUBBLE_MAX_DISTANCE_STUDS = 80
+
+-- S9-SPARKLE: Perfect-serve burst, reusing the authored CleanlinessStorage.Sparkles
+-- (same Emit count as Spill). Never build a substitute.
+local SPARKLE_COUNT = 30
+local SPARKLE_CLEANUP_SECONDS = 3
+local sparkleWarned = false
 
 ---> private
 
@@ -258,8 +287,8 @@ local function chipColor(spec: OrderSpec.OrderSpec): Color3
 	return Color3.fromRGB(204, 161, 135) -- coffee
 end
 
--- The order label with a patience bar under it. Returns the bar's fill frame.
-local function buildBubble(model: Model, specs: { OrderSpec.OrderSpec }, variant: Rules.Variant?): Frame
+-- The order label with a patience bar under it. Returns the bubble UI components.
+local function buildBubble(model: Model, specs: { OrderSpec.OrderSpec }, variant: Rules.Variant?): BubbleUI
 	local spec = specs[1]
 	local gui = Instance.new("BillboardGui")
 	gui.Name = "OrderBubble"
@@ -271,6 +300,7 @@ local function buildBubble(model: Model, specs: { OrderSpec.OrderSpec }, variant
 	gui.MaxDistance = BUBBLE_MAX_DISTANCE_STUDS
 
 	local card = Instance.new("Frame")
+	card.Name = "Card"
 	card.Size = UDim2.fromScale(1, 1)
 	card.BackgroundColor3 = if variant == "VIP" then Styles.GOLD else Styles.CREAM
 	card.BorderSizePixel = 0
@@ -349,7 +379,13 @@ local function buildBubble(model: Model, specs: { OrderSpec.OrderSpec }, variant
 	fillCorner.Parent = fill
 
 	gui.Parent = model
-	return fill
+	return {
+		Fill = fill,
+		Track = track,
+		Chip = chip,
+		Label = label,
+		Card = card,
+	}
 end
 
 local PATIENCE_COLORS = {
@@ -369,6 +405,8 @@ Npc.COLLISION_GROUP = "NPC"
 
 export type Npc = typeof(setmetatable({} :: NpcFields, Npc))
 
+local npcSeq = 0
+
 -- Builds an NPC for `order` (a pool order item) and its resolved `spec`. Yields while
 -- the rig is built. Returns nil when the rig could not be built. Call Start to send
 -- it on its way.
@@ -383,6 +421,9 @@ function Npc.new(
 	if model == nil then
 		return nil
 	end
+	npcSeq += 1
+	local id = `Customer_{npcSeq}`
+	model.Name = id
 	model:SetAttribute("Variant", variant)
 
 	local root = model.PrimaryPart :: BasePart
@@ -393,7 +434,9 @@ function Npc.new(
 	end
 	model:SetAttribute("PatienceTotal", patienceSeconds)
 
+	local bubble = buildBubble(model, { spec }, variant)
 	local fields: NpcFields = {
+		Id = id,
 		Model = model,
 		Humanoid = model:FindFirstChildOfClass("Humanoid") :: Humanoid,
 		Root = root,
@@ -406,12 +449,17 @@ function Npc.new(
 		State = "Walking",
 		PatienceTotal = patienceSeconds,
 		CounterSpot = nil,
+		PickupSpot = nil,
+		RequestedDrinkText = nil,
 		AssignedUserId = nil,
 		Scripted = false,
 		Rescue = false,
 		Left = false,
+		LeftReason = nil,
+		Thanked = nil,
 		_ctx = ctx,
-		_bar = buildBubble(model, { spec }, variant),
+		_bar = bubble.Fill,
+		_bubbleUI = bubble,
 		_patienceEnd = 0,
 		_fallbacks = 0,
 		_destroyed = false,
@@ -438,14 +486,35 @@ function Npc.Leave(self: Npc, reason: string, grade: string?)
 		return
 	end
 	self.Left = true
+	self.LeftReason = reason
+	local thanked = reason == "Served" and (self.Variant ~= "Karen" or grade == "Perfect")
+	self.Thanked = thanked
 	self:_setState("Leaving")
 	self:_stopTrack("Idle")
 	if reason ~= "Despawned" then
-		local thanked = reason == "Served" and (self.Variant ~= "Karen" or grade == "Perfect")
 		if thanked then
 			self:_playTrack("Wave", false, Enum.AnimationPriority.Action)
 		end
 		self:_say(if thanked then "LeavingServed" else "Leaving")
+	end
+	if grade == "Perfect" then
+		-- S9-SPARKLE: burst the shared Sparkles emitter at the NPC head.
+		-- Synchronous: FindFirstChild only, no yield, no new thread.
+		-- A missing template is skipped with one warning; never substituted.
+		local template = WorldPath.find(ReplicatedStorage, { "SharedStorage", "CleanlinessStorage", "Sparkles" })
+		local head = self.Model:FindFirstChild("Head")
+		local anchor = if head ~= nil and head:IsA("BasePart") then head else self.Root
+		if template ~= nil and template:IsA("ParticleEmitter") and anchor ~= nil then
+			local burst = template:Clone() :: ParticleEmitter
+			burst.Parent = anchor
+			burst:Emit(SPARKLE_COUNT)
+			Debris:AddItem(burst, SPARKLE_CLEANUP_SECONDS)
+		elseif not sparkleWarned then
+			sparkleWarned = true
+			warn(
+				"[CustomerService] CleanlinessStorage.Sparkles missing or not a ParticleEmitter; Perfect sparkle skipped."
+			)
+		end
 	end
 	self._ctx.Release(self)
 	self._ctx.OnLeft(self, reason)
@@ -458,6 +527,11 @@ function Npc.Destroy(self: Npc)
 	end
 	self:Leave("Despawned")
 	self._destroyed = true
+	for _, child in self.Model:GetChildren() do
+		if child:IsA("Tool") then
+			child:Destroy()
+		end
+	end
 	self.Model:Destroy()
 	self._ctx.OnDestroyed(self)
 end
@@ -479,18 +553,59 @@ function Npc.SetOrders(self: Npc, orders: { Rules.OrderItem }, specs: { OrderSpe
 	if old ~= nil then
 		old:Destroy()
 	end
-	self._bar = buildBubble(self.Model, specs, self.Variant)
+	local bubble = buildBubble(self.Model, specs, self.Variant)
+	self._bubbleUI = bubble
+	self._bar = bubble.Fill
+	if self.State == "AtCounter" then
+		self:ShowGreetingBubble()
+	elseif self.State == "AtPickup" then
+		self:ShowOrderBubble()
+	end
 end
 
--- Assigns the NPC to a barista and starts the patience clock (design 4.5: the
--- clock starts at assignment, not at arrival).
+function Npc.ShowGreetingBubble(self: Npc)
+	local bubble = self._bubbleUI
+	if bubble == nil then
+		return
+	end
+	bubble.Chip.Visible = false
+	bubble.Track.Visible = false
+	bubble.Label.Text = "Hi, can I order?"
+	self:_setPatienceBar(1)
+end
+
+function Npc.ShowOrderBubble(self: Npc)
+	local bubble = self._bubbleUI
+	if bubble == nil then
+		return
+	end
+	bubble.Chip.Visible = true
+	bubble.Track.Visible = true
+	bubble.Chip.BackgroundColor3 = chipColor(self.Spec)
+	bubble.Label.Text = describeOrders(self.Specs, self.Variant)
+	self:_setPatienceBar(1)
+end
+
+function Npc.GoToPickup(self: Npc, pickupSpot: BasePart)
+	self.PickupSpot = pickupSpot
+	self:_setState("Walking")
+end
+
+function Npc.StartPatience(self: Npc)
+	if self.PatienceTotal <= 0 then
+		self.PatienceTotal = CustomerConfig.PATIENCE_BASE_SECONDS
+	end
+	self._patienceEnd = workspace:GetServerTimeNow() + self.PatienceTotal
+	self.Model:SetAttribute("PatienceTotal", self.PatienceTotal)
+	self.Model:SetAttribute("PatienceEnd", self._patienceEnd)
+end
+
+-- Assigns the NPC to a barista (dedicated mode).
 function Npc.SetAssignment(self: Npc, userId: number, patienceSeconds: number, scripted: boolean)
 	self.AssignedUserId = userId
 	self.Scripted = scripted
 	self.PatienceTotal = patienceSeconds
-	self._patienceEnd = workspace:GetServerTimeNow() + patienceSeconds
 	self.Model:SetAttribute("PatienceTotal", patienceSeconds)
-	self.Model:SetAttribute("PatienceEnd", self._patienceEnd)
 	self.Model:SetAttribute("AssignedUserId", userId)
 end
 
@@ -600,8 +715,8 @@ end
 -- Walks to `target` with MoveTo. After SEGMENT_TIMEOUT_SECONDS the NPC is moved
 -- straight there with PivotTo; MAX_FALLBACKS_IN_A_ROW of those in a row is an error
 -- (Start despawns the NPC).
-function Npc._walkTo(self: Npc, target: BasePart)
-	local goal = target.Position
+function Npc._walkTo(self: Npc, target: BasePart | Vector3)
+	local goal = if typeof(target) == "Vector3" then target else target.Position
 	local finished = false
 	local reached = false
 	local connection = self.Humanoid.MoveToFinished:Connect(function(didReach: boolean)
@@ -630,7 +745,8 @@ function Npc._walkTo(self: Npc, target: BasePart)
 	local lifted = goal + Vector3.new(0, ROOT_HEIGHT_STUDS, 0)
 	self.Model:PivotTo(CFrame.new(lifted) * self.Model:GetPivot().Rotation)
 	if self._fallbacks >= MAX_FALLBACKS_IN_A_ROW then
-		error(`stuck: {self._fallbacks} walks in a row needed PivotTo (last target {target:GetFullName()})`)
+		local targetName = if typeof(target) == "Vector3" then tostring(target) else target:GetFullName()
+		error(`stuck: {self._fallbacks} walks in a row needed PivotTo (last target {targetName})`)
 	end
 end
 
@@ -644,7 +760,7 @@ end
 function Npc._waitOutPatience(self: Npc)
 	local last = os.clock()
 	local confusedPlayed = false
-	while self.State == "AtCounter" and not self._destroyed do
+	while self.State == "AtPickup" and not self._destroyed and not self.Left do
 		task.wait(WAIT_POLL_SECONDS)
 		local now = os.clock()
 		if self._patienceEnd > 0 and self._ctx.IsPaused() then
@@ -691,13 +807,26 @@ function Npc._run(self: Npc)
 	local spot: number? = nil
 	local standingAt = 0
 	while spot == nil and not self._destroyed do
-		local index = math.min(ctx.QueueIndex(self), #nodes.Queue)
+		local qIndex = ctx.QueueIndex(self)
 		spot = ctx.TryTakeCounter(self)
 		if spot ~= nil then
 			break
-		elseif standingAt ~= index then
-			self:_walkTo(nodes.Queue[index])
-			standingAt = index
+		elseif standingAt ~= qIndex then
+			if qIndex <= #nodes.Queue then
+				self:_walkTo(nodes.Queue[qIndex])
+				standingAt = qIndex
+			else
+				local last = nodes.Queue[#nodes.Queue]
+				local prev = nodes.Queue[math.max(1, #nodes.Queue - 1)]
+				local dir = if last and prev
+					then (last.Position - prev.Position) * Vector3.new(1, 0, 1)
+					else Vector3.new(-1, 0, 0)
+				local dirUnit = if dir.Magnitude > 0.01 then dir.Unit else Vector3.new(-1, 0, 0)
+				local overflowIndex = qIndex - #nodes.Queue
+				local offsetGoal = last.Position + dirUnit * (overflowIndex * 2.8)
+				self:_walkTo(offsetGoal)
+				standingAt = qIndex
+			end
 		else
 			task.wait(WAIT_POLL_SECONDS)
 		end
@@ -713,17 +842,89 @@ function Npc._run(self: Npc)
 	-- Counter parts face the kitchen; the customer faces the same way.
 	self.Model:PivotTo(CFrame.new(self.Model:GetPivot().Position) * counter.CFrame.Rotation)
 	self:_setState("AtCounter")
+	self:ShowGreetingBubble()
 	self:_playTrack("Wave", false, Enum.AnimationPriority.Action)
 	self:_playTrack("Idle", true, Enum.AnimationPriority.Idle)
-	self:_say("Greeting")
 
 	local ok, err = pcall(self._ctx.OnAtCounter, self)
 	if not ok then
-		warn(`[CustomerService] NPC assignment failed: {err}`)
+		warn(`[CustomerService] NPC OnAtCounter failed: {err}`)
+	end
+
+	-- Patience timer is completely paused/disabled at the register (Patience bar stays full/hidden).
+	-- The NPC waits at the counter until an order is taken & submitted, moving it to pickup (or destroyed/left).
+	while self.State == "AtCounter" and not self._destroyed and not self.Left do
+		task.wait(WAIT_POLL_SECONDS)
+	end
+	if self._destroyed or self.Left then
+		return
+	end
+
+	-- Walk from register to open pickup spot under workspace["Ordering System"]["Pick Up"]
+	if self.PickupSpot ~= nil then
+		self:_walkTo(self.PickupSpot)
+		self.Model:PivotTo(CFrame.new(self.Model:GetPivot().Position) * self.PickupSpot.CFrame.Rotation)
+	end
+
+	-- Arrive at Pick Up: patience starts ticking down here, overhead shows order icons and bar
+	self:_setState("AtPickup")
+	self:ShowOrderBubble()
+	self:StartPatience()
+
+	local okPickup, errPickup = pcall(self._ctx.OnAtPickup, self)
+	if not okPickup then
+		warn(`[CustomerService] NPC OnAtPickup failed: {errPickup}`)
 	end
 
 	self:_waitOutPatience()
 	self:Leave("PatienceOut")
+
+	-- BIG-B4: living cafe seating for served customers
+	local seatingForced = workspace:GetAttribute("B4SeatingForce") == true
+	local seatingOn = SeatingConfig.ENABLED or seatingForced
+	if self.LeftReason == "Served" and self.Thanked and seatingOn and math.random() <= SeatingConfig.SIT_CHANCE then
+		local seat = self._ctx.TryClaimSeat(self.Id, self.Root.Position, SeatingConfig.SEAT_MAX_DISTANCE_STUDS)
+		if seat ~= nil then
+			local prompt = self.Root:FindFirstChildOfClass("ProximityPrompt")
+			if prompt ~= nil then
+				prompt:Destroy()
+			end
+			self.Model:SetAttribute("PromptAction", nil)
+			local bubble = self.Model:FindFirstChild("OrderBubble")
+			if bubble ~= nil then
+				local card = bubble:FindFirstChild("Card")
+				if card ~= nil and card:IsA("GuiObject") then
+					card.Visible = false
+				end
+			end
+
+			self:_walkTo(seat)
+			if seat.Occupant == nil and not self._destroyed then
+				self.Humanoid:SetStateEnabled(Enum.HumanoidStateType.Seated, true)
+				seat:Sit(self.Humanoid)
+
+				local sitDuration = math.random(SeatingConfig.SIT_SECONDS_MIN, SeatingConfig.SIT_SECONDS_MAX)
+				local deadline = os.clock() + sitDuration
+				while os.clock() < deadline and not self._destroyed do
+					task.wait(SeatingConfig.SEATED_POLL_SECONDS)
+					if seat.Occupant ~= self.Humanoid then
+						break
+					end
+				end
+
+				self.Humanoid.Sit = false
+				self.Humanoid:SetStateEnabled(Enum.HumanoidStateType.Seated, false)
+			end
+
+			for _, child in self.Model:GetChildren() do
+				if child:IsA("Tool") then
+					child:Destroy()
+				end
+			end
+			self._ctx.ReleaseSeat(seat, self.Id)
+		end
+	end
+
 	self:_walkTo(nodes.Exit)
 end
 

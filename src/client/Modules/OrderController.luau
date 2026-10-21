@@ -38,12 +38,15 @@ OrderController._ticketsById = {} :: { [string]: { [string]: any } }
 OrderController._notepadOrder = nil :: { any }? -- a real-player order wins over the ticket
 OrderController.ReadyNode = nil :: Instance?
 OrderController.QueuePosition = nil :: number? -- nil = not queued, 1 = next up
+OrderController.ActiveNpcOrder = nil :: { [string]: any }?
 
 OrderController.OrderChanged = GoodSignal.new()
 OrderController.TicketsChanged = GoodSignal.new() -- fires(tickets: { ticket })
 OrderController.ReadyNodeChanged = GoodSignal.new()
 OrderController.AnnouncementReceived = GoodSignal.new()
 OrderController.QueueChanged = GoodSignal.new() -- fires(position: number?)
+OrderController.OpenOrderingRequested = GoodSignal.new() -- fires(npcOrderData: any)
+OrderController.CloseOrderingRequested = GoodSignal.new() -- fires()
 
 ---> Private
 
@@ -191,6 +194,23 @@ function OrderController:KnitStart()
 		local comboN = tonumber(string.match(text, "Combo ×(%d+)"))
 		UiSfx.Play("Serve", { Speed = UiSfx.ServeSpeed(comboN) })
 	end)
+
+	local customerService = Knit.GetService("CustomerService")
+	if customerService.OpenOrderingTablet ~= nil then
+		customerService.OpenOrderingTablet:Connect(function(data)
+			self:OpenOrdering(data)
+		end)
+	end
+end
+
+function OrderController:OpenOrdering(data: any)
+	self.ActiveNpcOrder = data
+	self.OpenOrderingRequested:Fire(data)
+end
+
+function OrderController:CloseOrdering()
+	self.ActiveNpcOrder = nil
+	self.CloseOrderingRequested:Fire()
 end
 
 -- Called by the OrderQueue UI button. Tells the server to remove this player

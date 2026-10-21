@@ -140,7 +140,7 @@ end
 ---> Item Row
 
 -- Renders a single order item: its name and any customisation lines beneath it.
-local function ItemRow(props: { item: { [string]: any }, layoutOrder: number })
+local function ItemRow(props: { item: { [string]: any }, layoutOrder: number, onOpenRecipe: (() -> ())? })
 	local item = props.item
 	local name = resolveItemName(item)
 	local customisations = resolveCustomisations(item)
@@ -179,8 +179,10 @@ local function ItemRow(props: { item: { [string]: any }, layoutOrder: number })
 			PaddingRight = UDim.new(0, 8),
 		}),
 
-		ItemName = c("TextLabel", {
+		ItemName = c("TextButton", {
 			LayoutOrder = 0,
+			Active = props.onOpenRecipe ~= nil,
+			AutoButtonColor = false,
 			AutomaticSize = Enum.AutomaticSize.Y,
 			BackgroundTransparency = 1,
 			FontFace = Styles.FONT_FREDOKA,
@@ -189,6 +191,7 @@ local function ItemRow(props: { item: { [string]: any }, layoutOrder: number })
 			TextColor3 = Styles.GREEN_DEEP,
 			TextSize = 15,
 			TextXAlignment = Enum.TextXAlignment.Left,
+			[React.Event.Activated] = props.onOpenRecipe,
 		}),
 
 		Customisations = next(customisationElements) and c(
@@ -216,7 +219,12 @@ end
 
 ---> OrderTicket
 
-return function(props: { stacked: boolean?, slot: number?, layoutOrder: number? })
+return function(props: {
+	stacked: boolean?,
+	slot: number?,
+	layoutOrder: number?,
+	SetCurrentPage: ((page: any, ...any) -> ())?,
+})
 	-- slot 2 is the second NPC ticket (level 5+): label and patience only.
 	local isSecond = props.slot == 2
 	local order, setOrder = React.useState(nil :: { any }?)
@@ -379,6 +387,11 @@ return function(props: { stacked: boolean?, slot: number?, layoutOrder: number? 
 		itemRows["Item_" .. i] = c(ItemRow, {
 			LayoutOrder = (i - 1) * 2 + 1,
 			item = item,
+			onOpenRecipe = if props.SetCurrentPage ~= nil and typeof(item.Item) == "string"
+				then function()
+					props.SetCurrentPage(UI.Pages.Recipes, item.Item)
+				end
+				else nil,
 		})
 	end
 

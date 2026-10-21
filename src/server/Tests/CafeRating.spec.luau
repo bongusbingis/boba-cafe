@@ -138,5 +138,83 @@ return function()
 			CafeRatingService:_publish()
 			expect(workspace:GetAttribute("RushEndsAt")).to.equal(nil)
 		end)
+
+		it("spotlights the buyer DisplayName and publishes BobaPartyBuyer", function()
+			local fakeBuyer = { Name = "bob123", DisplayName = "Bobby" } :: any
+			local ok = CafeRatingService:StartOrExtendBobaParty(fakeBuyer)
+
+			expect(ok).to.equal(true)
+			expect(CafeRatingService._partyBuyer).to.equal("Bobby")
+			expect(workspace:GetAttribute("BobaPartyBuyer")).to.equal("Bobby")
+			expect(typeof(workspace:GetAttribute("RushEndsAt"))).to.equal("number")
+
+			CafeRatingService._partyActive = false
+			CafeRatingService._partyEndTime = nil
+			CafeRatingService._partyBuyer = nil
+			CafeRatingService._rush = false
+			CafeRatingService._rushEndsAt = nil
+			CafeRatingService:_publish()
+			expect(workspace:GetAttribute("BobaPartyBuyer")).to.equal(nil)
+			expect(workspace:GetAttribute("RushEndsAt")).to.equal(nil)
+		end)
+
+		it("falls back to Name when DisplayName is missing or empty", function()
+			local nameless = { Name = "SoloBarista" } :: any
+			CafeRatingService:StartOrExtendBobaParty(nameless)
+			expect(CafeRatingService._partyBuyer).to.equal("SoloBarista")
+
+			CafeRatingService._partyActive = false
+			CafeRatingService._partyEndTime = nil
+			CafeRatingService._partyBuyer = nil
+			CafeRatingService._rush = false
+			CafeRatingService._rushEndsAt = nil
+
+			local blankDisplay = { Name = "PlainName", DisplayName = "" } :: any
+			CafeRatingService:StartOrExtendBobaParty(blankDisplay)
+			expect(CafeRatingService._partyBuyer).to.equal("PlainName")
+
+			CafeRatingService._partyActive = false
+			CafeRatingService._partyEndTime = nil
+			CafeRatingService._partyBuyer = nil
+			CafeRatingService._rush = false
+			CafeRatingService._rushEndsAt = nil
+			CafeRatingService:_publish()
+			workspace:SetAttribute("BobaPartyBuyer", nil)
+			workspace:SetAttribute("RushEndsAt", nil)
+		end)
+
+		it("extension spotlights the latest buyer and keeps the buyer without one", function()
+			local first = { Name = "first_one", DisplayName = "First" } :: any
+			CafeRatingService:StartOrExtendBobaParty(first)
+			expect(CafeRatingService._partyBuyer).to.equal("First")
+
+			local second = { Name = "second_one", DisplayName = "Second" } :: any
+			local ok = CafeRatingService:StartOrExtendBobaParty(second)
+			expect(ok).to.equal(true)
+			expect(CafeRatingService._partyBuyer).to.equal("Second")
+			expect(workspace:GetAttribute("BobaPartyBuyer")).to.equal("Second")
+
+			CafeRatingService:StartOrExtendBobaParty(nil)
+			expect(CafeRatingService._partyBuyer).to.equal("Second")
+
+			CafeRatingService._partyActive = false
+			CafeRatingService._partyEndTime = nil
+			CafeRatingService._partyBuyer = nil
+			CafeRatingService._rush = false
+			CafeRatingService._rushEndsAt = nil
+			CafeRatingService:_publish()
+			workspace:SetAttribute("BobaPartyBuyer", nil)
+			workspace:SetAttribute("RushEndsAt", nil)
+		end)
+
+		it("clears BobaPartyBuyer when published nil", function()
+			CafeRatingService._partyBuyer = "SomeBuyer"
+			CafeRatingService:_publish()
+			expect(workspace:GetAttribute("BobaPartyBuyer")).to.equal("SomeBuyer")
+
+			CafeRatingService._partyBuyer = nil
+			CafeRatingService:_publish()
+			expect(workspace:GetAttribute("BobaPartyBuyer")).to.equal(nil)
+		end)
 	end)
 end

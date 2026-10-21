@@ -89,6 +89,7 @@ local ShiftService = Knit.CreateService({
 	_states = {} :: { [Player]: ShiftState },
 	_customers = nil :: any,
 	_capsuleNudged = {} :: { [Player]: boolean },
+	_streaks = {} :: { [Player]: number }, -- session-only consecutive shifts completed
 })
 
 ---> private
@@ -269,6 +270,23 @@ function ShiftService:_endShift(player: Player, state: ShiftState)
 	if bonus > 0 then
 		pcall(function()
 			Knit.GetService("CurrencyService"):Modify(player, "BobaBucks", bonus, "Gameplay")
+		end)
+	end
+	-- Session streak (H6-STREAK, PROPOSED): consecutive shifts completed this session.
+	-- No clean server-side chest grant exists (TreasureHuntService only grants via a
+	-- physical ClaimChest with distance/cooldown/badge side effects), so every
+	-- STREAK_LENGTH-th shift end grants the chest's average BB value instead.
+	local streak = (self._streaks[player] or 0) + 1
+	self._streaks[player] = streak
+	local streakBonus = 0
+	if streak % ShiftConfig.STREAK_LENGTH == 0 then
+		streakBonus = ShiftConfig.STREAK_BONUS_BB
+	end
+	summary.ShiftStreak = streak
+	summary.StreakBonus = streakBonus
+	if streakBonus > 0 then
+		pcall(function()
+			Knit.GetService("CurrencyService"):Modify(player, "BobaBucks", streakBonus, "ShiftStreak")
 		end)
 	end
 	pcall(function()
@@ -464,6 +482,7 @@ function ShiftService:PlayerRemoving(player: Player)
 	self._states[player] = nil
 	self._toggleDebounces[player.UserId] = nil
 	self._capsuleNudged[player] = nil
+	self._streaks[player] = nil
 end
 
 return ShiftService

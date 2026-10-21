@@ -77,12 +77,7 @@ end
 	Creates the PromptSelection dialog (legacy grid picker replacement).
 	Returns the selected 1-based item index, or nil when dismissed.
 ]=]
-function DialogService:CreatePromptSelection(
-	player: Player,
-	items: { any },
-	props: Props?,
-	timeout: number?
-)
+function DialogService:CreatePromptSelection(player: Player, items: { any }, props: Props?, timeout: number?)
 	local dialogProps = table.clone(props or {})
 	dialogProps.Items = items
 	return self:CreateDialog(player, "PromptSelection", dialogProps, timeout)
@@ -133,8 +128,16 @@ end
 	@param player Player
 	@param notification { Title: string, Description: string, Image: string, SoundEnabled: boolean? }
 ]=]
-function DialogService:Notify(player: Player, notification: { Title: string, Description: string, Image: string, SoundEnabled: boolean? })
-	self.Client.NotificationSignal:Fire(player, notification)
+function DialogService:Notify(player: Player, notification: any, description: string?)
+	local payload = if typeof(notification) == "string"
+		then {
+			Title = notification,
+			Description = description or "",
+			Text = if description and description ~= "" then notification .. ": " .. description else notification,
+			Image = "",
+		}
+		else notification
+	self.Client.NotificationSignal:Fire(player, payload)
 end
 
 DialogService.FormatBrackets = formatBrackets

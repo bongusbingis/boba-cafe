@@ -1,3 +1,5 @@
+local MarketplaceService = game:GetService("MarketplaceService")
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Packages = ReplicatedStorage:WaitForChild("Packages")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -5,6 +7,9 @@ local UI = Shared:WaitForChild("UI")
 
 ---> dependencies
 local React = require(Packages.React)
+
+---> config
+local ProductIds = require(Shared.Configuration.ProductIds)
 
 ---> styles
 local Styles = require(UI.Styles)
@@ -15,26 +20,74 @@ local ShopCategory = require(script.Parent.ShopCategory)
 ---> private
 local c = React.createElement
 
----> mock data (replace with server-provided data)
-local SHOP_DATA: { BobaBucks: { ShopCategory.Item }, Points: { ShopCategory.Item } } = {
-	BobaBucks = {
-		{ Label = "50 Boba Bucks", Price = "500" }, -- MOCK value; Jack-approved Creator Hub default: 25 R$. Display live Marketplace price; never hardcode it.
-		{ Label = "150 Boba Bucks", Price = "1,300" }, -- MOCK value; Jack-approved Creator Hub default: 59 R$. Display live Marketplace price; never hardcode it.
-		{ Label = "500 Boba Bucks", Price = "3,500" }, -- MOCK value; Jack-approved Creator Hub default: 149 R$. Display live Marketplace price; never hardcode it.
-		{ Label = "1,000 Boba Bucks", Price = "6,000" }, -- MOCK value; Jack-approved Creator Hub default: 249 R$. Display live Marketplace price; never hardcode it.
-		{ Label = "5,000 Boba Bucks", Price = "20,000" }, -- MOCK value; Jack-approved Creator Hub default: 999 R$. Display live Marketplace price; never hardcode it.
-	},
-	Points = {
-		{ Label = "100 Points", Price = "500" },
-		{ Label = "500 Points", Price = "2,000" },
-		{ Label = "1,500 Points", Price = "5,000" },
-		{ Label = "5,000 Points", Price = "15,000" },
-		{ Label = "15,000 Points", Price = "40,000" },
-	},
+---> Boba Bucks Robux packs (M3-STUBS). IDs live in ProductIds; nil = pack inert.
+--- Price display always uses live Marketplace metadata (DEC-026), never hardcoded prices.
+local BOBA_BUCKS_PACKS = {
+	{ Key = "Pack50", Amount = 50 },
+	{ Key = "Pack150", Amount = 150 },
+	{ Key = "Pack500", Amount = 500 },
+	{ Key = "Pack1000", Amount = 1000 },
+	{ Key = "Pack5000", Amount = 5000 },
 }
+
+local function packLabel(amount: number): string
+	return `{amount} Boba Bucks`
+end
+
+local function packProductId(key: string): number?
+	return ProductIds.BobaBucks[key]
+end
 
 ---> public
 return function()
+	-- Live Robux prices keyed by pack Key. Empty while the stub is nil or unfetched,
+	-- in which case the row shows no price and its purchase path stays inert.
+	local prices, setPrices = React.useState({})
+
+	React.useEffect(function()
+		local mounted = true
+		task.spawn(function()
+			local fetched = {}
+			for _, pack in BOBA_BUCKS_PACKS do
+				local id = packProductId(pack.Key)
+				if id ~= nil then
+					local ok, info = pcall(function()
+						return MarketplaceService:GetProductInfoAsync(id, Enum.InfoType.Product)
+					end)
+					if ok and typeof(info) == "table" and info.PriceInRobux ~= nil then
+						fetched[pack.Key] = tostring(info.PriceInRobux)
+					end
+				end
+			end
+			if mounted then
+				setPrices(fetched)
+			end
+		end)
+		return function()
+			mounted = false
+		end
+	end, {})
+
+	local bucksItems = {}
+	for i, pack in BOBA_BUCKS_PACKS do
+		bucksItems[i] = {
+			Label = packLabel(pack.Amount),
+			Price = prices[pack.Key],
+		}
+	end
+
+	local function onPurchaseBucks(item)
+		for _, pack in BOBA_BUCKS_PACKS do
+			if packLabel(pack.Amount) == item.Label then
+				local id = packProductId(pack.Key)
+				if id ~= nil then
+					MarketplaceService:PromptProductPurchase(Players.LocalPlayer, id)
+				end
+				return
+			end
+		end
+	end
+
 	return c("Frame", {
 		BackgroundTransparency = 1,
 		Size = UDim2.fromScale(1, 1),
@@ -68,13 +121,20 @@ return function()
 
 			BobaBucks = c(ShopCategory, {
 				Title = "Boba Bucks",
-				Items = SHOP_DATA.BobaBucks,
+				Items = bucksItems,
 				LayoutOrder = 0,
+				OnPurchase = onPurchaseBucks,
 			}),
 
 			Points = c(ShopCategory, {
 				Title = "Points",
-				Items = SHOP_DATA.Points,
+				Items = {
+					{ Label = "100 Points", Price = "500" },
+					{ Label = "500 Points", Price = "2,000" },
+					{ Label = "1,500 Points", Price = "5,000" },
+					{ Label = "5,000 Points", Price = "15,000" },
+					{ Label = "15,000 Points", Price = "40,000" },
+				},
 				LayoutOrder = 1,
 			}),
 

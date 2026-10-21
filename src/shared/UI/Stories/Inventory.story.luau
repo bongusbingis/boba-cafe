@@ -15,7 +15,7 @@ local c = React.createElement
 
 return function(target)
 	local root = ReactRoblox.createRoot(target)
-    
+
 	root:render(c("Frame", {
 		BackgroundTransparency = 1,
 		Size = UDim2.fromScale(0.7, 0.7),
@@ -23,7 +23,7 @@ return function(target)
 		AnchorPoint = Vector2.new(0.5, 0.5),
 	}, {
 		Inventory = c(Inventory, {
-			Args = { "Nametags" },
+			Args = { "Titles" },
 		}),
 	}))
 

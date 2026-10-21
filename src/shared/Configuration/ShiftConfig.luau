@@ -12,4 +12,6 @@ return {
 	SHIFT_BONUS_PER_STAR = 5, -- DEC-024 (E7)
 	SHIFT_XP = 10, -- DEC-024 (E13)
 	SHIFT_XP_PER_STAR = 5, -- DEC-024 (E13)
+	STREAK_LENGTH = 3, -- PROPOSED (H6-STREAK, Jack-approved 2026-10-21)
+	STREAK_BONUS_BB = 30, -- PROPOSED (H6-STREAK): average-chest BB fallback (mean of TreasureHuntConfig MIN/MAX_BOBABUCKS 20/40)
 }

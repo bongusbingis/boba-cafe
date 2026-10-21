@@ -1,0 +1,16 @@
+$ stylua --check src/shared/Configuration/ProductIds.luau src/shared/UI/Pages/Shop/Currency.luau
+stylua exit=0
+$ selene --config selene.toml --display-style=quiet src/shared/Configuration/ProductIds.luau src/shared/UI/Pages/Shop/Currency.luau
+Results:
+0 errors
+0 warnings
+0 parse errors
+selene exit=0
+$ rojo build default.project.json -o $env:TEMP/gate-build-m3-stubs.rbxl
+Building project 'boba-cafe'
+Built project to gate-build-m3-stubs.rbxl
+rojo exit=0
+$ wsl bash scripts/gate.sh <files>
+NOT RUNNABLE — pre-existing CRLF checkout of scripts/gate.sh (i/lf w/crlf):
+  scripts/gate.sh: line 9: set: -\r: invalid option
+  (equivalent selene+stylua+rojo checks above run instead, same tool versions)

@@ -1,0 +1,6 @@
+PASS  src/server/Modules/ShiftService.luau  selene new=0 (baseline[HEAD]=0 now=0)  stylua=ok
+PASS  src/shared/Configuration/ShiftConfig.luau  selene new=0 (baseline[HEAD]=0 now=0)  stylua=ok
+PASS  src/shared/UI/Components/Core/Hud/ShiftCard.luau  selene new=0 (baseline[HEAD]=0 now=0)  stylua=ok
+PASS  src/server/Tests/ShiftService.spec.luau  selene new=0 (baseline[HEAD]=0 now=0)  stylua=ok
+PASS  rojo build -> /mnt/c/Users/jackc/AppData/Local/Temp/boba-gate/gate-build.rbxl
+GATE: PASS

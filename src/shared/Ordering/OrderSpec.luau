@@ -321,6 +321,25 @@ local function findProblem(spec: OrderSpec, chain: Chain, attrs: Table, current:
 			table.insert(reasons, field)
 		end
 	end
+	if typeof(attrs.PoorPours) == "number" and attrs.PoorPours > 0 then
+		if #reasons == 0 then
+			return {
+				Step = nil,
+				Severity = "Close",
+				Reason = "PoorPour",
+				Reasons = { "PoorPour" },
+			}
+		else
+			table.insert(reasons, "PoorPour")
+			return {
+				Step = chain.FieldSteps[reasons[1]],
+				Severity = "Wrong",
+				Reason = reasons[1],
+				Reasons = reasons,
+			}
+		end
+	end
+
 	if #reasons == 0 then
 		return nil
 	end
@@ -463,6 +482,15 @@ function OrderSpec.Match(spec: OrderSpec, attrs: Table): (Grade, { string })
 	end
 	if spec.Sugar ~= nil and (attrs.Sugar == true) ~= spec.Sugar then
 		table.insert(mistakes, "Sugar")
+	end
+
+	if typeof(attrs.PoorPours) == "number" and attrs.PoorPours > 0 then
+		if #mistakes == 0 then
+			return "Close", { "PoorPour" }
+		else
+			table.insert(mistakes, "PoorPour")
+			return "Wrong", mistakes
+		end
 	end
 
 	if #mistakes == 0 then

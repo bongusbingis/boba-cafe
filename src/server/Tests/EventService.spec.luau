@@ -43,6 +43,8 @@ return function()
 	describe("EventService", function()
 		local simulatedTime: number
 		local notifiedPlayers: { { player: any, notification: any } }
+		local originalEventStarted = EventService.Client.EventStarted
+		local originalEventEnded = EventService.Client.EventEnded
 
 		local function makePlayer(name: string, userId: number, rank: number, isAdmin: boolean?)
 			local attrs: { [string]: any } = {}
@@ -66,6 +68,13 @@ return function()
 		beforeEach(function()
 			simulatedTime = 100000
 			notifiedPlayers = {}
+
+			EventService.Client.EventStarted = {
+				FireAll = function() end,
+			}
+			EventService.Client.EventEnded = {
+				FireAll = function() end,
+			}
 
 			EventService._activeEvent = nil
 			EventService._activeEventDef = nil
@@ -111,6 +120,11 @@ return function()
 			Workspace:SetAttribute("RushHour", false)
 			Workspace:SetAttribute("KarenRush", false)
 			Workspace:SetAttribute("TreasureFrenzy", false)
+		end)
+
+		afterAll(function()
+			EventService.Client.EventStarted = originalEventStarted
+			EventService.Client.EventEnded = originalEventEnded
 		end)
 
 		describe("StartEvent & Overlap Rejection", function()

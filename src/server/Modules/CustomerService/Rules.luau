@@ -66,14 +66,29 @@ function Rules.PacingTarget(baristas: number, config: Config?): number
 	return math.min(c.SERVER_CAP, slots + line)
 end
 
--- Seconds of patience for an order (design 4.5): the base plus one bonus per item.
-function Rules.PatienceSeconds(items: { OrderItem }, config: Config?): number
+-- Patience trim by session shift (REVIVAL-001 C6): 1 below the first trimmed
+-- shift, then the per-shift trim capped at the max trim.
+function Rules.PatienceRampMult(sessionShift: number?, config: Config?): number
+	local c = config or CustomerConfig
+	if sessionShift == nil or sessionShift < c.PATIENCE_RAMP_FIRST_SHIFT then
+		return 1
+	end
+	return 1
+		- math.min(
+			(sessionShift - c.PATIENCE_RAMP_FIRST_SHIFT + 1) * c.PATIENCE_RAMP_TRIM_PER_SHIFT,
+			c.PATIENCE_RAMP_MAX_TRIM
+		)
+end
+
+-- Seconds of patience for an order (design 4.5): the base plus one bonus per item,
+-- trimmed by the session shift (REVIVAL-001 C6). No rounding: patience may be fractional.
+function Rules.PatienceSeconds(items: { OrderItem }, config: Config?, sessionShift: number?): number
 	local c = config or CustomerConfig
 	local seconds = c.PATIENCE_BASE_SECONDS
 	for _, item in items do
 		seconds += c.PATIENCE_BONUS_SECONDS[item.Category] or c.PATIENCE_GRAB_BONUS_SECONDS
 	end
-	return seconds
+	return seconds * Rules.PatienceRampMult(sessionShift, c)
 end
 
 -- Bar colour state for the fraction of patience left (1 = full, 0 = out).
@@ -286,6 +301,110 @@ function Rules.PickAssignee(candidates: { Player }, idleSince: { [Player]: numbe
 		end
 	end
 	return best
+end
+
+-- Formats one order item for the ordering tablet notepad (e.g. "Large Strawberry Boba, Tapioca, Ice").
+function Rules.FormatOrderItemForNotepad(order: OrderItem, _spec: any?): string
+	local customInfo = order.CustomInfo or {}
+	local size = customInfo.Size
+	local syrup = customInfo["Syrup Flavor"]
+	local tapioca = customInfo["Tapioca Flavor"]
+	local iced = customInfo.Iced == true or customInfo.Ice == true
+	local sugar = customInfo.Sugar == true
+
+	local name = order.Item
+	if order.Category == "Boba Teas" or string.find(name, "Boba") then
+		if syrup ~= nil then
+			name = syrup .. " Boba"
+		else
+			name = "Boba"
+		end
+	elseif order.Category == "Coffees" then
+		if name == "Regular" then
+			name = "Regular Coffee"
+		end
+	end
+
+	if size ~= nil then
+		name = size .. " " .. name
+	end
+
+	local extras = {}
+	if tapioca ~= nil then
+		table.insert(extras, if tapioca == "Normal" then "Tapioca" else (tapioca .. " Tapioca"))
+	end
+	if iced then
+		table.insert(extras, "Ice")
+	end
+	if sugar then
+		table.insert(extras, "Sugar")
+	end
+
+	if #extras > 0 then
+		return name .. ", " .. table.concat(extras, ", ")
+	end
+	return name
+end
+
+-- Formats a list of order items for the tablet notepad, one item per line.
+function Rules.FormatOrderForNotepad(orders: { OrderItem }, specs: { any }?): string
+	local lines = {}
+	for i, order in ipairs(orders) do
+		local spec = if specs ~= nil then specs[i] else nil
+		table.insert(lines, Rules.FormatOrderItemForNotepad(order, spec))
+	end
+	return table.concat(lines, "\n")
+end
+
+-- True when two order items ask for the same category, item and options.
+function Rules.ItemsMatch(a: OrderItem, b: OrderItem): boolean
+	if a.Category ~= b.Category or a.Item ~= b.Item then
+		return false
+	end
+	local aInfo = a.CustomInfo or {}
+	local bInfo = b.CustomInfo or {}
+	if aInfo.Size ~= bInfo.Size then
+		return false
+	end
+	if aInfo["Syrup Flavor"] ~= bInfo["Syrup Flavor"] then
+		return false
+	end
+	if aInfo["Tapioca Flavor"] ~= bInfo["Tapioca Flavor"] then
+		return false
+	end
+	local aIced = (aInfo.Iced == true or aInfo.Ice == true)
+	local bIced = (bInfo.Iced == true or bInfo.Ice == true)
+	if aIced ~= bIced then
+		return false
+	end
+	local aSugar = (aInfo.Sugar == true)
+	local bSugar = (bInfo.Sugar == true)
+	if aSugar ~= bSugar then
+		return false
+	end
+	return true
+end
+
+-- Validates that the submitted list of items matches what the customer asked for (order-independent).
+function Rules.ValidateSubmittedOrder(submittedList: { OrderItem }, expectedList: { OrderItem }): boolean
+	if #submittedList ~= #expectedList then
+		return false
+	end
+	local used = table.create(#expectedList, false)
+	for _, submitted in submittedList do
+		local found = false
+		for j, expected in expectedList do
+			if not used[j] and Rules.ItemsMatch(submitted, expected) then
+				used[j] = true
+				found = true
+				break
+			end
+		end
+		if not found then
+			return false
+		end
+	end
+	return true
 end
 
 return Rules

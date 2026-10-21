@@ -87,6 +87,86 @@ return function()
 		end)
 	end)
 
+	describe("PatienceRampMult (C6)", function()
+		it("should give 1 for nil", function()
+			expect(Rules.PatienceRampMult(nil)).to.equal(1)
+		end)
+
+		it("should give 1 for shift 1", function()
+			expect(Rules.PatienceRampMult(1)).to.equal(1)
+		end)
+
+		it("should give 1 for shift 2", function()
+			expect(Rules.PatienceRampMult(2)).to.equal(1)
+		end)
+
+		it("should give 0.95 for shift 3", function()
+			expect(Rules.PatienceRampMult(3)).to.be.near(0.95, 0.001)
+		end)
+
+		it("should give 0.90 for shift 4", function()
+			expect(Rules.PatienceRampMult(4)).to.be.near(0.90, 0.001)
+		end)
+
+		it("should cap at 0.90 for shift 5", function()
+			expect(Rules.PatienceRampMult(5)).to.be.near(0.90, 0.001)
+		end)
+
+		it("should cap at 0.90 for shift 50", function()
+			expect(Rules.PatienceRampMult(50)).to.be.near(0.90, 0.001)
+		end)
+	end)
+
+	describe("PatienceSeconds with a session shift (C6)", function()
+		it("should give a single boba 70 with a nil shift", function()
+			expect(Rules.PatienceSeconds({ item("Boba Teas") }, nil, nil)).to.equal(70)
+		end)
+
+		it("should give a single boba 70 on shift 2", function()
+			expect(Rules.PatienceSeconds({ item("Boba Teas") }, nil, 2)).to.equal(70)
+		end)
+
+		it("should give a single boba 66.5 on shift 3", function()
+			expect(Rules.PatienceSeconds({ item("Boba Teas") }, nil, 3)).to.be.near(66.5, 0.001)
+		end)
+
+		it("should give a single boba 63 on shift 4", function()
+			expect(Rules.PatienceSeconds({ item("Boba Teas") }, nil, 4)).to.be.near(63, 0.001)
+		end)
+
+		it("should give a single coffee 54 on shift 5", function()
+			expect(Rules.PatienceSeconds({ item("Coffees") }, nil, 5)).to.be.near(54, 0.001)
+		end)
+
+		it("should give an empty order 42.75 on shift 3", function()
+			expect(Rules.PatienceSeconds({}, nil, 3)).to.be.near(42.75, 0.001)
+		end)
+
+		it("should give boba plus brownie 72 on shift 4", function()
+			expect(Rules.PatienceSeconds({ item("Boba Teas"), item("Pastries") }, nil, 4)).to.be.near(72, 0.001)
+		end)
+
+		it("should follow a config override", function()
+			local c = table.clone(CustomerConfig) :: any
+			c.PATIENCE_RAMP_FIRST_SHIFT = 2
+			c.PATIENCE_RAMP_TRIM_PER_SHIFT = 0.1
+			c.PATIENCE_RAMP_MAX_TRIM = 0.2
+			expect(Rules.PatienceSeconds({ item("Boba Teas") }, c, 3)).to.be.near(56, 0.001)
+		end)
+
+		it("should compose Karen after the ramp", function()
+			expect(Rules.VariantPatience(Rules.PatienceSeconds({ item("Boba Teas") }, nil, 3), "Karen")).to.be.near(
+				66.5 * CustomerConfig.VARIANTS.Karen.PatienceMult,
+				0.001
+			)
+		end)
+
+		it("should keep the ramp constants in range", function()
+			expect(CustomerConfig.PATIENCE_RAMP_FIRST_SHIFT >= 3).to.equal(true)
+			expect(CustomerConfig.PATIENCE_RAMP_MAX_TRIM <= 0.10).to.equal(true)
+		end)
+	end)
+
 	describe("PatienceState", function()
 		it("should be green above half", function()
 			expect(Rules.PatienceState(1)).to.equal("Green")
@@ -453,6 +533,110 @@ return function()
 
 		it("should return nil when nobody qualifies", function()
 			expect(Rules.PickAssignee({}, {})).to.equal(nil)
+		end)
+	end)
+
+	describe("Dedicated Assignment Mode", function()
+		it("should configure ASSIGNMENT_MODE as Dedicated", function()
+			expect(CustomerConfig.ASSIGNMENT_MODE).to.equal("Dedicated")
+		end)
+	end)
+
+	describe("FormatOrderForNotepad", function()
+		it("should format a boba drink with size, syrup, tapioca, and ice", function()
+			local bobaOrder = {
+				Category = "Boba Teas",
+				Item = "Custom Boba",
+				CustomInfo = {
+					Size = "Large",
+					["Syrup Flavor"] = "Strawberry",
+					["Tapioca Flavor"] = "Normal",
+					Iced = true,
+				},
+			}
+			local text = Rules.FormatOrderItemForNotepad(bobaOrder)
+			expect(text).to.equal("Large Strawberry Boba, Tapioca, Ice")
+		end)
+
+		it("should format multi-item orders joined by newline", function()
+			local bobaOrder = {
+				Category = "Boba Teas",
+				Item = "Custom Boba",
+				CustomInfo = {
+					Size = "Large",
+					["Syrup Flavor"] = "Strawberry",
+					["Tapioca Flavor"] = "Normal",
+					Iced = true,
+				},
+			}
+			local pastryOrder = {
+				Category = "Pastries",
+				Item = "Fudge Brownie",
+				CustomInfo = {},
+			}
+			local text = Rules.FormatOrderForNotepad({ bobaOrder, pastryOrder })
+			expect(text).to.equal("Large Strawberry Boba, Tapioca, Ice\nFudge Brownie")
+		end)
+	end)
+
+	describe("ValidateSubmittedOrder", function()
+		local bobaOrder = {
+			Category = "Boba Teas",
+			Item = "Custom Boba",
+			CustomInfo = {
+				Size = "Large",
+				["Syrup Flavor"] = "Strawberry",
+				["Tapioca Flavor"] = "Normal",
+				Iced = true,
+			},
+		}
+		local brownieOrder = {
+			Category = "Pastries",
+			Item = "Fudge Brownie",
+			CustomInfo = {},
+		}
+
+		it("should validate an exact matching single order", function()
+			expect(Rules.ValidateSubmittedOrder({ bobaOrder }, { bobaOrder })).to.equal(true)
+		end)
+
+		it("should validate matching orders in any permutation", function()
+			expect(Rules.ValidateSubmittedOrder({ brownieOrder, bobaOrder }, { bobaOrder, brownieOrder })).to.equal(
+				true
+			)
+		end)
+
+		it("should reject mismatch in size", function()
+			local wrongSize = {
+				Category = "Boba Teas",
+				Item = "Custom Boba",
+				CustomInfo = {
+					Size = "Small",
+					["Syrup Flavor"] = "Strawberry",
+					["Tapioca Flavor"] = "Normal",
+					Iced = true,
+				},
+			}
+			expect(Rules.ValidateSubmittedOrder({ wrongSize }, { bobaOrder })).to.equal(false)
+		end)
+
+		it("should reject mismatch in flavor", function()
+			local wrongFlavor = {
+				Category = "Boba Teas",
+				Item = "Custom Boba",
+				CustomInfo = {
+					Size = "Large",
+					["Syrup Flavor"] = "Taro",
+					["Tapioca Flavor"] = "Normal",
+					Iced = true,
+				},
+			}
+			expect(Rules.ValidateSubmittedOrder({ wrongFlavor }, { bobaOrder })).to.equal(false)
+		end)
+
+		it("should reject mismatch in count", function()
+			expect(Rules.ValidateSubmittedOrder({ bobaOrder, brownieOrder }, { bobaOrder })).to.equal(false)
+			expect(Rules.ValidateSubmittedOrder({ bobaOrder }, { bobaOrder, brownieOrder })).to.equal(false)
 		end)
 	end)
 end

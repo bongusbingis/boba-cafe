@@ -15,8 +15,12 @@ return {
 	DRAIN_SECONDS = 5, -- TUNING
 	SPILL_XP = 5, -- PROPOSED (Jack): XP to the player who cleans a spill
 	RUSH_SECONDS = 120, -- DEC-024 (E8)
-	RUSH_NPC_MULT = 1.5, -- PROPOSED (Jack)
-	RUSH_CAP_BONUS = 4, -- PROPOSED (Jack)
+	RUSH_NPC_MULT = 5.0, -- PROPOSED (Jack)
+	RUSH_CAP_BONUS = 34, -- PROPOSED (Jack): max 50 concurrent NPCs (16 SERVER_CAP + 34)
+	RUSH_MIN_TARGET = 25, -- Guarantees at least 25 customers during rush hour even with 1 barista
+	RUSH_SPAWN_GAP_SECONDS = 0.2, -- Rapid spawning during rush hour instead of 3.0s
+	RUSH_SPAWN_BURST = 3, -- Spawn up to 3 customers per pacing tick
+	RUSH_QUEUE_CAP = 35, -- Allow line to hold up to 35 customers during rush hour (up from 6)
 	RUSH_PAY_MULT = 2, -- DEC-024 (E8)
 	AFTER_RUSH = 60, -- PROPOSED (Jack)
 	MIN_GAP_SECONDS = 360, -- TUNING

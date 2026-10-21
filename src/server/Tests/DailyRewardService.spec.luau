@@ -57,6 +57,8 @@ return function()
 		currencyCalls = {}
 		inventoryCalls = {}
 		capsuleSpace = true
+		service._lastClaimAttempts = {}
+		service.Client.Server = service
 
 		local dataService = {
 			GetDataAsync = function(_, _player)

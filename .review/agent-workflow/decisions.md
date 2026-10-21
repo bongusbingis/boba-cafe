@@ -362,16 +362,6 @@ Decision:
   - Q4 header (cup viewport, patience bar, "Shift n · k/N"): in M1.5b scope; viewport image approved.
   - M1.5b unblocked and re-dispatched. Mode: build per spec without sloppiness, keep cheap gates, defer verification to the end.
 
-## REVIVAL-001 / DEC-019: Jack does all in-game testing
-
-- **Date:** 2026-10-16.
-- **Source:** Jack: "In-game testing should be left to me. Tell me when to test things."
-- **Decision:**
-  - Agents never run Play tests, TestEZ runs or playtests in Studio.
-  - Studio is used only for authoring (Rigger) and saving.
-  - Lanes write "Test for Jack" steps in their note.
-  - Prime tells Jack when a testable slice is ready, with a short checklist. M1.6 is Jack's playtest.
-
 ## REVIVAL-001 / DEC-018: Implement first, verify later; minimal process
 
 - **Date:** 2026-10-16.

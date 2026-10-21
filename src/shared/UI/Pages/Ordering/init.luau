@@ -102,18 +102,90 @@ local function resolveItemDescription(orderItem)
 	return table.concat(lines, "\n")
 end
 
+local function itemsMatch(a: any, b: any): boolean
+	if a.Category ~= b.Category or a.Item ~= b.Item then
+		return false
+	end
+	local aInfo = a.CustomInfo or {}
+	local bInfo = b.CustomInfo or {}
+	if aInfo.Size ~= bInfo.Size then
+		return false
+	end
+	if aInfo["Syrup Flavor"] ~= bInfo["Syrup Flavor"] then
+		return false
+	end
+	if aInfo["Tapioca Flavor"] ~= bInfo["Tapioca Flavor"] then
+		return false
+	end
+	local aIced = (aInfo.Iced == true or aInfo.Ice == true)
+	local bIced = (bInfo.Iced == true or bInfo.Ice == true)
+	if aIced ~= bIced then
+		return false
+	end
+	local aSugar = (aInfo.Sugar == true)
+	local bSugar = (bInfo.Sugar == true)
+	if aSugar ~= bSugar then
+		return false
+	end
+	return true
+end
+
+local function validateSubmittedOrder(submittedList: { any }, expectedList: { any }): boolean
+	if #submittedList ~= #expectedList then
+		return false
+	end
+	local used = table.create(#expectedList, false)
+	for _, submitted in submittedList do
+		local found = false
+		for j, expected in expectedList do
+			if not used[j] and itemsMatch(submitted, expected) then
+				used[j] = true
+				found = true
+				break
+			end
+		end
+		if not found then
+			return false
+		end
+	end
+	return true
+end
+
 ---> public
 return function(props: {
+	Args: { any }?,
 	ClosePage: (() -> ())?,
 	OnClose: (() -> ())?,
 })
+	local npcOrderData = if props.Args
+			and typeof(props.Args[1]) == "table"
+			and props.Args[1].NpcId ~= nil
+		then props.Args[1]
+		else nil
+	if npcOrderData == nil then
+		pcall(function()
+			local controller = Knit.GetController("OrderController")
+			if controller and controller.ActiveNpcOrder then
+				npcOrderData = controller.ActiveNpcOrder
+			end
+		end)
+	end
+
 	local function closeMenu()
+		pcall(function()
+			local controller = Knit.GetController("OrderController")
+			if controller and controller.CloseOrdering then
+				controller:CloseOrdering()
+			end
+		end)
 		if props.ClosePage then
 			props.ClosePage()
 		elseif props.OnClose then
 			props.OnClose()
 		end
 	end
+
+	local notepadVisible, setNotepadVisible = React.useState(npcOrderData ~= nil)
 
 	---> page routing
 	-- Pages: "CategorySelect" | "ItemSelect" | "RequiredSelection" | "SizeOptions"
@@ -305,6 +377,41 @@ return function(props: {
 			request[i] = { Category = orderItem.Category, Item = orderItem.Item, CustomInfo = orderItem.CustomInfo }
 		end
 
+		if npcOrderData ~= nil then
+			local matches = validateSubmittedOrder(request, npcOrderData.Orders)
+			if not matches then
+				Knit.GetController("DialogController"):Notify({
+					Title = "Order Error",
+					Description = "That doesn't match what the customer asked for!",
+				})
+				return
+			end
+
+			isSubmitting.current = true
+			task.spawn(function()
+				local ok, result = pcall(function()
+					return Knit.GetService("CustomerService"):SubmitNpcOrder(npcOrderData.NpcId, request):expect()
+				end)
+				isSubmitting.current = false
+				local success = ok and typeof(result) == "table" and result.Success == true
+				local message = if ok and typeof(result) == "table" then result.Message else nil
+
+				if not success then
+					Knit.GetController("DialogController"):Notify({
+						Title = "Order Error",
+						Description = message or "That doesn't match what the customer asked for!",
+					})
+					return
+				end
+
+				closeMenu()
+				setOrderItems({})
+				setSelCategory(nil)
+				setPage("CategorySelect")
+			end)
+			return
+		end
+
 		isSubmitting.current = true
 		task.spawn(function()
 			-- Knit client methods return a Promise; expect() yields and throws on rejection.
@@ -371,6 +478,7 @@ return function(props: {
 		else nil
 
 	local function renderNotepad()
+		local noteText = if npcOrderData ~= nil then (npcOrderData.RequestedText or "") else ""
 		return c(Pane, {
 			ClassName = "Frame",
 			CornerRadius = UDim.new(0, 12),
@@ -386,7 +494,7 @@ return function(props: {
 				ClipsDescendants = true,
 				Position = UDim2.fromScale(-0.42, 0.5),
 				Size = UDim2.fromScale(0.4, 0.911841),
-				Visible = false,
+				Visible = notepadVisible,
 			},
 		}, {
 			Title = c(Pane, {
@@ -409,7 +517,9 @@ return function(props: {
 					FontFace = Styles.FONT_FREDOKA,
 					Position = UDim2.fromScale(0.00462942, 0.0994445),
 					Size = UDim2.fromScale(0.991803, 0.0662963),
-					Text = "Use this page to take notes on customer orders.",
+					Text = if npcOrderData ~= nil
+						then "Customer's requested order:"
+						else "Use this page to take notes on customer orders.",
 					TextColor3 = Color3.new(1, 1, 1),
 					TextScaled = true,
 				},
@@ -434,7 +544,7 @@ return function(props: {
 					FontFace = Font.new("rbxasset://fonts/families/SourceSansPro.json"),
 					Position = UDim2.fromScale(0.502242, 0.497798),
 					Size = UDim2.fromScale(0.932735, 0.941467),
-					Text = "",
+					Text = noteText,
 					TextColor3 = Color3.new(1, 1, 1),
 					TextScaled = true,
 					TextXAlignment = Enum.TextXAlignment.Left,
@@ -446,6 +556,9 @@ return function(props: {
 
 			CloseBtn = c(Pane, {
 				ClassName = "TextButton",
+				OnClick = function()
+					setNotepadVisible(false)
+				end,
 				Native = {
 					AutoButtonColor = false,
 					BackgroundTransparency = 1,
@@ -514,6 +627,11 @@ return function(props: {
 
 					NotepadToggle = c(Pane, {
 						ClassName = "ImageButton",
+						OnClick = function()
+							setNotepadVisible(function(v)
+								return not v
+							end)
+						end,
 						Native = {
 							AutoButtonColor = false,
 							BackgroundTransparency = 1,
@@ -569,6 +687,7 @@ return function(props: {
 						ResolveItemDescription = resolveItemDescription,
 						OnOrderItemRemoved = onOrderItemRemoved,
 						OnSubmit = submitOrder,
+						NpcOrderText = npcOrderData and npcOrderData.RequestedText,
 					}),
 
 					Pages = c(Pane, {

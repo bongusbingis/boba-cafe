@@ -28,6 +28,7 @@ local BUBBLE_SIZE = UDim2.fromOffset(200, 40)
 local BUBBLE_OFFSET = Vector3.new(0, 3.5, 0)
 local BUBBLE_MAX_DISTANCE_STUDS = 80
 local HEARTS_TIMEOUT_SECONDS = 60
+local CUSTOMER_NAME_MAX = 20
 local HEART_BUTTONS = {
 	{ Text = "1" },
 	{ Text = "2" },
@@ -174,6 +175,11 @@ function RealOrderService.ParseHearts(choice: any): number?
 	return nil
 end
 
+function RealOrderService.HeartsToast(name: string, hearts: number): string
+	local noun = if hearts == 1 then "heart" else "hearts"
+	return `{name} gave you {hearts} {noun}!`
+end
+
 -- One prompt per pick-up. DialogService only resolves a dialog for the player it was
 -- sent to, and only once, so a customer can rate each order exactly once.
 function RealOrderService:_askHearts(customer: Player, barista: Player)
@@ -181,6 +187,8 @@ function RealOrderService:_askHearts(customer: Player, barista: Player)
 		return
 	end
 	self._rating[customer] = true
+	local cleaned = string.gsub(customer.DisplayName, "[<>&]", "")
+	local customerName = string.sub(cleaned, 1, CUSTOMER_NAME_MAX)
 	local name = string.gsub(barista.DisplayName, "[<>&]", "")
 	local baristaId = barista.UserId
 	self._dialog
@@ -198,6 +206,10 @@ function RealOrderService:_askHearts(customer: Player, barista: Player)
 			end
 			self._stats:IncrementStat(target, "HeartsReceived", hearts)
 			self._stats:IncrementStat(target, "HeartsCount", 1)
+			pcall(function()
+				local text = RealOrderService.HeartsToast(customerName, hearts)
+				self._dialog:Notify(target, { Title = "Hearts", Description = text, Text = text } :: any)
+			end)
 		end)
 		:catch(function(err)
 			warn("[RealOrderService] Hearts prompt failed:", err)
@@ -319,6 +331,13 @@ function RealOrderService:_onOrderPickedUp(
 		task.defer(function()
 			pcall(function()
 				Knit.GetService("ShiftService"):RecordCustomer(barista, result)
+			end)
+		end)
+	end
+	if customer ~= nil and RealOrderService.CountsForTeamChain(multiplier) then
+		task.defer(function()
+			pcall(function()
+				self:_askHearts(customer, barista)
 			end)
 		end)
 	end

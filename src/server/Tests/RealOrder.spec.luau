@@ -75,4 +75,18 @@ return function()
 			expect(RealOrderService.PayMultiplier(history, 9, 2, 5)).to.equal(2)
 		end)
 	end)
+
+	describe("HeartsToast", function()
+		it("uses plural hearts for 5", function()
+			expect(RealOrderService.HeartsToast("Alex", 5)).to.equal("Alex gave you 5 hearts!")
+		end)
+
+		it("uses singular heart for 1", function()
+			expect(RealOrderService.HeartsToast("Alex", 1)).to.equal("Alex gave you 1 heart!")
+		end)
+
+		it("uses plural hearts for 2", function()
+			expect(RealOrderService.HeartsToast("Sam", 2)).to.equal("Sam gave you 2 hearts!")
+		end)
+	end)
 end

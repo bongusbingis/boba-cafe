@@ -97,8 +97,14 @@ return function(props: {
 					ZIndex = 10,
 				},
 			}, {
-				OrderTicket = c(OrderTicket, { stacked = true, slot = 1, layoutOrder = 1 }),
-				OrderTicket2 = c(OrderTicket, { stacked = true, slot = 2, layoutOrder = 2 }),
+				OrderTicket = c(
+					OrderTicket,
+					{ stacked = true, slot = 1, layoutOrder = 1, SetCurrentPage = props.SetCurrentPage }
+				),
+				OrderTicket2 = c(
+					OrderTicket,
+					{ stacked = true, slot = 2, layoutOrder = 2, SetCurrentPage = props.SetCurrentPage }
+				),
 			}),
 		}),
 		ShiftCard = c(ShiftCard, {}),

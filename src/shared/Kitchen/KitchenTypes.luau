@@ -10,6 +10,7 @@ export type ActionData = { any }
 export type RecipeData = {
     Sound: string?,
     HoldDuration: number?,
+    SkillMoment: boolean?, -- BIG-B7: a pour station that opens the optional pour meter
     Actions: { ActionData },
 }
 

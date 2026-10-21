@@ -17,10 +17,10 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 
 local Knit = require(Packages.Knit)
 local LeaderboardConfig = require(Shared.Configuration.LeaderboardConfig)
+local Styles = require(Shared.UI.Styles)
 local WorldPath = require(Shared.Utility.WorldPath)
 
 ---> constants
-local WORLD_WAIT_SECONDS = 10
 local ACTIVE_MINUTE_SECONDS = 60
 local FLUSH_ON_CLOSE_WAIT_SECONDS = 25
 
@@ -182,39 +182,300 @@ function LeaderboardService:_flushPending(onlyUserId: number?)
 	end
 end
 
+local function formatNumber(n: number): string
+	local formatted = tostring(math.floor(n))
+	local k
+	while true do
+		formatted, k = string.gsub(formatted, "^(-?%d+)(%d%d%d)", "%1,%2")
+		if k == 0 then
+			break
+		end
+	end
+	return formatted
+end
+
+function LeaderboardService:_renderTabularContent(
+	surfaceGui: SurfaceGui,
+	boardDef: LeaderboardConfig.BoardDefinition,
+	entries: { { UserId: number, Name: string, Value: number } }
+)
+	local container = surfaceGui:FindFirstChild("TableContainer") :: Frame?
+	if not container then
+		container = Instance.new("Frame")
+		container.Name = "TableContainer"
+		container.Size = UDim2.new(1, -24, 1, -24)
+		container.Position = UDim2.fromScale(0.5, 0.5)
+		container.AnchorPoint = Vector2.new(0.5, 0.5)
+		container.BackgroundColor3 = Styles.OFFWHITE
+		container.BorderSizePixel = 0
+
+		local stroke = Instance.new("UIStroke")
+		stroke.Color = Styles.GREEN_LIGHT
+		stroke.Thickness = 3
+		stroke.Parent = container
+
+		local corner = Instance.new("UICorner")
+		corner.CornerRadius = UDim.new(0, 12)
+		corner.Parent = container
+
+		local padding = Instance.new("UIPadding")
+		padding.PaddingTop = UDim.new(0, 8)
+		padding.PaddingBottom = UDim.new(0, 8)
+		padding.PaddingLeft = UDim.new(0, 8)
+		padding.PaddingRight = UDim.new(0, 8)
+		padding.Parent = container
+
+		-- Table Header Row
+		local headerRow = Instance.new("Frame")
+		headerRow.Name = "HeaderRow"
+		headerRow.Size = UDim2.new(1, 0, 0, 48)
+		headerRow.Position = UDim2.fromOffset(0, 0)
+		headerRow.BackgroundColor3 = Styles.GREEN
+		headerRow.BorderSizePixel = 0
+
+		local headerCorner = Instance.new("UICorner")
+		headerCorner.CornerRadius = UDim.new(0, 6)
+		headerCorner.Parent = headerRow
+
+		local rankHeader = Instance.new("TextLabel")
+		rankHeader.Name = "RankHeader"
+		rankHeader.Size = UDim2.fromScale(0.18, 1)
+		rankHeader.Position = UDim2.fromOffset(0, 0)
+		rankHeader.BackgroundTransparency = 1
+		rankHeader.Text = "RANK"
+		rankHeader.FontFace = Styles.FONT_FREDOKA
+		rankHeader.TextSize = 22
+		rankHeader.TextColor3 = Color3.new(1, 1, 1)
+		rankHeader.TextXAlignment = Enum.TextXAlignment.Center
+		rankHeader.Parent = headerRow
+
+		local playerHeader = Instance.new("TextLabel")
+		playerHeader.Name = "PlayerHeader"
+		playerHeader.Size = UDim2.new(0.52, -12, 1, 0)
+		playerHeader.Position = UDim2.new(0.18, 12, 0, 0)
+		playerHeader.BackgroundTransparency = 1
+		playerHeader.Text = "BARISTA"
+		playerHeader.FontFace = Styles.FONT_FREDOKA
+		playerHeader.TextSize = 22
+		playerHeader.TextColor3 = Color3.new(1, 1, 1)
+		playerHeader.TextXAlignment = Enum.TextXAlignment.Left
+		playerHeader.Parent = headerRow
+
+		local metricHeader = Instance.new("TextLabel")
+		metricHeader.Name = "MetricHeader"
+		metricHeader.Size = UDim2.new(0.30, -16, 1, 0)
+		metricHeader.Position = UDim2.fromScale(0.70, 0)
+		metricHeader.BackgroundTransparency = 1
+		metricHeader.Text = string.upper(boardDef.Metric or "SCORE")
+		metricHeader.FontFace = Styles.FONT_FREDOKA
+		metricHeader.TextSize = 22
+		metricHeader.TextColor3 = Color3.new(1, 1, 1)
+		metricHeader.TextXAlignment = Enum.TextXAlignment.Right
+		metricHeader.Parent = headerRow
+
+		headerRow.Parent = container
+
+		-- List of rows
+		local rowsFrame = Instance.new("Frame")
+		rowsFrame.Name = "RowsList"
+		rowsFrame.Size = UDim2.new(1, 0, 1, -54)
+		rowsFrame.Position = UDim2.fromOffset(0, 54)
+		rowsFrame.BackgroundTransparency = 1
+
+		local listLayout = Instance.new("UIListLayout")
+		listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+		listLayout.Padding = UDim.new(0, 4)
+		listLayout.Parent = rowsFrame
+
+		rowsFrame.Parent = container
+		container.Parent = surfaceGui
+	end
+
+	local headerRow = container:FindFirstChild("HeaderRow")
+	if headerRow then
+		local metricHeader = headerRow:FindFirstChild("MetricHeader")
+		if metricHeader and metricHeader:IsA("TextLabel") then
+			metricHeader.Text = string.upper(boardDef.Metric or "SCORE")
+		end
+	end
+
+	local rowsFrame = container:FindFirstChild("RowsList")
+	if not rowsFrame then
+		return
+	end
+
+	for i = 1, LeaderboardConfig.TOP_LIMIT do
+		local rowName = `Row_{i}`
+		local row = rowsFrame:FindFirstChild(rowName) :: Frame?
+		if not row then
+			row = Instance.new("Frame")
+			row.Name = rowName
+			row.Size = UDim2.new(1, 0, 0, 68)
+			row.LayoutOrder = i
+			row.BorderSizePixel = 0
+
+			local rowCorner = Instance.new("UICorner")
+			rowCorner.CornerRadius = UDim.new(0, 6)
+			rowCorner.Parent = row
+
+			if i == 1 then
+				row.BackgroundColor3 = Color3.fromRGB(255, 248, 220)
+				local goldStroke = Instance.new("UIStroke")
+				goldStroke.Name = "GoldStroke"
+				goldStroke.Color = Styles.GOLD_MID
+				goldStroke.Thickness = 1.5
+				goldStroke.Parent = row
+			elseif i % 2 == 0 then
+				row.BackgroundColor3 = Color3.fromRGB(242, 247, 240)
+			else
+				row.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+			end
+
+			local rankLabel = Instance.new("TextLabel")
+			rankLabel.Name = "Rank"
+			rankLabel.Size = UDim2.fromScale(0.18, 1)
+			rankLabel.Position = UDim2.fromOffset(0, 0)
+			rankLabel.BackgroundTransparency = 1
+			rankLabel.FontFace = Styles.FONT_FREDOKA
+			rankLabel.TextSize = 24
+			rankLabel.Text = `#{i}`
+			rankLabel.TextXAlignment = Enum.TextXAlignment.Center
+			if i == 1 then
+				rankLabel.TextColor3 = Styles.GOLD_DEEP
+			elseif i == 2 then
+				rankLabel.TextColor3 = Color3.fromRGB(120, 130, 140)
+			elseif i == 3 then
+				rankLabel.TextColor3 = Color3.fromRGB(175, 110, 60)
+			else
+				rankLabel.TextColor3 = Styles.GREEN_DEEP
+			end
+			rankLabel.Parent = row
+
+			local nameLabel = Instance.new("TextLabel")
+			nameLabel.Name = "Name"
+			nameLabel.Size = UDim2.new(0.52, -12, 1, 0)
+			nameLabel.Position = UDim2.new(0.18, 12, 0, 0)
+			nameLabel.BackgroundTransparency = 1
+			nameLabel.FontFace = Styles.FONT_FREDOKA
+			nameLabel.TextSize = 22
+			nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+			nameLabel.TextTruncate = Enum.TextTruncate.AtEnd
+			nameLabel.Parent = row
+
+			local valueLabel = Instance.new("TextLabel")
+			valueLabel.Name = "Value"
+			valueLabel.Size = UDim2.new(0.30, -16, 1, 0)
+			valueLabel.Position = UDim2.fromScale(0.70, 0)
+			valueLabel.BackgroundTransparency = 1
+			valueLabel.FontFace = Styles.FONT_FREDOKA
+			valueLabel.TextSize = 22
+			valueLabel.TextXAlignment = Enum.TextXAlignment.Right
+			valueLabel.Parent = row
+
+			row.Parent = rowsFrame
+		end
+
+		local entry = entries[i]
+		local nameLabel = row:FindFirstChild("Name")
+		if nameLabel and nameLabel:IsA("TextLabel") then
+			if entry then
+				nameLabel.Text = entry.Name
+				nameLabel.TextColor3 = Styles.GREEN_DEEP
+			else
+				nameLabel.Text = "---"
+				nameLabel.TextColor3 = Styles.GRAY
+			end
+		end
+
+		local valueLabel = row:FindFirstChild("Value")
+		if valueLabel and valueLabel:IsA("TextLabel") then
+			if entry then
+				valueLabel.Text = formatNumber(entry.Value)
+				valueLabel.TextColor3 = Styles.GREEN_DEEP
+			else
+				valueLabel.Text = "---"
+				valueLabel.TextColor3 = Styles.GRAY
+			end
+		end
+	end
+end
+
 function LeaderboardService:_updateBoardGui(
 	boardModel: Model,
 	boardDef: LeaderboardConfig.BoardDefinition,
 	entries: { { UserId: number, Name: string, Value: number } }
 )
-	local surfaceGui = self:_findSurfaceGui(boardModel)
-	if not surfaceGui then
-		return
-	end
+	local isHidden = boardDef.Hidden == true
 
-	-- Update title label (TimePeriod, Title, or Header)
-	local titleLabel = surfaceGui:FindFirstChild("Title")
-		or surfaceGui:FindFirstChild("TimePeriod")
-		or surfaceGui:FindFirstChild("Header")
+	-- 1. Update Header on Part (or MainColor)
+	local headerPart = boardModel:FindFirstChild("Part") or boardModel:FindFirstChild("MainColor")
+	local headerGui = if headerPart
+		then headerPart:FindFirstChildOfClass("SurfaceGui")
+		else self:_findSurfaceGui(boardModel)
+	if headerGui then
+		if isHidden then
+			headerGui.Enabled = false
+		else
+			headerGui.Enabled = true
 
-	if titleLabel and titleLabel:IsA("TextLabel") then
-		titleLabel.Text = boardDef.BoardName
-	end
+			local titleLabel = headerGui:FindFirstChild("TextLabel")
+			if not titleLabel or not titleLabel:IsA("TextLabel") then
+				titleLabel = headerGui:FindFirstChild("Title") or headerGui:FindFirstChild("Header")
+			end
+			if titleLabel and titleLabel:IsA("TextLabel") then
+				titleLabel.Text = boardDef.BoardName
+				titleLabel.FontFace = Styles.FONT_FREDOKA
+				titleLabel.TextColor3 = Color3.new(1, 1, 1)
+			end
 
-	-- Update any TextLabel that still holds the legacy "Most Staff Points" text
-	for _, desc in surfaceGui:GetDescendants() do
-		if desc:IsA("TextLabel") and desc.Text == "Most Staff Points" then
-			desc.Text = "Most Orders Served"
+			local timePeriodLabel = headerGui:FindFirstChild("TimePeriod")
+			if timePeriodLabel and timePeriodLabel:IsA("TextLabel") then
+				local isGlobal = boardModel.Parent and boardModel.Parent.Name == "Global"
+				if isGlobal then
+					timePeriodLabel.Text = "All Time"
+				else
+					timePeriodLabel.Text = DateTime.now():FormatUniversalTime("MMMM YYYY", "en-us")
+				end
+				timePeriodLabel.FontFace = Styles.FONT_FREDOKA
+				timePeriodLabel.TextColor3 = Styles.GOLD
+			end
+
+			for _, desc in headerGui:GetDescendants() do
+				if desc:IsA("TextLabel") and desc.Text == "Most Staff Points" then
+					desc.Text = "Most Orders Served"
+				end
+			end
 		end
 	end
 
-	-- Update entries label (TextLabel, Entries, or List)
-	local entriesLabel = surfaceGui:FindFirstChild("Entries")
-		or surfaceGui:FindFirstChild("List")
-		or surfaceGui:FindFirstChild("TextLabel")
+	-- 2. Update Content on Union
+	local unionPart = boardModel:FindFirstChild("Union")
+	if unionPart and unionPart:IsA("BasePart") then
+		local contentGui = unionPart:FindFirstChild("LeaderboardContentGui") :: SurfaceGui?
+		if not contentGui then
+			contentGui = unionPart:FindFirstChildOfClass("SurfaceGui")
+			if contentGui then
+				contentGui.Name = "LeaderboardContentGui"
+			end
+		end
 
-	if entriesLabel and entriesLabel:IsA("TextLabel") and entriesLabel ~= titleLabel then
-		entriesLabel.Text = self:_formatEntriesText(entries)
+		if not contentGui then
+			contentGui = Instance.new("SurfaceGui")
+			contentGui.Name = "LeaderboardContentGui"
+			contentGui.Face = Enum.NormalId.Back
+			contentGui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+			contentGui.PixelsPerStud = 100
+			contentGui.CanvasSize = Vector2.new(800, 850)
+			contentGui.LightInfluence = 1
+			contentGui.Parent = unionPart
+		end
+
+		if isHidden then
+			contentGui.Enabled = false
+		else
+			contentGui.Enabled = true
+			self:_renderTabularContent(contentGui, boardDef, entries)
+		end
 	end
 end
 
@@ -287,10 +548,15 @@ function LeaderboardService:GetTopEntries(
 	return entries
 end
 
---- Resolves Workspace.OldScriptables.LeaderboardsFolder.Monthly and updates all SurfaceGuis.
+--- Resolves Workspace.Assets.LeaderboardsFolder.Monthly (or OldScriptables) and updates all SurfaceGuis.
 --- Automatically renames legacy "Most Staff Points" board to "Most Orders Served".
 function LeaderboardService:RefreshBoards()
-	local monthlyFolder = WorldPath.find(Workspace, { "OldScriptables", "LeaderboardsFolder", "Monthly" })
+	local monthlyFolder = if self.LeaderboardsFolder
+		then self.LeaderboardsFolder:FindFirstChild("Monthly")
+		else WorldPath.find(Workspace, { "Assets", "LeaderboardsFolder", "Monthly" })
+	if not monthlyFolder then
+		monthlyFolder = WorldPath.find(Workspace, { "OldScriptables", "LeaderboardsFolder", "Monthly" })
+	end
 	if not monthlyFolder then
 		return
 	end
@@ -301,17 +567,27 @@ function LeaderboardService:RefreshBoards()
 
 		for _, child in monthlyFolder:GetChildren() do
 			if child:IsA("Model") and (child.Name == boardDef.BoardName or child.Name == boardDef.ModelName) then
-				if boardDef.Hidden then
-					local hiddenGui = self:_findSurfaceGui(child)
-					if hiddenGui then
-						hiddenGui.Enabled = false
-					end
-					continue
-				end
 				if child.Name ~= boardDef.BoardName then
 					child.Name = boardDef.BoardName
 				end
 				self:_updateBoardGui(child, boardDef, entries)
+			end
+		end
+	end
+
+	local globalFolder = if self.LeaderboardsFolder
+		then self.LeaderboardsFolder:FindFirstChild("Global")
+		else WorldPath.find(Workspace, { "Assets", "LeaderboardsFolder", "Global" })
+	if globalFolder then
+		for boardType, boardDef in LeaderboardConfig.BOARDS do
+			local entries = if boardDef.Hidden then {} else self:GetTopEntries(boardType, LeaderboardConfig.TOP_LIMIT)
+			for _, child in globalFolder:GetChildren() do
+				if child:IsA("Model") and (child.Name == boardDef.BoardName or child.Name == boardDef.ModelName) then
+					if child.Name ~= boardDef.BoardName then
+						child.Name = boardDef.BoardName
+					end
+					self:_updateBoardGui(child, boardDef, entries)
+				end
 			end
 		end
 	end
@@ -322,7 +598,12 @@ end
 --- statue 2 (formerly Most Tips) shows MostBobaBucks (DEC-037 Q13). Hidden boards feed no
 --- statue: a Top Donators statue gets no winner and is left as it is.
 function LeaderboardService:RefreshStatues()
-	local statuesFolder = WorldPath.find(Workspace, { "OldScriptables", "LeaderboardsFolder", "Statues" })
+	local statuesFolder = if self.LeaderboardsFolder
+		then self.LeaderboardsFolder:FindFirstChild("Statues")
+		else WorldPath.find(Workspace, { "Assets", "LeaderboardsFolder", "Statues" })
+	if not statuesFolder then
+		statuesFolder = WorldPath.find(Workspace, { "OldScriptables", "LeaderboardsFolder", "Statues" })
+	end
 	if not statuesFolder then
 		return
 	end
@@ -441,13 +722,7 @@ function LeaderboardService:KnitStart()
 		end)
 	end
 
-	local leaderboardsFolder =
-		WorldPath.waitFor(Workspace, { "OldScriptables", "LeaderboardsFolder" }, WORLD_WAIT_SECONDS)
-	if not leaderboardsFolder then
-		warn("[LeaderboardService] LeaderboardsFolder not found; leaderboard system disabled cleanly")
-		self.Enabled = false
-		return
-	end
+	local leaderboardsFolder = workspace:WaitForChild("Assets"):WaitForChild("LeaderboardsFolder")
 
 	self.Enabled = true
 	self.LeaderboardsFolder = leaderboardsFolder

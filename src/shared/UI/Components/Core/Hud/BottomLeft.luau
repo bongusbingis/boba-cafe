@@ -423,6 +423,20 @@ return function(props: {
 					LayoutOrder = 2,
 				}),
 
+				Invite = c(NormalButton, {
+					Icon = "",
+					Size = BUTTON_SIZE,
+					Color = Styles.GREEN_MID,
+					Text = "Invite Friends",
+					OnClick = function()
+						pcall(function()
+							local SocialService = game:GetService("SocialService")
+							SocialService:PromptGameInvite(Players.LocalPlayer)
+						end)
+					end,
+					LayoutOrder = 3,
+				}),
+
 				BucksWrap = c(Pane, {
 					ClassName = "Frame",
 					Scale = bucksPop.Scale,

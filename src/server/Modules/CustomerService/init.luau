@@ -34,6 +34,7 @@
 local PhysicsService = game:GetService("PhysicsService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 
 local Packages = ReplicatedStorage:WaitForChild("Packages")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -44,12 +45,14 @@ local Knit = require(Packages.Knit)
 local GoodSignal = require(Packages.GoodSignal)
 local CustomerConfig = require(Shared.Configuration.CustomerConfig)
 local RatingConfig = require(Shared.Configuration.RatingConfig)
+local SeatingConfig = require(Shared.Configuration.SeatingConfig)
 local TeamComboConfig = require(Shared.Configuration.TeamComboConfig)
 local Progression = require(Shared.Configuration.Progression)
 local OrderSpec = require(Shared.Ordering.OrderSpec)
 local WorldPath = require(Shared.Utility.WorldPath)
 local Npc = require(script.Npc)
 local Rules = require(script.Rules)
+local Seats = require(script.Seats)
 local Styles = require(Shared.UI.Styles)
 
 ---> constants
@@ -134,6 +137,8 @@ local CustomerService = Knit.CreateService({
 		-- (player, nil) to clear (serve, walkout, reassignment). A 3rd argument is the
 		-- ticket slot index (1, or 1-2 from level 5); ticket.Slot carries it too.
 		TicketChanged = Knit.CreateSignal(),
+		-- Fired to open the Ordering Tablet screen on the barista's client with NPC order data.
+		OpenOrderingTablet = Knit.CreateSignal(),
 	},
 
 	-- Server-side signal: fires (npc: Npc.Npc, reason: string) once per NPC when it stops waiting.
@@ -153,6 +158,10 @@ local CustomerService = Knit.CreateService({
 	_npcCount = 0,
 	_line = {} :: { Npc.Npc }, -- NPCs waiting for a counter spot, front first
 	_counter = {} :: { [number]: Npc.Npc }, -- counter spot -> the NPC that holds it
+	_pickupNodes = {} :: { BasePart }, -- pickup spots from workspace["Ordering System"]["Pick Up"]
+	_pickupHolders = {} :: { [BasePart]: Npc.Npc }, -- pickup spot -> the NPC that holds it
+	_npcPickupSpot = {} :: { [Npc.Npc]: BasePart }, -- NPC -> claimed pickup spot
+	_activeOrderingNpc = {} :: { [Player]: Npc.Npc }, -- barista -> NPC whose order is currently being taken
 	_baristas = 0, -- clocked-in players, refreshed every pacing tick
 	_lastSpawnClock = 0,
 	_characterConnections = {} :: { [Player]: RBXScriptConnection },
@@ -160,11 +169,14 @@ local CustomerService = Knit.CreateService({
 	_assignee = {} :: { [Npc.Npc]: Player }, -- NPC -> the barista holding its ticket
 	_idleSince = {} :: { [Player]: number }, -- os.clock() at clock-in and at ticket clear
 	_combo = {} :: { [Player]: number }, -- consecutive Perfect serves (session memory only)
+	_sessionShifts = {} :: { [Player]: number }, -- shifts completed this session, memory only
 	_lastOrder = {} :: { [Player]: Rules.OrderItem }, -- last order per barista (no repeats)
 	_teamChain = 0, -- consecutive successful serves server-wide (session memory only)
 	_firstServe = {} :: { [Player]: boolean }, -- barista -> served 0 customers when last assigned (session memory)
 	_teamComboUntil = 0, -- os.clock() deadline of the active Team Combo (0 = none)
 	_npcSeq = 0, -- makes ticket Ids unique per NPC
+	_stressSeen = {} :: { [Npc.Npc]: number }, -- BIG-B4-P1: first-seen clock per unassigned counter NPC (Studio stress only)
+	_seats = nil :: Seats.SeatsPool?,
 	_order = nil :: any,
 	_currency = nil :: any,
 	_stats = nil :: any,
@@ -309,6 +321,45 @@ function CustomerService:_makeContext(nodes: Npc.Nodes, folder: Folder): Npc.Con
 					self._counter[spot] = nil
 				end
 			end
+			local spot = self._npcPickupSpot[npc]
+			if spot ~= nil then
+				if self._pickupHolders[spot] == npc then
+					self._pickupHolders[spot] = nil
+				end
+				self._npcPickupSpot[npc] = nil
+			end
+		end,
+		ReleaseCounter = function(npc)
+			for spot, holder in self._counter do
+				if holder == npc then
+					self._counter[spot] = nil
+				end
+			end
+			npc.CounterSpot = nil
+		end,
+		ClaimPickupSpot = function(npc)
+			for _, node in self._pickupNodes do
+				if self._pickupHolders[node] == nil then
+					self._pickupHolders[node] = npc
+					self._npcPickupSpot[npc] = node
+					return node
+				end
+			end
+			local fallback = self._pickupNodes[1]
+			if fallback ~= nil then
+				self._npcPickupSpot[npc] = fallback
+				return fallback
+			end
+			return nil
+		end,
+		ReleasePickupSpot = function(npc)
+			local spot = self._npcPickupSpot[npc]
+			if spot ~= nil then
+				if self._pickupHolders[spot] == npc then
+					self._pickupHolders[spot] = nil
+				end
+				self._npcPickupSpot[npc] = nil
+			end
 		end,
 		IsPaused = function()
 			return self._baristas == 0
@@ -319,10 +370,27 @@ function CustomerService:_makeContext(nodes: Npc.Nodes, folder: Folder): Npc.Con
 		OnAtCounter = function(npc)
 			self:_onAtCounter(npc)
 		end,
+		OnAtPickup = function(npc)
+			self:_onAtPickup(npc)
+		end,
 		OnDestroyed = function(npc)
 			if self._npcs[npc] then
 				self._npcs[npc] = nil
 				self._npcCount -= 1
+			end
+			if self._seats ~= nil then
+				self._seats:Forget(npc.Id)
+			end
+		end,
+		TryClaimSeat = function(npcId, originPos, maxDist)
+			if self._seats == nil then
+				return nil
+			end
+			return self._seats:TryClaim(npcId, originPos, maxDist)
+		end,
+		ReleaseSeat = function(seat, npcId)
+			if self._seats ~= nil then
+				self._seats:Release(seat, npcId)
 			end
 		end,
 	}
@@ -345,13 +413,18 @@ function CustomerService:_spawnIfNeeded()
 	if context == nil then
 		return
 	end
-	if self._npcCount >= self:_pacingTarget() then
+	local activeCount = self._npcCount - (if self._seats ~= nil then self._seats:BudgetUsed() else 0)
+	if activeCount >= self:_pacingTarget() then
 		return
 	end
-	if #self._line >= #context.Nodes.Queue then
+	local maxLine = if self:IsRushHour() then (RatingConfig.RUSH_QUEUE_CAP or 35) else #context.Nodes.Queue
+	if #self._line >= maxLine then
 		return -- never spawn into a full queue
 	end
-	if os.clock() - self._lastSpawnClock < CustomerConfig.SPAWN_GAP_SECONDS then
+	local gap = if self:IsRushHour()
+		then (RatingConfig.RUSH_SPAWN_GAP_SECONDS or 0.2)
+		else CustomerConfig.SPAWN_GAP_SECONDS
+	if os.clock() - self._lastSpawnClock < gap then
 		return
 	end
 	self._lastSpawnClock = os.clock()
@@ -382,14 +455,90 @@ function CustomerService:IsRushHour(): boolean
 	return workspace:GetAttribute("RushHour") == true
 end
 
+-- BIG-B4-P1: true when seating is on (flag or Studio-only force). P2 calls it; P1 only adds it.
+function CustomerService:_seatingOn(): boolean
+	return SeatingConfig.ENABLED or (RunService:IsStudio() and workspace:GetAttribute("B4SeatingForce") == true)
+end
+
+-- BIG-B4-P1: Studio-only B4SeatBudgetOverride (number >= 0), else SEATED_BUDGET.
+function CustomerService:_seatBudget(): number
+	if RunService:IsStudio() then
+		local override = workspace:GetAttribute("B4SeatBudgetOverride")
+		if typeof(override) == "number" and override >= 0 then
+			return override
+		end
+	end
+	return SeatingConfig.SEATED_BUDGET
+end
+
+-- BIG-B4-P1: "Run" or "Drain" only in Studio when B4Stress says so; else nil.
+function CustomerService:_stressMode(): string?
+	if not RunService:IsStudio() then
+		return nil
+	end
+	local mode = workspace:GetAttribute("B4Stress")
+	if mode == "Run" then
+		return "Run"
+	elseif mode == "Drain" then
+		return "Drain"
+	end
+	return nil
+end
+
+-- BIG-B4-P1: Studio perf-check hook (non-yielding). Run forces baristas and
+-- auto-serves unassigned counter NPCs after STRESS_SERVE_AFTER_SECONDS (4 s);
+-- Drain serves them immediately. Serves skip pay on purpose: Leave("Served")
+-- fires CustomerLeft (not PatienceOut) and _onCustomerLeft only clears a
+-- ticket that does not exist, so there is no payout, stats or quest change.
+function CustomerService:_stressTick(mode: string)
+	if not RunService:IsStudio() then
+		return
+	end
+	if mode == "Run" then
+		self._baristas = math.max(self._baristas, SeatingConfig.STRESS_BARISTAS)
+	end
+	local wait = if mode == "Drain" then 0 else SeatingConfig.STRESS_SERVE_AFTER_SECONDS
+	local now = os.clock()
+	for _, npc in self:GetWaitingCustomers() do
+		if npc.AssignedUserId ~= nil then
+			continue
+		end
+		if npc.Left then
+			self._stressSeen[npc] = nil
+			continue
+		end
+		local seen = self._stressSeen[npc]
+		if seen == nil then
+			self._stressSeen[npc] = now
+			continue
+		end
+		if now - seen >= wait then
+			self._stressSeen[npc] = nil
+			npc:Leave("Served", "Perfect")
+		end
+	end
+	for npc in self._stressSeen do
+		if npc.Left then
+			self._stressSeen[npc] = nil
+		end
+	end
+	workspace:SetAttribute("B4NpcCount", self._npcCount)
+	local seatBudgetUsed = if self._seats ~= nil then self._seats:BudgetUsed() else 0
+	workspace:SetAttribute("B4SeatBudgetUsed", seatBudgetUsed)
+	workspace:SetAttribute("B4SeatsReserved", seatBudgetUsed)
+	workspace:SetAttribute("B4SeatEntries", 0)
+	local existing = workspace:GetAttribute("B4SeatBudgetMax")
+	local maxSoFar = if typeof(existing) == "number" then existing else 0
+	workspace:SetAttribute("B4SeatBudgetMax", math.max(maxSoFar, 0))
+end
+
 -- Rules.PacingTarget, scaled by Rush Hour (x NPC mult, cap + bonus).
 function CustomerService:_pacingTarget(): number
 	local target = Rules.PacingTarget(self._baristas)
-	if self:IsRushHour() then
-		target = math.min(
-			CustomerConfig.SERVER_CAP + RatingConfig.RUSH_CAP_BONUS,
-			math.ceil(target * RatingConfig.RUSH_NPC_MULT)
-		)
+	if self:IsRushHour() or (self:_stressMode() == "Run" and workspace:GetAttribute("B4StressRush") == true) then
+		local rushMin = RatingConfig.RUSH_MIN_TARGET or 25
+		local rushScaled = math.max(rushMin, math.ceil(target * RatingConfig.RUSH_NPC_MULT))
+		target = math.min(CustomerConfig.SERVER_CAP + RatingConfig.RUSH_CAP_BONUS, rushScaled)
 	end
 	return target
 end
@@ -492,8 +641,17 @@ function CustomerService:_pacingLoop()
 		-- this tick and never ends the loop.
 		local ok, err = pcall(function()
 			self._baristas = self:_countBaristas()
-			self:_spawnIfNeeded()
-			self:_assignAll()
+			local stress = self:_stressMode()
+			if stress ~= nil then
+				self:_stressTick(stress)
+			end
+			local burst = if self:IsRushHour() then (RatingConfig.RUSH_SPAWN_BURST or 3) else 1
+			for _ = 1, burst do
+				self:_spawnIfNeeded()
+			end
+			if CustomerConfig.ASSIGNMENT_MODE ~= "Dedicated" then
+				self:_assignAll()
+			end
 		end)
 		if not ok then
 			warnThrottled("pacing", `[CustomerService] Pacing step failed: {err}`)
@@ -621,6 +779,11 @@ function CustomerService:_fireTicket(player: Player, ticket: { [string]: any }?,
 	end
 end
 
+-- The session shift number for the player: shifts completed plus the current one.
+function CustomerService:_sessionShiftOf(player: Player): number
+	return (self._sessionShifts[player] or 0) + 1
+end
+
 -- Assigns one waiting NPC to a free barista (design 4.3-4.5). No-ops when the
 -- NPC is gone or taken, while a player order is pending, or when nobody
 -- qualifies: the NPC keeps waiting and the next pacing tick tries again.
@@ -669,7 +832,14 @@ function CustomerService:_assign(npc: Npc.Npc)
 		end
 	end
 	npc:SetOrders(orders, specs)
-	npc:SetAssignment(player.UserId, Rules.VariantPatience(Rules.PatienceSeconds(orders), npc.Variant), scripted)
+	npc:SetAssignment(
+		player.UserId,
+		Rules.VariantPatience(
+			Rules.PatienceSeconds(orders, nil, if scripted then nil else self:_sessionShiftOf(player)),
+			npc.Variant
+		),
+		scripted
+	)
 	self._lastOrder[player] = order
 	local held = self._tickets[player]
 	if held == nil then
@@ -705,33 +875,194 @@ function CustomerService:_onAtCounter(npc: Npc.Npc)
 	if not self.Enabled then
 		return
 	end
-	self:_assign(npc)
+	if CustomerConfig.ASSIGNMENT_MODE == "Dedicated" then
+		self:_ensureNpcPrompt(npc, "Take Order", "Customer")
+	else
+		self:_assign(npc)
+	end
 end
 
-function CustomerService:_ensureServePrompt(npc: Npc.Npc)
+function CustomerService:_onAtPickup(npc: Npc.Npc)
+	if not self.Enabled then
+		return
+	end
+	self:_ensureNpcPrompt(npc, "Serve", npc.LabelText)
+end
+
+function CustomerService:_ensureNpcPrompt(npc: Npc.Npc, actionText: string, objectText: string)
 	local root: BasePart = npc.Root
 	local head = npc.Model:FindFirstChild("HumanoidRootPart")
 	if head ~= nil and head:IsA("BasePart") then
 		root = head
 	end
-	if root:FindFirstChild("ServePrompt") ~= nil then
+	local prompt = root:FindFirstChildOfClass("ProximityPrompt")
+	if prompt == nil then
+		prompt = Instance.new("ProximityPrompt")
+		prompt.Name = "CustomerPrompt"
+		prompt.HoldDuration = 0
+		prompt.MaxActivationDistance = 8
+		prompt.RequiresLineOfSight = false
+		prompt.Parent = root
+		prompt.Triggered:Connect(function(player)
+			local ok, err = pcall(self._onCustomerPromptTriggered, self, npc, player)
+			if not ok then
+				warnOnce("prompt", `[CustomerService] Customer prompt failed: {err}`)
+			end
+		end)
+	end
+	prompt.ActionText = actionText
+	prompt.ObjectText = objectText
+	prompt.Enabled = true
+	npc.Model:SetAttribute("PromptAction", actionText)
+end
+
+function CustomerService:_ensureServePrompt(npc: Npc.Npc)
+	self:_ensureNpcPrompt(npc, "Serve", npc.LabelText)
+end
+
+function CustomerService:_onCustomerPromptTriggered(npc: Npc.Npc, player: Player)
+	if npc.State == "AtCounter" then
+		self:_onTakeOrderTriggered(npc, player)
+	elseif npc.State == "AtPickup" then
+		self:_onServeTriggered(npc, player)
+	end
+end
+
+function CustomerService:_onTakeOrderTriggered(npc: Npc.Npc, player: Player)
+	if self._context == nil or npc.Left or npc.State ~= "AtCounter" then
 		return
 	end
-	local prompt = Instance.new("ProximityPrompt")
-	prompt.Name = "ServePrompt"
-	prompt.ActionText = "Serve"
-	prompt.ObjectText = npc.LabelText
-	prompt.HoldDuration = 0
-	prompt.MaxActivationDistance = 8
-	prompt.RequiresLineOfSight = false
-	prompt.Parent = root
-	npc.Model:SetAttribute("PromptAction", "Serve")
-	prompt.Triggered:Connect(function(player)
-		local ok, err = pcall(self._onServeTriggered, self, npc, player)
-		if not ok then
-			warnOnce("serve", `[CustomerService] Serve failed: {err}`)
+	if not self._shift:IsClockedIn(player) then
+		self._dialog:Notify(player, {
+			Title = "Clock In Required",
+			Description = "You must be clocked in to take orders!",
+		})
+		return
+	end
+	local character = player.Character
+	local primary = if character ~= nil then character.PrimaryPart else nil
+	if primary == nil or (primary.Position - npc.Root.Position).Magnitude > 12 then
+		return
+	end
+	if not self:_hasFreeSlot(player) then
+		self._dialog:Notify(player, {
+			Title = "Slots Full",
+			Description = "You already have an active order ticket!",
+		})
+		return
+	end
+
+	local order, scripted = self:_pickOrderFor(player)
+	local spec, reason = OrderSpec.FromOrderItem(order)
+	if spec == nil then
+		warnOnce("order", `[CustomerService] Order rejected by OrderSpec ({reason}): {order.Category}/{order.Item}`)
+		return
+	end
+
+	self._npcSeq += 1
+	if npc.Model.Name == "Customer" then
+		npc.Model.Name = `Customer_{self._npcSeq}`
+	end
+	local orders: { Rules.OrderItem } = { order }
+	local specs: { OrderSpec.OrderSpec } = { spec }
+	if scripted then
+		npc:ClearVariant()
+	else
+		for _ = 2, Rules.ItemCountForLevel(self:_levelOf(player)) do
+			local extra = Rules.PickOrder(nil, nil, self:_levelOf(player))
+			local extraSpec = OrderSpec.FromOrderItem(extra)
+			if extraSpec ~= nil then
+				table.insert(orders, extra)
+				table.insert(specs, extraSpec)
+			end
 		end
-	end)
+	end
+	npc:SetOrders(orders, specs)
+	self._lastOrder[player] = order
+
+	local requestedText = Rules.FormatOrderForNotepad(orders, specs)
+	npc.RequestedDrinkText = requestedText
+	self._activeOrderingNpc[player] = npc
+
+	self.Client.OpenOrderingTablet:Fire(player, {
+		NpcId = npc.Id,
+		RequestedText = requestedText,
+		Orders = orders,
+		Specs = specs,
+	})
+end
+
+function CustomerService:_submitNpcOrder(
+	player: Player,
+	npcId: string,
+	submittedOrderItems: any
+): { Success: boolean, Message: string? }
+	if not self.Enabled or self._context == nil then
+		return { Success = false, Message = "CustomerService is disabled." }
+	end
+	if not self._shift:IsClockedIn(player) then
+		return { Success = false, Message = "You must be clocked in." }
+	end
+	if typeof(npcId) ~= "string" or typeof(submittedOrderItems) ~= "table" then
+		return { Success = false, Message = "Invalid order submission." }
+	end
+
+	local npc = self._activeOrderingNpc[player]
+	if npc == nil or npc.Id ~= npcId then
+		for activeNpc in self._npcs do
+			if activeNpc.Id == npcId and not activeNpc.Left and activeNpc.State == "AtCounter" then
+				npc = activeNpc
+				break
+			end
+		end
+	end
+	if npc == nil or npc.Left or npc.State ~= "AtCounter" then
+		return { Success = false, Message = "Customer is no longer waiting at the counter." }
+	end
+
+	local matches = Rules.ValidateSubmittedOrder(submittedOrderItems, npc.Orders)
+	if not matches then
+		return { Success = false, Message = "That doesn't match what the customer asked for!" }
+	end
+
+	-- Dedicated mode ticket generation & assignment
+	local scripted = npc.Scripted
+	local patienceSeconds = Rules.VariantPatience(
+		Rules.PatienceSeconds(npc.Orders, nil, if scripted then nil else self:_sessionShiftOf(player)),
+		npc.Variant
+	)
+	npc:SetAssignment(player.UserId, patienceSeconds, scripted)
+
+	local held = self._tickets[player]
+	if held == nil then
+		held = {}
+		self._tickets[player] = held
+	end
+	local slot = 1
+	while held[slot] ~= nil do
+		slot += 1
+	end
+	local ticket = self:_makeTicket(npc)
+	ticket.Slot = slot
+	held[slot] = ticket
+	self._assignee[npc] = player
+	self:_fireTicket(player, ticket, slot)
+
+	-- Free counter spot so next in queue can step up
+	self._context.ReleaseCounter(npc)
+
+	-- Claim pickup spot and move NPC there
+	local pickupSpot = self._context.ClaimPickupSpot(npc)
+	self._activeOrderingNpc[player] = nil
+	if pickupSpot ~= nil then
+		npc:GoToPickup(pickupSpot)
+	end
+
+	return { Success = true }
+end
+
+function CustomerService.Client:SubmitNpcOrder(player: Player, npcId: string, submittedOrderItems: any)
+	return self.Server:_submitNpcOrder(player, npcId, submittedOrderItems)
 end
 
 -- The Serve prompt, in design 4.6 order. The tip bonus is resolved first (it may
@@ -758,7 +1089,7 @@ function CustomerService:_onServeTriggered(npc: Npc.Npc, player: Player)
 		return
 	end
 	-- (3) still waiting.
-	if npc.Left or npc.State ~= "AtCounter" then
+	if npc.Left or (npc.State ~= "AtPickup" and npc.State ~= "AtCounter") then
 		return
 	end
 	-- (4) assigned, or a Rescue below 30% patience.
@@ -784,6 +1115,20 @@ function CustomerService:_onServeTriggered(npc: Npc.Npc, player: Player)
 	if grade ~= "Perfect" and grade ~= "Close" then
 		return
 	end
+	-- BIG-B7 skill moment: flat pour tip, read before the tools are destroyed (guarded; serve never breaks).
+	local pourTip = 0
+	local okPour, pourResult = pcall(function()
+		return Knit.GetService("KitchenService"):GetPourTip(tools)
+	end)
+	if okPour and typeof(pourResult) == "number" then
+		pourTip = pourResult
+	end
+	if #tools > 0 and npc.Model ~= nil and npc.Model.Parent ~= nil then
+		pcall(function()
+			local carried = tools[1]:Clone()
+			carried.Parent = npc.Model
+		end)
+	end
 	for _, tool in tools do
 		tool:Destroy()
 	end
@@ -807,6 +1152,10 @@ function CustomerService:_onServeTriggered(npc: Npc.Npc, player: Player)
 			tip = extra
 			pay += extra
 		end
+	end
+	if pourTip > 0 then
+		tip += pourTip
+		pay += pourTip
 	end
 	self._currency:Modify(player, "BobaBucks", pay, "Gameplay")
 	pcall(function()
@@ -872,6 +1221,9 @@ function CustomerService:_onServeTriggered(npc: Npc.Npc, player: Player)
 	npc.Rescue = rescue
 	local holder = self._assignee[npc]
 	self:_clearTicket(npc)
+	if self._context ~= nil then
+		self._context.ReleasePickupSpot(npc)
+	end
 	if rescue and holder ~= nil and holder ~= player then
 		self._dialog:Notify(holder, {
 			Title = "Customer rescued",
@@ -983,6 +1335,9 @@ end
 -- Walkouts clear the ticket and reset the combo (design 3.4, 4.8). A served
 -- or despawned NPC only frees the slot. Never stops the pacing thread.
 function CustomerService:_onCustomerLeft(npc: Npc.Npc, reason: string)
+	if self._context ~= nil then
+		self._context.ReleasePickupSpot(npc)
+	end
 	if reason ~= "PatienceOut" then
 		self:_clearTicket(npc)
 		return
@@ -1021,6 +1376,25 @@ function CustomerService:KnitStart()
 	local folder = Instance.new("Folder")
 	folder.Name = CUSTOMERS_FOLDER_NAME
 	folder.Parent = workspace
+	self._seats = Seats.new(nil, function()
+		return self:_seatBudget()
+	end)
+
+	local orderingSystem = workspace:FindFirstChild("Ordering System")
+	local pickUp = if orderingSystem ~= nil then orderingSystem:FindFirstChild("Pick Up") else nil
+	if pickUp ~= nil then
+		for _, child in pickUp:GetChildren() do
+			if child:IsA("BasePart") then
+				table.insert(self._pickupNodes, child)
+			end
+		end
+	end
+	if #self._pickupNodes == 0 then
+		for _, part in nodes.Counter do
+			table.insert(self._pickupNodes, part)
+		end
+	end
+
 	self._context = self:_makeContext(nodes, folder)
 	self.Enabled = true
 
@@ -1030,6 +1404,16 @@ function CustomerService:KnitStart()
 		local ok, err = pcall(self._onCustomerLeft, self, npc, reason)
 		if not ok then
 			warnThrottled("left", `[CustomerService] Walkout step failed: {err}`)
+		end
+	end)
+
+	-- Each ended shift advances the player's session shift count (memory only).
+	self._shift.ShiftEnding:Connect(function(player)
+		local ok, err = pcall(function()
+			self._sessionShifts[player] = (self._sessionShifts[player] or 0) + 1
+		end)
+		if not ok then
+			warnThrottled("shift", `[CustomerService] Session shift step failed: {err}`)
 		end
 	end)
 
@@ -1068,7 +1452,9 @@ function CustomerService:PlayerAdded(player: Player)
 end
 
 function CustomerService:PlayerRemoving(player: Player)
+	self._activeOrderingNpc[player] = nil
 	self._firstServe[player] = nil
+	self._sessionShifts[player] = nil
 	local connection = self._characterConnections[player]
 	if connection ~= nil then
 		connection:Disconnect()

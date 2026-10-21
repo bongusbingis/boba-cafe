@@ -136,6 +136,7 @@ Recipes.Items = {
 
 	["Sink"] = {
 		Sound = "Sink",
+		SkillMoment = true, -- BIG-B7 pour meter
 		HoldDuration = 3,
 		Actions = {
 			{ "ToolNameValidityCheck", { "#Cup|!Milk" } },
@@ -181,6 +182,7 @@ Recipes.Items = {
 
 	["Milk"] = {
 		Sound = "Pour",
+		SkillMoment = true, -- BIG-B7 pour meter
 		HoldDuration = 2,
 		Actions = {
 			{ "ToolNameValidityCheck", { "#Clear Cup|=Mug" } },
@@ -200,6 +202,7 @@ Recipes.Items = {
 
 	["Coffee Machine"] = {
 		Sound = "Machine",
+		SkillMoment = true, -- BIG-B7 pour meter
 		HoldDuration = 4, -- TUNING (Q14)
 		Actions = {
 			{ "ToolNameValidityCheck", { "#Cup", "!Clear" } },
@@ -340,6 +343,7 @@ Recipes.Items = {
 for name: string, color: Color3 in Recipes.Syrups do
 	Recipes.Items[name .. " Syrup"] = {
 		Sound = "Pour",
+		SkillMoment = true, -- BIG-B7 pour meter
 		HoldDuration = 2,
 		Actions = {
 			{ "ToolNameValidityCheck", { "#Cup %+ Milk" } },

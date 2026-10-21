@@ -3,6 +3,7 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
 
 ---> Dependencies
 
@@ -15,6 +16,8 @@ local GamepassUtil = require(Shared.Utility.GamepassUtil)
 local WorldPath = require(Shared.Utility.WorldPath)
 local OrderSpec = require(Shared.Ordering.OrderSpec)
 local Styles = require(Shared.UI.Styles)
+local KitchenConfig = require(Shared.Configuration.KitchenConfig)
+local PourMeter = require(Shared.Kitchen.PourMeter)
 local KitchenGuidance = require(script.Parent.KitchenGuidance)
 
 ---> Constants
@@ -360,6 +363,25 @@ local function runPatienceCues(model: Model, root: BasePart, fraction: number, c
 		end
 	end
 	wasRescuable[model] = rescuable
+
+	-- T5: hide other baristas' bubbles unless rescuable; clocked-out sees all.
+	local bubbleOk, bubbleErr = pcall(function()
+		local hideBubble = clockedIn
+			and assigned ~= nil
+			and assigned ~= localPlayer.UserId
+			and not (fraction < CustomerConfig.RESCUE_FRACTION)
+		local bubble = model:FindFirstChild("OrderBubble")
+		if bubble and bubble:IsA("BillboardGui") then
+			local visible = not hideBubble
+			if bubble.Enabled ~= visible then
+				bubble.Enabled = visible
+			end
+		end
+	end)
+	if not bubbleOk and not patienceCuesWarned then
+		patienceCuesWarned = true
+		warn("[KitchenController] Patience cues failed: " .. tostring(bubbleErr))
+	end
 end
 
 -- Local view of each NPC ServePrompt (design 4.6): "Serve" for the assigned barista,
@@ -496,6 +518,289 @@ local function startGuidance()
 	end)
 end
 
+---> Pour meter (BIG-B7 skill moment)
+
+-- Optional timing tap after pour stations. The server opens the window and
+-- owns the clock; this only draws the meter from the server's view and
+-- reports back how long the player watched it. Skipping it changes nothing.
+-- Built from Styles tokens only (DEC-013): GREEN fills, OFFWHITE surfaces,
+-- Fredoka labels, PromptButton-style radius and stroke.
+
+local POUR_GUI_NAME = "PourMeter"
+local POUR_POSITION = UDim2.fromScale(0.5, 0.68)
+local POUR_SIZE = UDim2.fromScale(0.34, 0.14)
+
+type PourState = {
+	Gui: ScreenGui?,
+	Track: Frame?,
+	Zone: Frame?,
+	PerfectZone: Frame?,
+	Marker: Frame?,
+	WindowId: number?,
+	OpenedAt: number,
+	Period: number,
+	Duration: number,
+	Heartbeat: RBXScriptConnection?,
+}
+
+local pour: PourState = {
+	Gui = nil,
+	Track = nil,
+	Zone = nil,
+	PerfectZone = nil,
+	Marker = nil,
+	WindowId = nil,
+	OpenedAt = 0,
+	Period = 1,
+	Duration = 0,
+	Heartbeat = nil,
+}
+
+local function hidePourMeter()
+	if pour.Heartbeat then
+		pour.Heartbeat:Disconnect()
+		pour.Heartbeat = nil
+	end
+	pour.WindowId = nil
+	if pour.Gui then
+		pour.Gui.Enabled = false
+	end
+end
+
+local function tapPourMeter()
+	local id = pour.WindowId
+	if id == nil then
+		return
+	end
+	pour.WindowId = nil -- one tap per window
+	local claimed = os.clock() - pour.OpenedAt
+	hidePourMeter()
+	task.spawn(function()
+		pcall(function()
+			Knit.GetService("KitchenService"):ReportPourTap(id, claimed)
+		end)
+	end)
+end
+
+local function buildPourMeter(): ScreenGui
+	local playerGui = Players.LocalPlayer:WaitForChild("PlayerGui")
+	local gui = Instance.new("ScreenGui")
+	gui.Name = POUR_GUI_NAME
+	gui.ResetOnSpawn = false
+	gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+	gui.Enabled = false
+
+	local panel = Instance.new("Frame")
+	panel.AnchorPoint = Vector2.new(0.5, 0.5)
+	panel.Position = POUR_POSITION
+	panel.Size = POUR_SIZE
+	panel.BackgroundTransparency = 1
+	panel.Parent = gui
+
+	local track = Instance.new("Frame")
+	track.AnchorPoint = Vector2.new(0.5, 0)
+	track.Position = UDim2.fromScale(0.5, 0)
+	track.Size = UDim2.fromScale(1, 0.38)
+	track.BackgroundColor3 = Styles.GREEN_DEEP
+	track.BorderSizePixel = 0
+	local trackCorner = Instance.new("UICorner")
+	trackCorner.CornerRadius = Styles.CORNER_CARD
+	trackCorner.Parent = track
+	track.Parent = panel
+
+	local config = KitchenConfig.POUR_METER
+
+	local zone = Instance.new("Frame")
+	zone.AnchorPoint = Vector2.new(0.5, 0.5)
+	zone.Position = UDim2.fromScale(0.5, 0.5)
+	zone.Size = UDim2.fromScale(config.ZONE_WIDTH, 1)
+	zone.BackgroundColor3 = Styles.GREEN
+	zone.BorderSizePixel = 0
+	zone.Parent = track
+
+	local perfectZone = Instance.new("Frame")
+	perfectZone.AnchorPoint = Vector2.new(0.5, 0.5)
+	perfectZone.Position = UDim2.fromScale(0.5, 0.5)
+	perfectZone.Size = UDim2.fromScale(config.PERFECT_WIDTH / config.ZONE_WIDTH, 1)
+	perfectZone.BackgroundColor3 = Styles.GOLD
+	perfectZone.BorderSizePixel = 0
+	perfectZone.Parent = zone
+
+	local marker = Instance.new("Frame")
+	marker.AnchorPoint = Vector2.new(0.5, 0.5)
+	marker.Position = UDim2.fromScale(0, 0.5)
+	marker.Size = UDim2.fromScale(0.025, 1)
+	marker.BackgroundColor3 = Styles.OFFWHITE
+	marker.BorderSizePixel = 0
+	marker.ZIndex = 3
+	marker.Parent = track
+
+	local tapButton = Instance.new("TextButton")
+	tapButton.AnchorPoint = Vector2.new(0.5, 1)
+	tapButton.Position = UDim2.fromScale(0.5, 1)
+	tapButton.Size = UDim2.fromScale(1, 0.5)
+	tapButton.AutoButtonColor = false
+	tapButton.BackgroundColor3 = Styles.GREEN
+	tapButton.FontFace = Styles.FONT_FREDOKA
+	tapButton.Text = "TAP!"
+	tapButton.TextColor3 = Color3.new(1, 1, 1)
+	tapButton.TextScaled = true
+	local tapCorner = Instance.new("UICorner")
+	tapCorner.CornerRadius = Styles.CORNER_BUTTON
+	tapCorner.Parent = tapButton
+	local tapStroke = Instance.new("UIStroke")
+	tapStroke.Color = Styles.GREEN:Lerp(Color3.new(0, 0, 0), 0.15)
+	tapStroke.Thickness = 3
+	tapStroke.Parent = tapButton
+	tapButton.Parent = panel
+	tapButton.Activated:Connect(tapPourMeter)
+
+	pour.Track = track
+	pour.Zone = zone
+	pour.PerfectZone = perfectZone
+	pour.Marker = marker
+	pour.Gui = gui
+	gui.Parent = playerGui
+	return gui
+end
+
+local function showPourMeter(view: any)
+	if typeof(view) ~= "table" or typeof(view.Id) ~= "number" then
+		return
+	end
+	local config = KitchenConfig.POUR_METER
+	local gui = pour.Gui
+	if gui == nil then
+		local ok, built = pcall(buildPourMeter)
+		if not ok or built == nil then
+			warn("[KitchenController] Pour meter build failed: " .. tostring(built))
+			return
+		end
+		gui = built
+	end
+	local zoneWidth = view.ZoneWidth or config.ZONE_WIDTH
+	local perfectWidth = view.PerfectWidth or config.PERFECT_WIDTH
+	if pour.Zone then
+		pour.Zone.Size = UDim2.fromScale(zoneWidth, 1)
+		pour.Zone.Position = UDim2.fromScale(view.ZoneCenter or 0.5, 0.5)
+	end
+	if pour.PerfectZone then
+		local ratio = if zoneWidth > 0 then math.clamp(perfectWidth / zoneWidth, 0, 1) else 0.5
+		pour.PerfectZone.Size = UDim2.fromScale(ratio, 1)
+		pour.PerfectZone.Position = UDim2.fromScale(0.5, 0.5)
+	end
+	pour.WindowId = view.Id
+	pour.OpenedAt = os.clock()
+	pour.Period = view.Period or config.PERIOD_SECONDS
+	pour.Duration = view.Duration or config.DURATION_SECONDS
+	gui.Enabled = true
+	if pour.Heartbeat then
+		pour.Heartbeat:Disconnect()
+	end
+	pour.Heartbeat = RunService.Heartbeat:Connect(function()
+		if pour.Marker and pour.WindowId == view.Id then
+			pour.Marker.Position = UDim2.fromScale(PourMeter.Position(os.clock() - pour.OpenedAt, pour.Period), 0.5)
+		end
+	end)
+	local id = view.Id
+	task.delay(pour.Duration + config.LATENCY_ALLOWANCE_SECONDS + 0.5, function()
+		if pour.WindowId == id then
+			hidePourMeter()
+		end
+	end)
+end
+
+local function showPourFeedback(tier: string)
+	local text: string
+	local textColor: Color3
+	local strokeColor: Color3
+
+	if tier == "Perfect" then
+		text = "Perfect Pour!"
+		textColor = Styles.GOLD
+		strokeColor = Styles.GOLD:Lerp(Color3.new(0, 0, 0), 0.35)
+	elseif tier == "Good" then
+		text = "Good Pour"
+		textColor = Styles.GREEN
+		strokeColor = Styles.GREEN:Lerp(Color3.new(0, 0, 0), 0.35)
+	elseif tier == "Poor" then
+		text = "Messy Pour!"
+		textColor = Color3.fromRGB(255, 110, 80)
+		strokeColor = Color3.fromRGB(120, 30, 20)
+	else
+		return
+	end
+
+	local player = Players.LocalPlayer
+	local character = if player then player.Character else nil
+	local targetPart = if character then (character:FindFirstChild("Head") or character.PrimaryPart) else nil
+	if not (targetPart and targetPart:IsA("BasePart")) then
+		toast(text)
+		return
+	end
+
+	local playerGui = if player
+		then (player:FindFirstChild("PlayerGui") or player:WaitForChild("PlayerGui", 2))
+		else nil
+	local parentTarget = playerGui or character
+	if parentTarget == nil then
+		toast(text)
+		return
+	end
+
+	local initialOffset = Vector3.new(0, 3.5, 0)
+	local gui = Instance.new("BillboardGui")
+	gui.Name = "PourFeedback"
+	gui.Adornee = targetPart
+	gui.Size = UDim2.fromOffset(140, 40)
+	gui.StudsOffset = initialOffset
+	gui.AlwaysOnTop = true
+	gui.MaxDistance = 60
+	gui.ResetOnSpawn = false
+
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.fromScale(1, 1)
+	label.BackgroundTransparency = 1
+	label.FontFace = Styles.FONT_FREDOKA
+	label.TextScaled = true
+	label.Text = text
+	label.TextColor3 = textColor
+
+	local stroke = Instance.new("UIStroke")
+	stroke.Color = strokeColor
+	stroke.Thickness = 1.5
+	stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+	stroke.Parent = label
+
+	label.Parent = gui
+	gui.Parent = parentTarget
+
+	local tweenInfo = TweenInfo.new(1.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+	TweenService:Create(gui, tweenInfo, { StudsOffset = initialOffset + Vector3.new(0, 2.5, 0) }):Play()
+	TweenService:Create(label, tweenInfo, { TextTransparency = 1 }):Play()
+	TweenService:Create(stroke, tweenInfo, { Transparency = 1 }):Play()
+
+	task.delay(1.2, function()
+		pcall(function()
+			gui:Destroy()
+		end)
+	end)
+end
+
+local function startPourMeter()
+	local ok, kitchenService = pcall(Knit.GetService, "KitchenService")
+	if not ok or kitchenService == nil then
+		warn("[KitchenController] KitchenService not found; pour meter is disabled.")
+		return
+	end
+	kitchenService.PourWindowOpened:Connect(showPourMeter)
+	kitchenService.PourResolved:Connect(function(_id: number, tier: any)
+		if typeof(tier) == "string" then
+			showPourFeedback(tier)
+		end
+	end)
+end
+
 ---> Public
 
 -- The dialog button the current step wants pressed ("Medium", "Latte", an item name), or
@@ -523,6 +828,10 @@ function KitchenController:KnitStart()
 	end)
 
 	task.spawn(function()
+		local okPour, errPour = pcall(startPourMeter)
+		if not okPour then
+			warn("[KitchenController] Pour meter could not start: " .. tostring(errPour))
+		end
 		local ok, err = pcall(startGuidance)
 		if not ok then
 			warn("[KitchenController] Station hints could not start: " .. tostring(err))

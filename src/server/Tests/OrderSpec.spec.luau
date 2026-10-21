@@ -238,6 +238,21 @@ return function()
 				expectMatch(specD(), { Item = "Milk", Size = "Mug" }, "Wrong", { "Item" })
 			end)
 		end)
+
+		describe("craft quality (PoorPours)", function()
+			it("an otherwise perfect drink with PoorPours = 1 evaluates to Close with reason PoorPour", function()
+				expectMatch(specA(), with(attrsA(), { PoorPours = 1 }), "Close", { "PoorPour" })
+			end)
+
+			it("a drink with a minor mistake (e.g. wrong size) and PoorPours = 1 evaluates to Wrong", function()
+				expectMatch(specA(), with(attrsA(), { Size = "Large", PoorPours = 1 }), "Wrong", { "Size", "PoorPour" })
+			end)
+
+			it("a drink with PoorPours = 0 (or nil) and PerfectPours = 1 evaluates to Perfect", function()
+				expectMatch(specA(), with(attrsA(), { PoorPours = 0, PerfectPours = 1 }), "Perfect", {})
+				expectMatch(specA(), with(attrsA(), { PerfectPours = 1 }), "Perfect", {})
+			end)
+		end)
 	end)
 
 	-- ══════════════════════════════════════════════════════════════════════

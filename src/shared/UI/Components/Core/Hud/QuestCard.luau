@@ -64,6 +64,31 @@ local CLOSE_BUTTON_H = 0.123874
 local CLOSE_BUTTON_X = 0.980770
 local CLOSE_BUTTON_Y = 0.147523
 
+local PREVIEW_WEEKLY_QUESTS: { QuestEntry } = {
+	{
+		Id = "preview_w1",
+		Type = "CustomersServed",
+		Target = 30,
+		Progress = 12,
+		Completed = false,
+		Claimed = false,
+		RewardBobaBucks = 0,
+		RewardXP = 0,
+		RewardCapsule = "Regular Pet Capsule",
+	},
+	{
+		Id = "preview_w2",
+		Type = "ShiftsCompleted",
+		Target = 5,
+		Progress = 5,
+		Completed = true,
+		Claimed = false,
+		RewardBobaBucks = 0,
+		RewardXP = 0,
+		RewardCapsule = "Regular Pet Capsule",
+	},
+}
+
 local PREVIEW_QUESTS: { QuestEntry } = {
 	{
 		Id = "preview_1",
@@ -205,6 +230,8 @@ local function QuestRow(props: {
 	isActing: boolean,
 	onClaim: (index: number) -> (),
 	onReroll: (index: number) -> (),
+	order: number?,
+	showReroll: boolean?,
 })
 	local px = usePx()
 	local quest = props.quest
@@ -215,6 +242,9 @@ local function QuestRow(props: {
 	local progress = math.clamp(quest.Progress or 0, 0, quest.Target or 1)
 	local target = math.max(1, quest.Target or 1)
 	local progressFraction = math.clamp(progress / target, 0, 1)
+	local rewardText = if quest.RewardCapsule ~= nil
+		then "+1 Pet Capsule"
+		else string.format("+%d BB · +%d XP", quest.RewardBobaBucks or 0, quest.RewardXP or 0)
 
 	local topRow = c("Frame", {
 		LayoutOrder = 1,
@@ -256,7 +286,7 @@ local function QuestRow(props: {
 				FontFace = Styles.FONT_FREDOKA,
 				Position = UDim2.fromScale(0.5, 0.5),
 				Size = UDim2.fromScale(0.9, 0.8),
-				Text = string.format("+%d BB · +%d XP", quest.RewardBobaBucks or 0, quest.RewardXP or 0),
+				Text = rewardText,
 				TextColor3 = Styles.GOLD_DEEP,
 				TextScaled = true,
 				TextXAlignment = Enum.TextXAlignment.Center,
@@ -288,6 +318,18 @@ local function QuestRow(props: {
 			OnClick = function()
 				props.onClaim(props.index)
 			end,
+		})
+	elseif props.showReroll == false then
+		actionElement = c("TextLabel", {
+			AnchorPoint = Vector2.new(1, 0.5),
+			BackgroundTransparency = 1,
+			FontFace = Styles.FONT_FREDOKA,
+			Position = UDim2.fromScale(1, 0.5),
+			Size = UDim2.fromOffset(actionWidth, actionHeight),
+			Text = "Weekly",
+			TextColor3 = Styles.GRAY,
+			TextSize = px(18),
+			TextXAlignment = Enum.TextXAlignment.Center,
 		})
 	else
 		actionElement = c(QuestActionButton, {
@@ -341,7 +383,7 @@ local function QuestRow(props: {
 	})
 
 	return c("Frame", {
-		LayoutOrder = props.index * 2,
+		LayoutOrder = props.order or props.index * 2,
 		AutomaticSize = Enum.AutomaticSize.Y,
 		BackgroundTransparency = 1,
 		Size = UDim2.fromScale(1, 0),
@@ -362,12 +404,15 @@ end
 
 local function QuestCardBody(props: {
 	Quests: { QuestEntry }?,
+	WeeklyQuests: { QuestEntry }?,
 	OnCloseRequested: () -> (),
 })
 	local px = usePx()
 	local camera = useCamera()
 	local initialQuests = props.Quests or (if not RunService:IsRunning() then PREVIEW_QUESTS else {})
 	local quests, setQuests = React.useState(initialQuests :: { QuestEntry })
+	local initialWeekly = props.WeeklyQuests or (if not RunService:IsRunning() then PREVIEW_WEEKLY_QUESTS else {})
+	local weeklyQuests, setWeeklyQuests = React.useState(initialWeekly :: { QuestEntry })
 	local freeRerolls, setFreeRerolls = React.useState(0)
 	local isActing, setIsActing = React.useState(false)
 
@@ -382,11 +427,24 @@ local function QuestCardBody(props: {
 				end
 			end
 
+			local function handleWeeklyQuests(newQuests)
+				if typeof(newQuests) == "table" then
+					setWeeklyQuests(newQuests)
+				end
+			end
+
 			local res = questService:GetQuests()
 			if typeof(res) == "table" and res.andThen then
 				res:andThen(handleQuests)
 			elseif typeof(res) == "table" then
 				handleQuests(res)
+			end
+
+			local weeklyRes = questService:GetWeeklyQuests()
+			if typeof(weeklyRes) == "table" and weeklyRes.andThen then
+				weeklyRes:andThen(handleWeeklyQuests)
+			elseif typeof(weeklyRes) == "table" then
+				handleWeeklyQuests(weeklyRes)
 			end
 
 			setFreeRerolls(checkFreeRerolls())
@@ -401,9 +459,11 @@ local function QuestCardBody(props: {
 			end
 
 			local conn = questService.QuestsUpdated:Connect(handleQuests)
+			local weeklyConn = questService.WeeklyQuestsUpdated:Connect(handleWeeklyQuests)
 
 			return function()
 				conn:Disconnect()
+				weeklyConn:Disconnect()
 			end
 		end, {})
 	end
@@ -477,6 +537,48 @@ local function QuestCardBody(props: {
 		end)
 	end, { isActing })
 
+	local handleWeeklyClaim = React.useCallback(function(index: number)
+		if isActing or not RunService:IsRunning() then
+			return
+		end
+		setIsActing(true)
+		local claimedEntry = weeklyQuests[index]
+		task.spawn(function()
+			local ok, success, err = pcall(function()
+				local questService = Knit.GetService("QuestService")
+				local res = questService:ClaimWeeklyQuest(index)
+				if typeof(res) == "table" and res.await then
+					local _, s, e = res:await()
+					return s, e
+				end
+				return res
+			end)
+			setIsActing(false)
+			if not ok or success == false then
+				warn("[QuestCard] Weekly claim failed:", err)
+				if err == "InventoryFull" then
+					pcall(function()
+						local dialogController = Knit.GetController("DialogController")
+						if dialogController and dialogController.Toast then
+							dialogController:Toast("Capsule storage is full!")
+						end
+					end)
+				end
+			elseif claimedEntry then
+				pcall(function()
+					local text = "Weekly quest claimed!"
+					if claimedEntry.RewardCapsule ~= nil then
+						text ..= " +1 " .. claimedEntry.RewardCapsule
+					end
+					local dialogController = Knit.GetController("DialogController")
+					if dialogController and dialogController.Toast then
+						dialogController:Toast(text)
+					end
+				end)
+			end
+		end)
+	end, { isActing, weeklyQuests })
+
 	local hasFreeReroll = freeRerolls > 0
 	local isEmpty = RunService:IsRunning() and #quests == 0
 
@@ -499,6 +601,42 @@ local function QuestCardBody(props: {
 			onClaim = handleClaim,
 			onReroll = handleReroll,
 		})
+	end
+
+	-- Weekly section reusing the same QuestRow component. Weekly quests
+	-- cannot be rerolled, so the reroll button is replaced with a label.
+	local WEEKLY_ORDER_BASE = 1000
+	if #weeklyQuests > 0 then
+		questItems["WeeklyHeader"] = c("TextLabel", {
+			LayoutOrder = WEEKLY_ORDER_BASE,
+			AutomaticSize = Enum.AutomaticSize.Y,
+			BackgroundTransparency = 1,
+			FontFace = Styles.FONT_FREDOKA,
+			Size = UDim2.fromScale(1, 0),
+			Text = "Weekly Quests",
+			TextColor3 = Styles.GREEN_DEEP,
+			TextSize = px(20),
+			TextXAlignment = Enum.TextXAlignment.Left,
+		})
+		for index, quest in weeklyQuests do
+			questItems["WDivider_" .. index] = c("Frame", {
+				LayoutOrder = WEEKLY_ORDER_BASE + index * 2 - 1,
+				BackgroundColor3 = Styles.GRAY,
+				BackgroundTransparency = 0.5,
+				BorderSizePixel = 0,
+				Size = UDim2.new(1, 0, 0, 1),
+			})
+			questItems["WQuest_" .. index] = c(QuestRow, {
+				index = index,
+				order = WEEKLY_ORDER_BASE + index * 2,
+				quest = quest,
+				hasFreeReroll = false,
+				isActing = isActing,
+				showReroll = false,
+				onClaim = handleWeeklyClaim,
+				onReroll = handleReroll,
+			})
+		end
 	end
 
 	questItems.Padding = c("UIPadding", {
@@ -629,6 +767,7 @@ return function(props: {
 	OnClose: (() -> ())?,
 	CloseRef: { current: (() -> ())? }?,
 	Quests: { QuestEntry }?,
+	WeeklyQuests: { QuestEntry }?,
 })
 	local closeFnRef = React.useRef(nil)
 	local onCloseRef = React.useRef(props.OnClose)
@@ -664,8 +803,12 @@ return function(props: {
 	end, { props.CloseRef })
 
 	local pageContent = React.useMemo(function()
-		return c(QuestCardBody, { Quests = props.Quests, OnCloseRequested = handleClose })
-	end, { props.Quests })
+		return c(QuestCardBody, {
+			Quests = props.Quests,
+			WeeklyQuests = props.WeeklyQuests,
+			OnCloseRequested = handleClose,
+		})
+	end, { props.Quests, props.WeeklyQuests })
 
 	return c("Frame", {
 		BackgroundTransparency = 1,

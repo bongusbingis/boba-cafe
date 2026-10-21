@@ -4,7 +4,10 @@
 	XP and levels 1-50 (REVIVAL-001 M2-PROGRESS). Serving earns XP, level-ups
 	grant a nametag every 5 levels and show a toast. Nothing is locked.
 
-	Player attributes: Level (number), LevelTitle (string).
+	Player attributes: Level (number), LevelTitle (string), EquippedTitle (string).
+	Titles are an earned cosmetic: level titles are granted automatically,
+	manual titles only through the server-only `GrantTitle` (events, staff
+	awards), and players equip owned titles from the Inventory Titles tab.
 	A failure here warns and never blocks serving.
 --]]
 
@@ -18,21 +21,30 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Knit = require(Packages.Knit)
 local CustomerConfig = require(Shared.Configuration.CustomerConfig)
 local Progression = require(Shared.Configuration.Progression)
+local Titles = require(Shared.Configuration.Titles)
 local ShiftConfig = require(Shared.Configuration.ShiftConfig)
 local Rules = require(script.Parent.CustomerService.Rules)
 
 ---> service declaration
 local ProgressionService = Knit.CreateService({
 	Name = "ProgressionService",
+	Client = {},
 
 	_state = {} :: { [Player]: { Level: number, XP: number } }, -- cache; the profile is written on every change
 	_shiftXp = {} :: { [Player]: number }, -- XP gained since the last ShiftEnding
+	_equipDebounces = {} :: { [number]: boolean },
 })
 
 local function setAttributes(player: Player, level: number)
 	pcall(function()
 		player:SetAttribute("Level", level)
 		player:SetAttribute("LevelTitle", Progression.TitleFor(level))
+	end)
+end
+
+local function setEquippedTitleAttribute(player: Player, data: Titles.TitlesData)
+	pcall(function()
+		player:SetAttribute("EquippedTitle", Titles.TextFor(data.Equipped))
 	end)
 end
 
@@ -130,6 +142,103 @@ function ProgressionService:GetLevel(player: Player): number
 	return if typeof(level) == "number" then level else 1
 end
 
+-- Merges the level titles earned at the player's level into the stored
+-- titles, keeps a valid equipped title (defaulting to the highest level
+-- title for new profiles), and writes back only when something changed.
+function ProgressionService:_ensureTitles(player: Player, proxy: any): Titles.TitlesData
+	local state = self._state[player]
+	local level = if state ~= nil then state.Level else self:GetLevel(player)
+	local isNew = typeof(proxy.Data.Titles) ~= "table"
+	local data = Titles.Normalize(proxy.Data.Titles)
+	local changed = isNew
+	for titleId in Titles.LevelOwned(level) do
+		if not data.Owned[titleId] then
+			data.Owned[titleId] = true
+			changed = true
+		end
+	end
+	if isNew and data.Equipped == "" then
+		data.Equipped = Titles.HighestLevelTitleId(level)
+	elseif data.Equipped ~= "" and not data.Owned[data.Equipped] then
+		data.Equipped = ""
+		changed = true
+	end
+	if changed then
+		proxy:SetValue({ "Titles" }, data)
+	end
+	setEquippedTitleAttribute(player, data)
+	return data
+end
+
+-- Server-only manual grant for events and staff awards. This is the entry
+-- point other server code (EventService, a Studio command) calls; it is
+-- deliberately not on `Client`, so no player can grant themselves a title.
+-- Returns (false, reason) for an unknown title id; granting a title the
+-- player already owns succeeds and does nothing.
+function ProgressionService:GrantTitle(player: Player, titleId: string): (boolean, string?)
+	if Titles.Get(titleId) == nil then
+		return false, "UnknownTitle"
+	end
+	Knit.GetService("DataService")
+		:GetDataAsync(player)
+		:andThen(function(proxy)
+			local data = self:_ensureTitles(player, proxy)
+			if data.Owned[titleId] then
+				return
+			end
+			data.Owned[titleId] = true
+			if data.Equipped == "" then
+				data.Equipped = titleId
+			end
+			proxy:SetValue({ "Titles" }, data)
+			setEquippedTitleAttribute(player, data)
+			local def = Titles.Get(titleId)
+			if def ~= nil then
+				Knit.GetService("DialogService")
+					:Notify(player, { Text = `New title: {def.Text}`, SoundEnabled = true } :: any)
+			end
+		end)
+		:catch(function(err)
+			warn(`[ProgressionService] GrantTitle failed: {err}`)
+		end)
+	return true, nil
+end
+
+---> client
+
+-- Equips an owned title, or unequips when titleId is "". The overhead
+-- and the Staff tab read the result from the replicated profile and the
+-- `EquippedTitle` attribute.
+function ProgressionService.Client:EquipTitle(player: Player, titleId: any): { Success: boolean, Message: string }
+	if typeof(titleId) ~= "string" or (titleId ~= "" and Titles.Get(titleId) == nil) then
+		return { Success = false, Message = "Unknown title." }
+	end
+	local server = self.Server
+	if server._equipDebounces[player.UserId] then
+		return { Success = false, Message = "Please wait before switching again." }
+	end
+	server._equipDebounces[player.UserId] = true
+	task.delay(1, function()
+		server._equipDebounces[player.UserId] = nil
+	end)
+
+	local ok, proxy = Knit.GetService("DataService"):GetDataAsync(player):await()
+	if not ok or proxy == nil then
+		return { Success = false, Message = "Your titles are still loading." }
+	end
+	local data = server:_ensureTitles(player, proxy)
+	if titleId ~= "" and not Titles.CanEquip(data, titleId) then
+		return { Success = false, Message = "You haven't earned that title yet." }
+	end
+	if data.Equipped ~= titleId then
+		data.Equipped = titleId
+		proxy:SetValue({ "Titles" }, data)
+		setEquippedTitleAttribute(player, data)
+	end
+	local msg = if titleId == "" then "Title unequipped." else "Title equipped."
+	return { Success = true, Message = msg }
+end
+
 -- Adds XP, levels up while the curve allows. Safe to call at any time.
 -- Returns the XP actually granted (boost included).
 function ProgressionService:AddXp(player: Player, amount: number, skipShiftCount: boolean?): number
@@ -184,6 +293,7 @@ end
 
 function ProgressionService:_onLevelUp(player: Player, level: number, proxy: any)
 	local ok, err = pcall(function()
+		self:_ensureTitles(player, proxy)
 		local reward = Progression.COSMETIC_REWARDS[level]
 		if reward ~= nil then
 			proxy:SetValue({ "Inventory", "Items", reward.ItemType, HttpService:GenerateGUID(false) }, {
@@ -274,12 +384,14 @@ function ProgressionService:PlayerAdded(player: Player)
 		local state = { Level = proxy.Data.Level or 1, XP = proxy.Data.XP or 0 }
 		self._state[player] = state
 		setAttributes(player, state.Level)
+		self:_ensureTitles(player, proxy)
 	end)
 end
 
 function ProgressionService:PlayerRemoving(player: Player)
 	self._state[player] = nil
 	self._shiftXp[player] = nil
+	self._equipDebounces[player.UserId] = nil
 end
 
 return ProgressionService

@@ -43,17 +43,33 @@ type ActionRegistry = {
 	Load: (self: any, folder: Folder) -> (),
 }
 
+type SequenceState = {
+	PourDone: boolean?,
+	PourTier: string?,
+}
+
 type InteractionRunner = {
 	_debounces: { [Player]: boolean },
 	_registry: ActionRegistry,
 	_onFailure: (player: Player, reason: string) -> (),
+	_onSuccess: ((player: Player, recipeData: RecipeData) -> ())?,
+	_pourMoments: any?,
 	Run: (self: InteractionRunner, player: Player, recipeData: RecipeData, model: Model) -> (),
-	_runSequence: (self: InteractionRunner, player: Player, model: Model, actions: { ActionData }) -> InteractionResult,
+	_runSequence: (
+		self: InteractionRunner,
+		player: Player,
+		model: Model,
+		actions: { ActionData },
+		recipeData: RecipeData?,
+		state: SequenceState?
+	) -> InteractionResult,
 	_runSelectFrom: (
 		self: InteractionRunner,
 		player: Player,
 		model: Model,
-		actionData: ActionData
+		actionData: ActionData,
+		recipeData: RecipeData?,
+		state: SequenceState?
 	) -> InteractionResult,
 }
 
@@ -66,18 +82,32 @@ InteractionRunner.__index = InteractionRunner
 
 function InteractionRunner.new(
 	registry: ActionRegistry,
-	onFailure: (player: Player, reason: string) -> ()
+	onFailure: (player: Player, reason: string) -> (),
+	onSuccessOrPours: any?,
+	pourMoments: any?
 ): InteractionRunner
+	local onSuccess = if typeof(onSuccessOrPours) == "function" then onSuccessOrPours else nil
+	local pours = if typeof(onSuccessOrPours) == "table" and onSuccessOrPours.AwaitPour
+		then onSuccessOrPours
+		else pourMoments
 	return setmetatable({
 		_debounces = {},
 		_registry = registry,
 		_onFailure = onFailure,
+		_onSuccess = onSuccess,
+		_pourMoments = pours,
 	}, InteractionRunner) :: any
 end
 
 ---> Private
 
-function InteractionRunner:_runSelectFrom(player: Player, model: Model, actionData: ActionData): InteractionResult
+function InteractionRunner:_runSelectFrom(
+	player: Player,
+	model: Model,
+	actionData: ActionData,
+	recipeData: RecipeData?,
+	state: SequenceState?
+): InteractionResult
 	local promptConfig = actionData[2] :: {
 		Title: string?,
 		Text: string?,
@@ -152,23 +182,56 @@ function InteractionRunner:_runSelectFrom(player: Player, model: Model, actionDa
 		return { Success = false, Error = "SelectFrom: invalid choice" }
 	end
 
-	return self:_runSequence(player, model, branch)
+	return self:_runSequence(player, model, branch, recipeData, state)
 end
 
-function InteractionRunner:_runSequence(player: Player, model: Model, actions: { ActionData }): InteractionResult
+function InteractionRunner:_runSequence(
+	player: Player,
+	model: Model,
+	actions: { ActionData },
+	recipeData: RecipeData?,
+	state: SequenceState?
+): InteractionResult
+	local seqState = state or {}
+
 	for _, actionData in actions do
 		local actionName = actionData[1] :: string
 
 		if actionName == "SelectFrom" then
-			local result = self:_runSelectFrom(player, model, actionData)
+			local result = self:_runSelectFrom(player, model, actionData, recipeData, seqState)
 			if not result.Success then
 				return result
 			end
 			continue
 		end
 
-		local actionFn = self._registry.Get(actionName)
+		local isCheck = actionName == "ToolNameValidityCheck" or actionName == "ToolAttributeCheck"
+		local isEmpty = actionName == "EmptyTool"
 
+		-- If not a check or empty tool, and this recipe has a SkillMoment that hasn't run yet,
+		-- invoke the pour moment before final actions!
+		if not isCheck and not isEmpty and recipeData and recipeData.SkillMoment == true and not seqState.PourDone then
+			seqState.PourDone = true
+			if self._pourMoments and self._pourMoments.AwaitPour then
+				local tier = self._pourMoments:AwaitPour(player, recipeData, model)
+				if tier == nil then
+					return { Success = false, Error = "Pour cancelled" }
+				end
+				seqState.PourTier = tier
+			end
+		end
+
+		-- If a poor pour was recorded, do not overwrite Liquid.Transparency back to 0
+		if
+			seqState.PourTier == "Poor"
+			and actionName == "SetToolHoldingProperty"
+			and actionData[2] == "Liquid"
+			and actionData[3] == "Transparency"
+		then
+			continue
+		end
+
+		local actionFn = self._registry.Get(actionName)
 		if not actionFn then
 			warn(string.format("[InteractionRunner] Unknown action: '%s'", actionName))
 			return { Success = false, Error = "Unknown action: " .. actionName }
@@ -194,7 +257,7 @@ function InteractionRunner:Run(player: Player, recipeData: RecipeData, model: Mo
 
 	task.spawn(function()
 		-- An erroring action must not leave the player's debounce stuck forever.
-		local ok, result = pcall(self._runSequence, self, player, model, recipeData.Actions)
+		local ok, result = pcall(self._runSequence, self, player, model, recipeData.Actions, recipeData)
 		if not ok then
 			warn(string.format("[InteractionRunner] Interaction errored for %s: %s", player.Name, tostring(result)))
 			result = { Success = false, Error = "Interaction error" }
@@ -202,15 +265,30 @@ function InteractionRunner:Run(player: Player, recipeData: RecipeData, model: Mo
 
 		if not result.Success then
 			self._onFailure(player, result.Error :: string)
-		elseif recipeData.Sound then
-			local kitchenSounds = getKitchenSounds()
-			local soundTemplate = kitchenSounds and kitchenSounds:FindFirstChild(recipeData.Sound)
-			local primaryPart = model.PrimaryPart
-			if soundTemplate and primaryPart then
-				local sound = soundTemplate:Clone()
-				sound.Parent = primaryPart
-				sound:Play()
-				task.delay(soundTemplate.TimeLength, sound.Destroy, sound)
+		else
+			if recipeData.Sound then
+				local kitchenSounds = getKitchenSounds()
+				local soundTemplate = kitchenSounds and kitchenSounds:FindFirstChild(recipeData.Sound)
+				local primaryPart = model.PrimaryPart
+				if soundTemplate and primaryPart then
+					local sound = soundTemplate:Clone()
+					sound.Parent = primaryPart
+					sound:Play()
+					task.delay(soundTemplate.TimeLength, sound.Destroy, sound)
+				end
+			end
+			-- A successful station may invoke onSuccess if provided.
+			if self._onSuccess then
+				local okSuccess, errSuccess = pcall(self._onSuccess, player, recipeData)
+				if not okSuccess then
+					warn(
+						string.format(
+							"[InteractionRunner] onSuccess failed for %s: %s",
+							player.Name,
+							tostring(errSuccess)
+						)
+					)
+				end
 			end
 		end
 

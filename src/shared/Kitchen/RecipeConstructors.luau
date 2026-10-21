@@ -92,6 +92,7 @@ function RecipeConstructors.makeTeaVariant(name: string, color: Color3): { { any
 	return {
 		Sound = "Powder",
 		HoldDuration = 2,
+		SkillMoment = true, -- BIG-B7 pour meter
 		Actions = {
 			{ "ToolNameValidityCheck", { "#Water" } },
 			{ "SetToolHoldingProperty", "Liquid", "Color", color },
@@ -109,6 +110,7 @@ function RecipeConstructors.makeHotChocolateVariant(flavor: string, color: Color
 	return {
 		Sound = "Powder",
 		HoldDuration = 2,
+		SkillMoment = true, -- BIG-B7 pour meter
 		Actions = {
 			{ "ToolNameValidityCheck", { "=Mug + Steamed Milk" } },
 			{ "SetToolHoldingProperty", "Liquid", "Color", color },

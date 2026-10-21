@@ -30,6 +30,21 @@ local UiSfx = require(UI.Utility.UiSfx)
 
 local c = React.createElement
 
+local MAX_NAME_CHARS = 8
+
+-- D8: buyer name unchanged when 8 chars or fewer, else first 8 chars + "..".
+local function shortName(name: string): string
+	local len = utf8.len(name)
+	if len ~= nil and len <= MAX_NAME_CHARS then
+		return name
+	end
+	local cut = utf8.offset(name, MAX_NAME_CHARS + 1)
+	if cut == nil then
+		return name
+	end
+	return string.sub(name, 1, cut - 1) .. ".."
+end
+
 ---> Component
 
 return function()
@@ -38,6 +53,7 @@ return function()
 	local clockedIn, setClockedIn = React.useState(true)
 	local endsAt, setEndsAt = React.useState(nil)
 	local party, setParty = React.useState(false)
+	local buyer, setBuyer = React.useState(nil)
 	local _tick, setTick = React.useState(0)
 
 	if RunService:IsRunning() then
@@ -56,6 +72,8 @@ return function()
 				local ends = workspace:GetAttribute("RushEndsAt")
 				setEndsAt(if typeof(ends) == "number" then ends else nil)
 				setParty(workspace:GetAttribute("BobaParty") == true)
+				local buyerNow = workspace:GetAttribute("BobaPartyBuyer")
+				setBuyer(if typeof(buyerNow) == "string" then buyerNow else nil)
 				setClockedIn(player:GetAttribute("ClockedIn") ~= false)
 			end
 			refresh()
@@ -64,6 +82,7 @@ return function()
 				workspace:GetAttributeChangedSignal("RushHour"):Connect(refresh),
 				workspace:GetAttributeChangedSignal("RushEndsAt"):Connect(refresh),
 				workspace:GetAttributeChangedSignal("BobaParty"):Connect(refresh),
+				workspace:GetAttributeChangedSignal("BobaPartyBuyer"):Connect(refresh),
 				player:GetAttributeChangedSignal("ClockedIn"):Connect(refresh),
 			}
 			return function()
@@ -107,7 +126,13 @@ return function()
 	end
 	local bannerText = "Cafe Rating"
 	if rush then
-		bannerText = if party then "Boba Party!" else "Rush Hour!"
+		if party and typeof(buyer) == "string" then
+			bannerText = `{shortName(buyer)}'s Party!`
+		elseif party then
+			bannerText = "Boba Party!"
+		else
+			bannerText = "Rush Hour!"
+		end
 		if remaining > 0 then
 			bannerText ..= string.format(" %d:%02d", math.floor(remaining / 60), remaining % 60)
 		end
