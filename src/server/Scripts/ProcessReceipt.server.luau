@@ -3,6 +3,7 @@ local DataStoreService = game:GetService("DataStoreService")
 local MarketplaceService = game:GetService("MarketplaceService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
+local ServerScriptService = game:GetService("ServerScriptService")
 
 ---> networking
 -- The Networking folder is not guaranteed to exist in the place, so find or create it (and the remote) in code.
@@ -83,6 +84,17 @@ local ProductActionMap = {
 	},
 }
 
+-- Donate! board products (IDs in Shared.Configuration.ProductIds). The optional third element runs once, only
+-- after the receipt is answered PurchaseGranted (Top Donators credit).
+local DonationReceipts = require(ServerScriptService:WaitForChild("Server").Modules.DonationReceipts)
+for productId, donationAction in DonationReceipts.BuildActions() do
+	if ProductActionMap[productId] then
+		warn(`[ProcessReceipt] Donation ProductId {productId} collides with an existing product; skipped`)
+		continue
+	end
+	ProductActionMap[productId] = { donationAction.Name, donationAction.Grant, donationAction.OnGranted }
+end
+
 if BOBA_PARTY_PRODUCT_ID then
 	ProductActionMap[BOBA_PARTY_PRODUCT_ID] = {
 		"Boba Party",
@@ -99,6 +111,9 @@ end
 
 -- PurchaseIds currently being handled; guards against a re-entrant call for the same receipt while one yields.
 local inFlight: { [string]: boolean } = {}
+-- PurchaseIds granted on this server whose post-grant hook has not run yet (the save was not confirmed). The hook
+-- runs on the first PurchaseGranted answer for it, so it runs at most once per grant.
+local pendingOnGranted: { [string]: (Player, { [string]: any }) -> () } = {}
 
 --- Records `purchaseId` in the profile and prunes the oldest entries beyond MAX_PROCESSED_RECEIPTS.
 --- Does not yield, so the grant and the record are applied back to back with the check in processReceipt.
@@ -171,6 +186,16 @@ local function handleReceipt(receiptInfo: { [string]: any }): Enum.ProductPurcha
 
 	local function finish(decision: Enum.ProductPurchaseDecision)
 		inFlight[purchaseId] = nil
+		local onGranted = pendingOnGranted[purchaseId]
+		if onGranted and decision == Enum.ProductPurchaseDecision.PurchaseGranted then
+			pendingOnGranted[purchaseId] = nil
+			task.spawn(function()
+				local ok, err = pcall(onGranted, player, receiptInfo)
+				if not ok then
+					warn(`[ProcessReceipt] Post-grant hook failed for PurchaseId {purchaseId}: {err}`)
+				end
+			end)
+		end
 		return decision
 	end
 
@@ -215,6 +240,10 @@ local function handleReceipt(receiptInfo: { [string]: any }): Enum.ProductPurcha
 	if res ~= true then
 		warn("Purchase action for product", receiptInfo.ProductId, "was not granted:", res, reason)
 		return finish(Enum.ProductPurchaseDecision.NotProcessedYet)
+	end
+
+	if action[3] then
+		pendingOnGranted[purchaseId] = action[3]
 	end
 
 	-- The grant is already applied to the profile; record it before answering so a retry cannot grant twice.

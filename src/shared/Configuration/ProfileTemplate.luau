@@ -115,6 +115,8 @@ export type ProfileTemplate = {
 	BestShiftPay: number,
 	WeeklyQuests: WeeklyQuestData,
 	InvitedFriends: { [string]: boolean },
+	-- Lifetime Robux donated through the Donate! board (sum of granted donation receipts).
+	RobuxDonated: number,
 }
 
 return {
@@ -185,4 +187,5 @@ return {
 		ActiveQuests = {},
 	},
 	InvitedFriends = {},
+	RobuxDonated = 0,
 }

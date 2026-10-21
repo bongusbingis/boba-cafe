@@ -507,6 +507,24 @@ function LeaderboardService:IncrementStat(player: Player, boardType: string, del
 	userBoards[boardType] = (userBoards[boardType] or 0) + delta
 end
 
+--- Credits a granted donation to Top Donators. Unlike IncrementStat this records even while the board is
+--- Hidden (DEC-035 Q4), so the monthly store is already populated if Jack unhides it; hidden boards are still
+--- never queried or displayed. Called by DonationReceipts only after PurchaseGranted.
+function LeaderboardService:CreditDonation(player: Player, robux: number)
+	if not player or typeof(player.UserId) ~= "number" or player.UserId <= 0 then
+		return
+	end
+	if typeof(robux) ~= "number" or robux <= 0 then
+		return
+	end
+	local userBoards = self._pending[player.UserId]
+	if not userBoards then
+		userBoards = {}
+		self._pending[player.UserId] = userBoards
+	end
+	userBoards.TopDonators = (userBoards.TopDonators or 0) + math.floor(robux)
+end
+
 --- Flushes all batched increments now. Used on shutdown and by tests.
 function LeaderboardService:FlushAll()
 	self:_flushPending(nil)

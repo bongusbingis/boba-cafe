@@ -10,21 +10,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 
 local Knit = require(Packages.Knit)
 local Gamepasses = require(Shared.Configuration.Gamepasses)
-
-local DONATION_PRODUCTS = {
-	928273533, -- 5 Robux
-	55777641, -- 10 Robux
-	680670445, -- 20 Robux
-	680670692, -- 50 Robux
-	680670865, -- 100 Robux
-	680671117, -- 500 Robux
-	680671325, -- 1000 Robux
-	680671544, -- 5000 Robux
-	680671832, -- 10000 Robux
-	928275862, -- 50000 Robux
-	928276567, -- 100000 Robux
-	1168137385, -- 500000 Robux
-}
+local ProductIds = require(Shared.Configuration.ProductIds)
 
 local GamepassBoardController = Knit.CreateController({
 	Name = "GamepassBoardController",
@@ -182,7 +168,8 @@ local function setupDonationBoard(board: Model, templatesFolder: Instance)
 
 	local uiList = scrollingFrame:FindFirstChildWhichIsA("UIListLayout")
 
-	for _, productId in DONATION_PRODUCTS do
+	for _, donation in ProductIds.Donations do
+		local productId = donation.ProductId
 		local btn = templateBtn:Clone()
 		btn.Name = "Product_" .. tostring(productId)
 		btn.Visible = true
