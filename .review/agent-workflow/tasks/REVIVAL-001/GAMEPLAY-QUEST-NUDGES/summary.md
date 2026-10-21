@@ -1,0 +1,2 @@
+RESULT: PASS (runtime UNVERIFIED)
+QuestService:AdvanceQuest: collects newlyCompleted, task.defer+pcall DialogService:Notify "Quest complete: <title>! Open Quests to claim." (nil-safe via _getService). QuestCard.handleClaim: captures entry before claim, toasts "Quest claimed! +N Boba Bucks · +N XP" (zero parts omitted) via DialogController:Toast in pcall; deps now {isActing, quests}. Gate PASS, rojo ok.

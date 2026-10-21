@@ -413,6 +413,7 @@ local function QuestCardBody(props: {
 			return
 		end
 		setIsActing(true)
+		local claimedEntry = quests[index]
 		task.spawn(function()
 			local ok, success, err = pcall(function()
 				local questService = Knit.GetService("QuestService")
@@ -426,9 +427,27 @@ local function QuestCardBody(props: {
 			setIsActing(false)
 			if not ok or success == false then
 				warn("[QuestCard] Claim failed:", err)
+			elseif claimedEntry then
+				pcall(function()
+					local text = "Quest claimed!"
+					local bucks = claimedEntry.RewardBobaBucks
+					local xp = claimedEntry.RewardXP
+					local hasBucks = typeof(bucks) == "number" and bucks > 0
+					local hasXp = typeof(xp) == "number" and xp > 0
+					if hasBucks then
+						text ..= " +" .. bucks .. " Boba Bucks"
+					end
+					if hasXp then
+						text ..= (if hasBucks then " · +" else " +") .. xp .. " XP"
+					end
+					local dialogController = Knit.GetController("DialogController")
+					if dialogController and dialogController.Toast then
+						dialogController:Toast(text)
+					end
+				end)
 			end
 		end)
-	end, { isActing })
+	end, { isActing, quests })
 
 	local handleReroll = React.useCallback(function(index: number)
 		if isActing or not RunService:IsRunning() then

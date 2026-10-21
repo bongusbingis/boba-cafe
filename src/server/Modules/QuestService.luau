@@ -126,12 +126,14 @@ function QuestService:AdvanceQuest(player: Player, questType: string, amount: nu
 
 	local activeQuests = self:_ensureDailyQuests(player, playerData)
 	local changed = false
+	local newlyCompleted = {}
 
 	for _, quest in activeQuests do
 		if quest.Type == questType and not quest.Completed then
 			quest.Progress = math.min(quest.Target, quest.Progress + actualAmount)
 			if quest.Progress >= quest.Target then
 				quest.Completed = true
+				table.insert(newlyCompleted, quest)
 			end
 			changed = true
 		end
@@ -141,6 +143,27 @@ function QuestService:AdvanceQuest(player: Player, questType: string, amount: nu
 		playerData:SetValue({ "Quests", "ActiveQuests" }, activeQuests)
 		pcall(function()
 			self.Client.QuestsUpdated:Fire(player, activeQuests)
+		end)
+	end
+
+	if #newlyCompleted > 0 then
+		-- deferred so no caller (serve path) ever waits on the toast
+		task.defer(function()
+			pcall(function()
+				local dialog = self:_getService("DialogService")
+				if dialog then
+					for _, entry in newlyCompleted do
+						dialog:Notify(
+							player,
+							{
+								Text = "Quest complete: "
+									.. QuestConfig.GetQuestTitle(entry)
+									.. "! Open Quests to claim.",
+							} :: any
+						)
+					end
+				end
+			end)
 		end)
 	end
 
