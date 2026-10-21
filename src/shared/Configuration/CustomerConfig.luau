@@ -23,7 +23,7 @@ export type SizeWeight = { Size: string, Weight: number }
 local Progression = require(script.Parent.Progression)
 
 local CustomerConfig = {
-	ASSIGNMENT_MODE = "Dedicated", -- "Dedicated": barista takes order at register, ticket assigned to them
+	ASSIGNMENT_MODE = "Dedicated", -- the only mode: the barista who takes the order at the register serves it (auto-assign removed, TAKEOVER-FIX 2)
 
 	---> pacing (design 4.2)
 	-- NPCs present = min(SERVER_CAP, slots + line), where
@@ -50,6 +50,12 @@ local CustomerConfig = {
 	PATIENCE_RAMP_FIRST_SHIFT = 3, -- PROPOSED (REVIVAL-001 C6, DEC-053): first session shift that is trimmed
 	PATIENCE_RAMP_TRIM_PER_SHIFT = 0.05, -- PROPOSED (REVIVAL-001 C6, DEC-053): extra trim per shift from the first trimmed one
 	PATIENCE_RAMP_MAX_TRIM = 0.10, -- PROPOSED (REVIVAL-001 C6, DEC-053): the trim never exceeds this
+	-- Register patience (TAKEOVER-FIX 2): an NPC at the register whose order nobody takes walks out
+	-- unhappy (a walkout: rating drops). Same seconds and ramp as pickup patience, times this mult.
+	REGISTER_PATIENCE_MULT = 1, -- DEC-058 agent-set, Jack to tune
+	REGISTER_TAKE_ORDER_GRACE_SECONDS = 30, -- DEC-058 agent-set, Jack to tune: "Take Order" leaves at least this long to enter it
+	-- An NPC still in line after this long gives up quietly (no walkout, no rating change): clears a Rush backlog.
+	QUEUE_PATIENCE_SECONDS = 120, -- DEC-058 agent-set, Jack to tune
 
 	---> order pool: the M1 slice (design 4.4 and 7)
 	-- PENDING JACK Q3: whether boba keeps 3 sizes. If not, this is a config-only change.

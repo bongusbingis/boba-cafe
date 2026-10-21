@@ -5,10 +5,13 @@
 	Entry -> Path -> Queue -> Counter -> Exit. CustomerService owns the line and the
 	counter spots and hands them in through the Context table.
 
-	Lifecycle (State attribute): Walking -> Queued -> Walking -> AtCounter -> Leaving.
-	Patience starts at assignment and ticks down through the
-	`PatienceEnd` (server time) and `PatienceTotal` attributes. It pauses while nobody
-	is clocked in. When it runs out the NPC just leaves: no penalty, no payout.
+	Lifecycle (State attribute): Walking -> Queued -> Walking -> AtCounter -> Walking
+	-> AtPickup -> Leaving.
+	Three clocks, all paused while nobody is clocked in (TAKEOVER-FIX 2):
+	- line: QUEUE_PATIENCE_SECONDS in the queue, then a quiet "LineGaveUp" leave;
+	- register: the order's patience (same ramp) times REGISTER_PATIENCE_MULT at the
+	  counter, then a "PatienceOut" walkout; "Take Order" grants a grace floor;
+	- pickup: `PatienceEnd` (server time) / `PatienceTotal`, then "PatienceOut".
 
 	Assignment, the Serve prompt and payout live here too (REVIVAL-001 M1.4e).
 --]]
@@ -57,6 +60,7 @@ export type Context = {
 	ClaimPickupSpot: (npc: Npc) -> BasePart?, -- claim an open spot at the pickup counter
 	ReleasePickupSpot: (npc: Npc) -> (),
 	IsPaused: () -> boolean, -- true while nobody is clocked in
+	RegisterPatience: (npc: Npc) -> number, -- seconds the NPC waits at the register for its order to be taken
 	OnLeft: (npc: Npc, reason: string) -> (), -- the NPC stopped waiting (once)
 	OnAtCounter: (npc: Npc) -> (), -- the NPC reached its counter spot (greeting prompt)
 	OnAtPickup: (npc: Npc) -> (), -- the NPC reached its pickup spot (serve prompt)
@@ -99,6 +103,7 @@ type NpcFields = {
 	_bar: Frame,
 	_bubbleUI: BubbleUI?,
 	_patienceEnd: number,
+	_registerEnd: number, -- os.clock() deadline at the register (0 = not at the register)
 	_fallbacks: number, -- PivotTo fallbacks in a row
 	_destroyed: boolean,
 	_tracks: { [string]: AnimationTrack },
@@ -461,6 +466,7 @@ function Npc.new(
 		_bar = bubble.Fill,
 		_bubbleUI = bubble,
 		_patienceEnd = 0,
+		_registerEnd = 0,
 		_fallbacks = 0,
 		_destroyed = false,
 		_tracks = {},
@@ -569,9 +575,17 @@ function Npc.ShowGreetingBubble(self: Npc)
 		return
 	end
 	bubble.Chip.Visible = false
-	bubble.Track.Visible = false
+	bubble.Track.Visible = true -- register patience shows on the same bar (TAKEOVER-FIX 2)
 	bubble.Label.Text = "Hi, can I order?"
 	self:_setPatienceBar(1)
+end
+
+-- "Take Order": the register clock never ends sooner than `seconds` from now.
+function Npc.ExtendRegisterPatience(self: Npc, seconds: number)
+	if self.State ~= "AtCounter" or self._registerEnd <= 0 then
+		return
+	end
+	self._registerEnd = math.max(self._registerEnd, os.clock() + seconds)
 end
 
 function Npc.ShowOrderBubble(self: Npc)
@@ -806,10 +820,21 @@ function Npc._run(self: Npc)
 	self:_setState("Queued")
 	local spot: number? = nil
 	local standingAt = 0
-	while spot == nil and not self._destroyed do
+	local lineLeft = CustomerConfig.QUEUE_PATIENCE_SECONDS
+	local lineLast = os.clock()
+	while spot == nil and not self._destroyed and not self.Left do
 		local qIndex = ctx.QueueIndex(self)
 		spot = ctx.TryTakeCounter(self)
+		local lineNow = os.clock()
+		if not ctx.IsPaused() then
+			lineLeft -= lineNow - lineLast
+		end
+		lineLast = lineNow
 		if spot ~= nil then
+			break
+		elseif lineLeft <= 0 then
+			-- Gave up in line (TAKEOVER-FIX 2): quiet, no walkout. Clears a Rush backlog.
+			self:Leave("LineGaveUp")
 			break
 		elseif standingAt ~= qIndex then
 			if qIndex <= #nodes.Queue then
@@ -832,6 +857,9 @@ function Npc._run(self: Npc)
 		end
 	end
 	if spot == nil then
+		if self.Left and not self._destroyed then
+			self:_walkTo(nodes.Exit)
+		end
 		return
 	end
 
@@ -851,12 +879,34 @@ function Npc._run(self: Npc)
 		warn(`[CustomerService] NPC OnAtCounter failed: {err}`)
 	end
 
-	-- Patience timer is completely paused/disabled at the register (Patience bar stays full/hidden).
-	-- The NPC waits at the counter until an order is taken & submitted, moving it to pickup (or destroyed/left).
+	-- Register patience (TAKEOVER-FIX 2): the NPC waits for its order to be taken and
+	-- submitted (which moves it to pickup); if nobody does, it walks out unhappy.
+	local registerTotal = math.max(1, ctx.RegisterPatience(self))
+	self._registerEnd = os.clock() + registerTotal
+	local registerLast = os.clock()
 	while self.State == "AtCounter" and not self._destroyed and not self.Left do
 		task.wait(WAIT_POLL_SECONDS)
+		local now = os.clock()
+		if ctx.IsPaused() then
+			self._registerEnd += now - registerLast
+		end
+		registerLast = now
+		if self.State ~= "AtCounter" or self.Left then
+			break
+		end
+		local remaining = self._registerEnd - now
+		self:_setPatienceBar(remaining / registerTotal)
+		if remaining <= 0 then
+			self:Leave("PatienceOut")
+			break
+		end
 	end
-	if self._destroyed or self.Left then
+	self._registerEnd = 0
+	if self._destroyed then
+		return
+	end
+	if self.Left then
+		self:_walkTo(nodes.Exit)
 		return
 	end
 

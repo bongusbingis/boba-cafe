@@ -19,7 +19,10 @@
 	API for the later serve and assignment work:
 	  CustomerService:GetWaitingCustomers()  NPCs standing at a counter spot, by spot
 	  CustomerService.CustomerLeft           GoodSignal (npc, reason); once per NPC when
-	                                         it stops waiting: "PatienceOut" or "Despawned"
+	                                         it stops waiting: "PatienceOut", "LineGaveUp",
+	                                         "Served" or "Despawned"
+	  CustomerService.CustomerResolved       GoodSignal (player?, result). player is nil for
+	                                         a walkout nobody held (register or orphan, TAKEOVER-FIX 2)
 	  CustomerService.Enabled                false when the world contract is missing
 
 	NPC fields other code may read: Model, Order, Spec, State, PatienceTotal,
@@ -364,6 +367,9 @@ function CustomerService:_makeContext(nodes: Npc.Nodes, folder: Folder): Npc.Con
 		IsPaused = function()
 			return self._baristas == 0
 		end,
+		RegisterPatience = function(npc)
+			return self:_registerPatience(npc)
+		end,
 		OnLeft = function(npc, reason)
 			self.CustomerLeft:Fire(npc, reason)
 		end,
@@ -649,9 +655,6 @@ function CustomerService:_pacingLoop()
 			for _ = 1, burst do
 				self:_spawnIfNeeded()
 			end
-			if CustomerConfig.ASSIGNMENT_MODE ~= "Dedicated" then
-				self:_assignAll()
-			end
 		end)
 		if not ok then
 			warnThrottled("pacing", `[CustomerService] Pacing step failed: {err}`)
@@ -743,7 +746,7 @@ function CustomerService:_hasFreeSlot(player: Player): boolean
 	return held < slots
 end
 
--- The ticket table (the M1.4f contract, copied exactly; Slot is added by _assign).
+-- The ticket table (the M1.4f contract, copied exactly; Slot is added by _issueTicket).
 function CustomerService:_makeTicket(npc: Npc.Npc): { [string]: any }
 	local customInfo = table.clone(npc.Order.CustomInfo)
 	local items = {}
@@ -784,63 +787,21 @@ function CustomerService:_sessionShiftOf(player: Player): number
 	return (self._sessionShifts[player] or 0) + 1
 end
 
--- Assigns one waiting NPC to a free barista (design 4.3-4.5). No-ops when the
--- NPC is gone or taken, while a player order is pending, or when nobody
--- qualifies: the NPC keeps waiting and the next pacing tick tries again.
-function CustomerService:_assign(npc: Npc.Npc)
-	if self._context == nil or npc.Left or npc.State ~= "AtCounter" or npc.AssignedUserId ~= nil then
-		return
-	end
-	if self._order:GetPendingCount() > 0 then
-		return -- real-player orders go first (design 4.9)
-	end
-	local candidates: { Player } = {}
+-- Register patience (TAKEOVER-FIX 2): the order's own patience with the same session ramp,
+-- using the most-trimmed clocked-in barista, times REGISTER_PATIENCE_MULT. No yield.
+function CustomerService:_registerPatience(npc: Npc.Npc): number
+	local shift = 1
 	for _, player in Players:GetPlayers() do
-		if self._shift:IsClockedIn(player) and self:_hasFreeSlot(player) and not self._order:HasActiveOrder(player) then
-			table.insert(candidates, player)
+		if self._shift:IsClockedIn(player) then
+			shift = math.max(shift, self:_sessionShiftOf(player))
 		end
 	end
-	local player = Rules.PickAssignee(candidates, self._idleSince)
-	if player == nil then
-		return
-	end
+	local seconds = Rules.VariantPatience(Rules.PatienceSeconds(npc.Orders, nil, shift), npc.Variant)
+	return seconds * CustomerConfig.REGISTER_PATIENCE_MULT
+end
 
-	local order, scripted = self:_pickOrderFor(player)
-	local spec, reason = OrderSpec.FromOrderItem(order)
-	if spec == nil then
-		warnOnce("order", `[CustomerService] Order rejected by OrderSpec ({reason}): {order.Category}/{order.Item}`)
-		return
-	end
-
-	-- The ticket Id is the model name, unique per NPC.
-	self._npcSeq += 1
-	if npc.Model.Name == "Customer" then
-		npc.Model.Name = `Customer_{self._npcSeq}`
-	end
-	local orders: { Rules.OrderItem } = { order }
-	local specs: { OrderSpec.OrderSpec } = { spec }
-	if scripted then
-		npc:ClearVariant() -- first-session NPCs are always normal
-	else
-		for _ = 2, Rules.ItemCountForLevel(self:_levelOf(player)) do
-			local extra = Rules.PickOrder(nil, nil, self:_levelOf(player))
-			local extraSpec = OrderSpec.FromOrderItem(extra)
-			if extraSpec ~= nil then
-				table.insert(orders, extra)
-				table.insert(specs, extraSpec)
-			end
-		end
-	end
-	npc:SetOrders(orders, specs)
-	npc:SetAssignment(
-		player.UserId,
-		Rules.VariantPatience(
-			Rules.PatienceSeconds(orders, nil, if scripted then nil else self:_sessionShiftOf(player)),
-			npc.Variant
-		),
-		scripted
-	)
-	self._lastOrder[player] = order
+-- Puts a ticket for `npc` in the player's first free slot and tells their client.
+function CustomerService:_issueTicket(player: Player, npc: Npc.Npc)
 	local held = self._tickets[player]
 	if held == nil then
 		held = {}
@@ -854,32 +815,36 @@ function CustomerService:_assign(npc: Npc.Npc)
 	ticket.Slot = slot
 	held[slot] = ticket
 	self._assignee[npc] = player
-	self:_ensureServePrompt(npc)
 	self:_fireTicket(player, ticket, slot)
 end
 
--- Retries every unassigned NPC at the counter (the 1 s pacing tick).
-function CustomerService:_assignAll()
-	if self._context == nil then
+-- The holder left or clocked out: hands an accepted order to the longest-idle clocked-in
+-- barista with a free slot. Nobody free: it stays unassigned (any barista can Rescue it
+-- below RESCUE_FRACTION) and walks out when its pickup patience runs out.
+function CustomerService:_handOff(npc: Npc.Npc, exclude: Player)
+	if self._context == nil or npc.Left or npc.State == "AtCounter" then
 		return
 	end
-	for _, npc in self:GetWaitingCustomers() do
-		if npc.AssignedUserId == nil then
-			self:_assign(npc)
+	local candidates: { Player } = {}
+	for _, player in Players:GetPlayers() do
+		if player ~= exclude and self._shift:IsClockedIn(player) and self:_hasFreeSlot(player) then
+			table.insert(candidates, player)
 		end
 	end
+	local player = Rules.PickAssignee(candidates, self._idleSince)
+	if player == nil then
+		return
+	end
+	npc:Reassign(player.UserId)
+	self:_issueTicket(player, npc)
 end
 
--- The first NPC on a fresh profile assigns without waiting for the next tick.
+-- Dedicated is the only mode (TAKEOVER-FIX 2): the barista who takes the order serves it.
 function CustomerService:_onAtCounter(npc: Npc.Npc)
 	if not self.Enabled then
 		return
 	end
-	if CustomerConfig.ASSIGNMENT_MODE == "Dedicated" then
-		self:_ensureNpcPrompt(npc, "Take Order", "Customer")
-	else
-		self:_assign(npc)
-	end
+	self:_ensureNpcPrompt(npc, "Take Order", "Customer")
 end
 
 function CustomerService:_onAtPickup(npc: Npc.Npc)
@@ -979,6 +944,7 @@ function CustomerService:_onTakeOrderTriggered(npc: Npc.Npc, player: Player)
 	end
 	npc:SetOrders(orders, specs)
 	self._lastOrder[player] = order
+	npc:ExtendRegisterPatience(CustomerConfig.REGISTER_TAKE_ORDER_GRACE_SECONDS)
 
 	local requestedText = Rules.FormatOrderForNotepad(orders, specs)
 	npc.RequestedDrinkText = requestedText
@@ -1032,21 +998,7 @@ function CustomerService:_submitNpcOrder(
 		npc.Variant
 	)
 	npc:SetAssignment(player.UserId, patienceSeconds, scripted)
-
-	local held = self._tickets[player]
-	if held == nil then
-		held = {}
-		self._tickets[player] = held
-	end
-	local slot = 1
-	while held[slot] ~= nil do
-		slot += 1
-	end
-	local ticket = self:_makeTicket(npc)
-	ticket.Slot = slot
-	held[slot] = ticket
-	self._assignee[npc] = player
-	self:_fireTicket(player, ticket, slot)
+	self:_issueTicket(player, npc)
 
 	-- Free counter spot so next in queue can step up
 	self._context.ReleaseCounter(npc)
@@ -1312,23 +1264,20 @@ function CustomerService:_clearTicket(npc: Npc.Npc)
 	end
 end
 
--- The holder clocked out or left: frees their slot and hands the NPC to the
--- next free barista. Patience keeps running (PatienceEnd unchanged).
+-- The holder clocked out or left: frees every slot they held and hands each NPC to
+-- the next free barista. Patience keeps running (PatienceEnd unchanged).
 function CustomerService:_releaseTicket(player: Player)
-	local npc: Npc.Npc? = nil
+	self._activeOrderingNpc[player] = nil
+	local held: { Npc.Npc } = {}
 	for waiting, holder in self._assignee do
 		if holder == player then
-			npc = waiting
-			break
+			table.insert(held, waiting)
 		end
 	end
-	if npc == nil then
-		return
-	end
-	npc:ClearAssignment()
-	self:_clearTicket(npc)
-	if not npc.Left and npc.State == "AtCounter" then
-		self:_assign(npc)
+	for _, npc in held do
+		npc:ClearAssignment()
+		self:_clearTicket(npc)
+		self:_handOff(npc, player)
 	end
 end
 
@@ -1343,9 +1292,18 @@ function CustomerService:_onCustomerLeft(npc: Npc.Npc, reason: string)
 		return
 	end
 	self:RecordTeamServe(nil) -- any walkout breaks the server-wide chain, assigned or not
+	for taker, ordering in self._activeOrderingNpc do
+		if ordering == npc then
+			self._activeOrderingNpc[taker] = nil
+		end
+	end
 	local holder = self._assignee[npc]
 	self:_clearTicket(npc)
 	if holder == nil then
+		-- Nobody held it (register walkout or orphan): the cafe rating still drops (TAKEOVER-FIX 2).
+		pcall(function()
+			self.CustomerResolved:Fire(nil, { Kind = "Walkout", Pay = 0, Fast = false, Combo = 0 })
+		end)
 		return
 	end
 	self._combo[holder] = 0
