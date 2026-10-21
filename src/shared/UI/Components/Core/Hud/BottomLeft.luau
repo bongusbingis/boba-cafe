@@ -10,6 +10,7 @@
 local MarketplaceService = game:GetService("MarketplaceService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
 local Players = game:GetService("Players")
 
 local Packages = ReplicatedStorage:WaitForChild("Packages")
@@ -19,6 +20,7 @@ local UI = Shared:WaitForChild("UI")
 ---> dependencies
 local Knit = require(Packages.Knit)
 local React = require(Packages.React)
+local ReactSpring = require(Packages.ReactSpring)
 local RankUtil = require(Shared.Utility.RankUtil)
 
 ---> constants
@@ -26,6 +28,10 @@ local SKIP_HATCH_PRODUCT_ID = 1143554452
 local HATCH_DURATION_SECONDS = 15 * 60
 local BUTTON_SIZE = UDim2.fromScale(1, 1)
 local CLOCKED_IN_ATTRIBUTE = "ClockedIn" -- owned by the server's ShiftService
+local COUNT_TWEEN = TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+local POP_SCALE = 1.07
+local CLOCK_OUT_TITLE = "Clock Out?"
+local CLOCK_OUT_TEXT = "Your shift progress resets."
 
 ---> styles
 local Styles = require(UI.Styles)
@@ -65,6 +71,36 @@ return function(props: {
 		Points = 0,
 	})
 
+	local bucksPop, bucksPopApi = ReactSpring.useSpring(function()
+		return { Scale = 1, config = Styles.SPRING_STANDARD }
+	end)
+	local shownBucks, setShownBucks = React.useState(0)
+	local prevBucksRef = React.useRef(nil :: number?)
+	React.useEffect(function()
+		local target = currency.BobaBucks
+		local prev = prevBucksRef.current
+		prevBucksRef.current = target
+		if not RunService:IsRunning() then
+			setShownBucks(target)
+			return
+		end
+		if prev ~= nil and target > prev then
+			bucksPopApi.start({ from = { Scale = POP_SCALE }, to = { Scale = 1 }, config = Styles.SPRING_STANDARD })
+		end
+		local counter = Instance.new("NumberValue")
+		counter.Value = prev or 0
+		local changed = counter.Changed:Connect(function(v)
+			setShownBucks(math.floor(v + 0.5))
+		end)
+		local tween = TweenService:Create(counter, COUNT_TWEEN, { Value = target })
+		tween:Play()
+		return function()
+			tween:Cancel()
+			changed:Disconnect()
+			counter:Destroy()
+		end
+	end, { currency.BobaBucks })
+
 	local capsuleHatching, setCapsuleHatching = React.useState(nil)
 	local hatchClockText, setHatchClockText = React.useState("00:00")
 	local requestedReadyHatchRef = React.useRef(false)
@@ -99,13 +135,7 @@ return function(props: {
 		end, {})
 	end
 
-	local function toggleClockedIn()
-		local wantClockedIn = not clockedIn
-		if not RunService:IsRunning() then
-			setClockedIn(wantClockedIn) -- story preview
-			return
-		end
-
+	local function sendClockedIn(wantClockedIn: boolean)
 		-- The server sets the attribute; the listener below updates the button.
 		task.spawn(function()
 			local ok, err = pcall(function()
@@ -115,6 +145,31 @@ return function(props: {
 				warn("[BottomLeft] Clock in/out request failed:", err)
 			end
 		end)
+	end
+
+	local function toggleClockedIn()
+		local wantClockedIn = not clockedIn
+		if not RunService:IsRunning() then
+			setClockedIn(wantClockedIn) -- story preview
+			return
+		end
+		if clockedIn then
+			local prompt = Knit.GetController("DialogController").new("ButtonPrompt", {
+				Title = CLOCK_OUT_TITLE,
+				Text = CLOCK_OUT_TEXT,
+				Buttons = {
+					{ Text = "Clock Out", Color = Styles.GOLD_MID },
+					{ Text = "Cancel", Color = Styles.RED },
+				},
+			})
+			prompt:Fire():andThen(function(choice)
+				if choice == "Clock Out" then
+					sendClockedIn(false)
+				end
+			end)
+			return
+		end
+		sendClockedIn(true)
 	end
 
 	React.useEffect(function()
@@ -365,28 +420,23 @@ return function(props: {
 					LayoutOrder = 2,
 				}),
 
-				Points = c(NormalButton, {
-					PlusButton = true,
-					Icon = "rbxassetid://13391365805",
-					Size = BUTTON_SIZE,
-					Color = Styles.CORAL,
-					Text = currency.Points,
-					OnClick = function()
-						props.SetCurrentPage(UI.Pages.Shop, "Currency")
-					end,
-					LayoutOrder = 3,
-				}),
-
-				Bucks = c(NormalButton, {
-					PlusButton = true,
-					Icon = "rbxassetid://13382286492",
-					Size = BUTTON_SIZE,
-					Color = Styles.GREEN_LIGHT,
-					Text = currency.BobaBucks,
-					OnClick = function()
-						props.SetCurrentPage(UI.Pages.Shop, "Currency")
-					end,
-					LayoutOrder = 4,
+				BucksWrap = c(Pane, {
+					ClassName = "Frame",
+					Scale = bucksPop.Scale,
+					AspectRatio = 7, -- NormalButton wrapper ratio
+					Native = { BackgroundTransparency = 1, Size = BUTTON_SIZE, LayoutOrder = 4 },
+				}, {
+					Bucks = c(NormalButton, {
+						PlusButton = true,
+						Icon = "rbxassetid://13382286492",
+						Position = UDim2.fromScale(0.5, 0.5), -- wrapper is anchored (0.5,0.5)
+						Size = UDim2.fromScale(1, 1),
+						Color = Styles.GREEN_LIGHT,
+						Text = shownBucks,
+						OnClick = function()
+							props.SetCurrentPage(UI.Pages.Shop, "Currency")
+						end,
+					}),
 				}),
 			}),
 		}),
