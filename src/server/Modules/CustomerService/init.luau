@@ -1191,10 +1191,21 @@ function CustomerService:_onServeTriggered(npc: Npc.Npc, player: Player)
 	pcall(function()
 		Knit.GetService("LeaderboardService"):IncrementStat(player, "OrdersServed", 1)
 	end)
+	-- TAKEOVER-REVIEW-FIX P3-8: "Prepare N Boba Drinks" also counts the boba a barista serves, not only pickups.
+	local bobaServed = 0
+	for _, order in npc.Orders do
+		if typeof(order.Item) == "string" and string.find(order.Item, "Boba", 1, true) then
+			bobaServed += 1
+		end
+	end
 	-- AdvanceQuest can yield (data, pass lookups); spawned so the serve path never waits on it.
 	task.spawn(function()
 		pcall(function()
-			Knit.GetService("QuestService"):AdvanceQuest(player, "CustomersServed", 1)
+			local quests = Knit.GetService("QuestService")
+			quests:AdvanceQuest(player, "CustomersServed", 1)
+			if bobaServed > 0 then
+				quests:AdvanceQuest(player, "BobaOrdered", bobaServed)
+			end
 		end)
 	end)
 	local newCombo = Rules.NextCombo(combo, grade)
