@@ -9,6 +9,7 @@ local ShiftConfig = require(ReplicatedStorage.Shared.Configuration.ShiftConfig)
 
 ---> constants
 local CARD_WAIT_SECONDS = 30
+local PROMPT_TIMEOUT_SECONDS = 120 -- DialogService resolves nil after this
 
 ---> lifecycle
 local function getFilterResult(text: string, fromUserId: number)
@@ -33,14 +34,34 @@ return {
 	function(player: Player, proxy) ---> nickname setup
 		local current = os.time()
 		proxy.Data.Playtime.MostRecentJoin = current
-		if proxy.Data.Playtime.FirstJoin ~= 0 then
+		if proxy.Data.Playtime.FirstJoin == 0 then
+			proxy.Data.Playtime.FirstJoin = current
+		end
+		-- Offered at a shift end on every join until the player submits a nickname or presses Skip
+		-- (REVIEW-FIX P2-3). A timeout, a leave or an empty Submit is not an answer.
+		if proxy.Data.Nickname ~= "" or proxy.Data.NicknameSkipped == true then
 			return
 		end
-		proxy.Data.Playtime.FirstJoin = current
+
+		local connection: any = nil
+		local removing: any = nil
+		local listen: () -> ()
+
+		local function cleanup()
+			if connection ~= nil then
+				connection:Disconnect()
+				connection = nil
+			end
+			if removing ~= nil then
+				removing:Disconnect()
+				removing = nil
+			end
+		end
 
 		local function chooseNicknameRecursive(errorText: string?)
 			local baseMessage = "Choose a roleplay nickname."
 			local toAppend = errorText or "This cannot be changed later, so choose wisely!"
+			local openedAt = os.clock()
 			Knit.GetService("DialogService")
 				:CreateDialog(player, "TextInputPrompt", {
 					Title = "Roleplay Name",
@@ -48,11 +69,26 @@ return {
 					PlaceholderText = player.DisplayName,
 					CloseText = "Close",
 					SkipText = "Skip",
-				})
+				}, PROMPT_TIMEOUT_SECONDS)
 				:andThen(function(nickname)
-					if nickname == nil or nickname == "" then
+					if nickname == "" then
+						-- Skip: keep DisplayName and never ask again
+						proxy:SetValue({ "NicknameSkipped" }, true)
 						player:SetAttribute("NicknamePending", nil)
-						return -- Skip, or an empty Submit: keep DisplayName
+						cleanup()
+						return
+					end
+
+					if nickname == nil then
+						player:SetAttribute("NicknamePending", nil)
+						if player.Parent == nil then
+							cleanup() -- left: offered again on the next join
+						elseif os.clock() - openedAt >= PROMPT_TIMEOUT_SECONDS - 5 then
+							listen() -- timed out: offered again at the next shift end
+						else
+							chooseNicknameRecursive("|Type a nickname, or press Skip.|")
+						end
+						return
 					end
 
 					if typeof(nickname) ~= "string" or nickname:gsub(" ", "") == "" then
@@ -75,6 +111,7 @@ return {
 						proxy:SetValue({ "Nickname" }, nickname)
 						Knit.GetService("CosmeticsService"):NotifyNicknameChanged(player, nickname)
 						player:SetAttribute("NicknamePending", nil)
+						cleanup()
 					else
 						chooseNicknameRecursive("|An unexpected error occurred. Please try again.|")
 						return
@@ -82,36 +119,58 @@ return {
 				end)
 		end
 
-		-- The prompt waits for the end of the first shift (summary.First) and for the shift card to close.
-		-- The listener only sets an attribute and schedules; it never yields (it runs inside ShiftService:_endShift).
-		task.defer(function()
-			local ok, err = pcall(function()
-				local connection
-				local gaveUp = false
-				connection = Knit.GetService("ShiftService").ShiftEnding:Connect(function(shiftPlayer, summary)
-					if shiftPlayer ~= player or not (summary.First or gaveUp) then
+		-- The prompt waits for a shift end and for the shift card to close. The listener only sets an
+		-- attribute and schedules; it never yields (it runs inside ShiftService:_endShift).
+		listen = function()
+			if player.Parent == nil or connection ~= nil then
+				return
+			end
+			connection = Knit.GetService("ShiftService").ShiftEnding:Connect(function(shiftPlayer, summary)
+				if shiftPlayer ~= player then
+					return
+				end
+				if player.Parent == nil then
+					cleanup()
+					return
+				end
+				-- disconnect before prompting so it cannot show twice; listen() re-arms on a give-up
+				if connection ~= nil then
+					connection:Disconnect()
+					connection = nil
+				end
+				player:SetAttribute("NicknamePending", true)
+				task.delay(summary.Seconds or ShiftConfig.CARD_SECONDS_FIRST, function()
+					local waited = 0
+					while
+						player.Parent ~= nil
+						and player:GetAttribute("ShiftCardOpen") == true
+						and waited < CARD_WAIT_SECONDS
+					do
+						task.wait(1)
+						waited += 1
+					end
+					if player.Parent == nil then
+						cleanup()
 						return
 					end
-					player:SetAttribute("NicknamePending", true)
-					task.delay(ShiftConfig.CARD_SECONDS_FIRST, function()
-						local waited = 0
-						while
-							player.Parent ~= nil
-							and player:GetAttribute("ShiftCardOpen") == true
-							and waited < CARD_WAIT_SECONDS
-						do
-							task.wait(1)
-							waited += 1
-						end
-						if player.Parent == nil or player:GetAttribute("ShiftCardOpen") == true then
-							gaveUp = true -- the hook stays for the next shift end
-							player:SetAttribute("NicknamePending", nil)
-							return
-						end
-						connection:Disconnect()
-						chooseNicknameRecursive()
-					end)
+					if player:GetAttribute("ShiftCardOpen") == true then
+						player:SetAttribute("NicknamePending", nil)
+						listen() -- try again at the next shift end
+						return
+					end
+					chooseNicknameRecursive()
 				end)
+			end)
+		end
+
+		task.defer(function()
+			local ok, err = pcall(function()
+				removing = player.AncestryChanged:Connect(function()
+					if player.Parent == nil then
+						cleanup()
+					end
+				end)
+				listen()
 			end)
 			if not ok then
 				warn("[PlayerSetup] Nickname hook failed:", err)

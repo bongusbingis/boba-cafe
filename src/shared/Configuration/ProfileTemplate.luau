@@ -99,6 +99,8 @@ export type ProfileTemplate = {
 	LastTreasureChestTime: number,
 	HatchingPet: PendingHatch | false,
 	Nickname: string,
+	-- True once the player pressed Skip on the nickname prompt (REVIEW-FIX P2-3).
+	NicknameSkipped: boolean,
 	-- Codes the player has already redeemed; keyed by normalised code string for O(1) lookups.
 	RedeemedCodes: { [string]: boolean },
 	-- Developer product receipts already granted; keyed by `ReceiptInfo.PurchaseId`, value is the grant time (os.time()).
@@ -154,6 +156,7 @@ return {
 	LastTreasureChestTime = 0,
 	HatchingPet = false,
 	Nickname = "",
+	NicknameSkipped = false,
 	RedeemedCodes = {},
 	ProcessedReceipts = {},
 	Settings = {
