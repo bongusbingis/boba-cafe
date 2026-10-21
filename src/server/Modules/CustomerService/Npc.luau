@@ -130,6 +130,7 @@ local BUBBLE_MAX_DISTANCE_STUDS = 80
 local SPARKLE_COUNT = 30
 local SPARKLE_CLEANUP_SECONDS = 3
 local sparkleWarned = false
+local registerPatienceWarned = false
 
 ---> private
 
@@ -885,7 +886,18 @@ function Npc._run(self: Npc)
 
 	-- Register patience (TAKEOVER-FIX 2): the NPC waits for its order to be taken and
 	-- submitted (which moves it to pickup); if nobody does, it walks out unhappy.
-	local registerTotal = math.max(1, ctx.RegisterPatience(self))
+	-- Guarded: a context without RegisterPatience (a server that loaded a mismatched
+	-- CustomerService, seen in Studio as "Npc:884: attempt to call a nil value") or a
+	-- throwing callback used to despawn every NPC reaching the counter. Fall back instead.
+	local registerTotal = CustomerConfig.PATIENCE_BASE_SECONDS * CustomerConfig.REGISTER_PATIENCE_MULT
+	local okPatience, seconds = pcall(ctx.RegisterPatience, self)
+	if okPatience and typeof(seconds) == "number" and seconds == seconds and seconds < math.huge then
+		registerTotal = seconds
+	elseif not registerPatienceWarned then
+		registerPatienceWarned = true
+		warn(`[CustomerService] RegisterPatience failed; using the base patience: {seconds}`)
+	end
+	registerTotal = math.max(1, registerTotal)
 	self._registerEnd = os.clock() + registerTotal
 	local registerLast = os.clock()
 	while self.State == "AtCounter" and not self._destroyed and not self.Left do
