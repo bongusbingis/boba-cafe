@@ -8,11 +8,9 @@ local React = require(Packages.React)
 
 ---> components
 local Pane = require(UI.Components.Pane)
-local useCamera = require(UI.Hooks.useCamera)
 local usePx = require(UI.Hooks.usePx)
 local TopBar = require(script.TopBar)
 local BottomLeft = require(script.BottomLeft)
-local BottomRight = require(script.BottomRight)
 local OrderTicket = require(script.OrderTicket)
 local OrderQueue = require(script.OrderQueue)
 local ShiftCard = require(script.ShiftCard)
@@ -23,18 +21,13 @@ local c = React.createElement
 
 local TICKET_WIDTH = 190
 local TICKET_SCALE = 1.6 -- Jack Q27 A (DEC-052): ticket size only
-local COLUMN_GAP = 10
 
 return function(props: {
 	CurrentPage: ModuleScript,
 	SetCurrentPage: (pageComponent: ModuleScript | nil, ...any) -> (),
 })
 	local px = usePx()
-	local camera = useCamera()
 	local ticketScale = px.scale(TICKET_SCALE)
-	-- ShiftCard is back at its original anchor (1,0) / (0.99, 0.14), width 0.2 clamped to 190..300.
-	-- The ticket column sits directly left of it (Q28 fallback B, DEC-052).
-	local shiftWidth = math.clamp(camera.ViewportSize.X * 0.2, 190, 300)
 
 	-- Quests is a closed-by-default pop-up card, not a page (DEC-048).
 	local questsOpen, setQuestsOpen = React.useState(false)
@@ -45,22 +38,6 @@ return function(props: {
 	local closeQuests = React.useCallback(function()
 		setQuestsOpen(false)
 	end, {})
-
-	local toggleQuests = React.useCallback(function()
-		if questsOpenRef.current then
-			if questsCloseRef.current then
-				questsCloseRef.current()
-			else
-				setQuestsOpen(false)
-			end
-			return
-		end
-		-- App toggles: passing the open page closes it.
-		if props.CurrentPage ~= nil then
-			props.SetCurrentPage(props.CurrentPage)
-		end
-		setQuestsOpen(true)
-	end, { props.CurrentPage, props.SetCurrentPage })
 
 	-- Shop / Inventory / Menu and the card are never stacked.
 	React.useEffect(function()
@@ -90,26 +67,21 @@ return function(props: {
 			SetCurrentPage = props.SetCurrentPage,
 		}),
 
-		BottomRight = c(BottomRight, {
-			CurrentPage = props.CurrentPage,
-			SetCurrentPage = props.SetCurrentPage,
-			QuestsOpen = questsOpen,
-			OnToggleQuests = toggleQuests,
-		}),
+		-- The Quests button was removed from the bottom right; how the Quests card opens is a later pass (Jack, 2026-10-20).
 
-		-- Ticket column, upper right, left of the ShiftCard (Q28 fallback B).
+		-- Ticket column, middle right. Bottom edge is fixed, so it grows upward as tickets are added.
 		TicketColumn = c("Frame", {
-			AnchorPoint = Vector2.new(1, 0),
+			AnchorPoint = Vector2.new(1, 1),
 			AutomaticSize = Enum.AutomaticSize.Y,
 			BackgroundTransparency = 1,
-			Position = UDim2.new(0.99, -(shiftWidth + COLUMN_GAP), 0.14, 0),
+			Position = UDim2.fromScale(0.99, 0.65),
 			Size = UDim2.fromOffset(math.ceil(TICKET_WIDTH * ticketScale), 0),
 			ZIndex = 10,
 		}, {
 			Layout = c("UIListLayout", {
 				FillDirection = Enum.FillDirection.Vertical,
 				HorizontalAlignment = Enum.HorizontalAlignment.Right,
-				Padding = UDim.new(0, COLUMN_GAP),
+				Padding = UDim.new(0, 10),
 				SortOrder = Enum.SortOrder.LayoutOrder,
 			}),
 			TicketStack = c(Pane, {
