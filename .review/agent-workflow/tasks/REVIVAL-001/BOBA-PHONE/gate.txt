@@ -1,0 +1,55 @@
+BOBA-PHONE gate run
+agy-boba-phone
+== src/shared/UI/Pages/BobaPhone/BuildOrderRequest.luau
+Results:
+0 errors
+0 warnings
+0 parse errors
+selene:0
+stylua:0
+== src/shared/UI/Pages/BobaPhone/init.luau
+Results:
+0 errors
+0 warnings
+0 parse errors
+selene:0
+stylua:0
+== src/client/Modules/BobaPhoneController.luau
+Results:
+0 errors
+0 warnings
+0 parse errors
+selene:0
+stylua:0
+== src/server/Modules/BobaPhoneService.luau
+Results:
+0 errors
+0 warnings
+0 parse errors
+selene:0
+stylua:0
+== src/server/Tests/BobaPhone.spec.luau
+Results:
+0 errors
+0 warnings
+0 parse errors
+selene:0
+stylua:0
+== src/shared/UI/Components/Core/Hud/TopBar.luau
+Results:
+0 errors
+0 warnings
+0 parse errors
+selene:0
+stylua:0
+== HEAD baseline: TopBar selene (DEC-001: no new findings)
+Results:
+0 errors
+0 warnings
+0 parse errors
+head-selene:0
+== rojo build
+Building project 'boba-cafe'
+Built project to phone.rbxl
+rojo:0
+-rwxrwxrwx 1 jackc jackc 1519196 Oct 21 13:27 /mnt/c/Users/jackc/AppData/Local/Temp/boba-phone-out/phone.rbxl
