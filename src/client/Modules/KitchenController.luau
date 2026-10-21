@@ -10,6 +10,7 @@ local Packages = ReplicatedStorage:WaitForChild("Packages")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 
 local Knit = require(Packages.Knit)
+local CustomerConfig = require(Shared.Configuration.CustomerConfig)
 local GamepassUtil = require(Shared.Utility.GamepassUtil)
 local WorldPath = require(Shared.Utility.WorldPath)
 local OrderSpec = require(Shared.Ordering.OrderSpec)
@@ -28,6 +29,9 @@ local HIGHLIGHT_NAME = "StationHint"
 local BEAM_NAME = "StationHintBeam"
 local BEAM_ATTACHMENT_NAME = "StationHintAttachment"
 local TOAST_COOLDOWN_SECONDS = 1.5
+local RESCUE_BROADCAST_STUDS = 40
+local RESCUE_TOAST_COOLDOWN_SECONDS = 20
+local IMPATIENT_TEXT = "Your customer is getting impatient!"
 
 -- TUNING
 local GUIDANCE_INTERVAL_SECONDS = 0.2 -- how often the hint target is recomputed
@@ -293,6 +297,71 @@ local function resolveServeTarget(): Model?
 	return nil
 end
 
+local impatientToasted: { [Model]: boolean } = setmetatable({}, { __mode = "k" }) :: any
+local wasRescuable: { [Model]: boolean } = setmetatable({}, { __mode = "k" }) :: any
+local lastRescueToastAt = -math.huge
+local patienceCuesWarned = false
+
+local function patienceFraction(model: Model): number
+	local patienceEnd = model:GetAttribute("PatienceEnd")
+	local total = model:GetAttribute("PatienceTotal")
+	if typeof(patienceEnd) == "number" and typeof(total) == "number" and total > 0 then
+		return (patienceEnd - workspace:GetServerTimeNow()) / total
+	end
+	return 1
+end
+
+-- C1 (own customer turns red) and C3 (nearby rescuable customer) toasts. Client-only.
+local function runPatienceCues(model: Model, root: BasePart, fraction: number, clockedIn: boolean)
+	local localPlayer = Players.LocalPlayer
+	local assigned = model:GetAttribute("AssignedUserId")
+	local atCounter = model:GetAttribute("State") == "AtCounter"
+
+	-- C1
+	if
+		assigned == localPlayer.UserId
+		and atCounter
+		and fraction <= CustomerConfig.PATIENCE_RED_FRACTION
+		and fraction > 0
+		and not impatientToasted[model]
+	then
+		local scripted = false
+		if resolveServeTarget() == model then
+			local order = Knit.GetController("OrderController").CurrentOrder
+			scripted = typeof(order) == "table" and (order :: any).Scripted == true
+		end
+		if not scripted then
+			impatientToasted[model] = true
+			toast(IMPATIENT_TEXT)
+		end
+	end
+
+	-- C3
+	local rescuable = false
+	if
+		clockedIn
+		and atCounter
+		and assigned ~= nil
+		and assigned ~= localPlayer.UserId
+		and fraction > 0
+		and fraction < CustomerConfig.RESCUE_FRACTION
+	then
+		local character = localPlayer.Character
+		local myRoot = character and character:FindFirstChild("HumanoidRootPart")
+		if myRoot and myRoot:IsA("BasePart") then
+			rescuable = (myRoot.Position - root.Position).Magnitude <= RESCUE_BROADCAST_STUDS
+		end
+	end
+	if rescuable and not wasRescuable[model] then
+		local now = os.clock()
+		if now - lastRescueToastAt >= RESCUE_TOAST_COOLDOWN_SECONDS then
+			lastRescueToastAt = now
+			toast(`A customer needs help! Rescue for {CustomerConfig.RESCUE_MULT}x pay`)
+		end
+	end
+	wasRescuable[model] = rescuable
+end
+
 -- Local view of each NPC ServePrompt (design 4.6): "Serve" for the assigned barista,
 -- "Rescue" for a clocked-in barista once patience is below 30%, else hidden. The
 -- server enforces every rule; this only decides what the player sees.
@@ -306,20 +375,20 @@ local function updateServePrompts()
 		local root = model:FindFirstChild("HumanoidRootPart")
 		local prompt = root and root:FindFirstChild("ServePrompt")
 		if prompt and prompt:IsA("ProximityPrompt") then
-			local patienceEnd = model:GetAttribute("PatienceEnd")
-			local total = model:GetAttribute("PatienceTotal")
-			local fraction = 1
-			if typeof(patienceEnd) == "number" and typeof(total) == "number" and total > 0 then
-				fraction = (patienceEnd - workspace:GetServerTimeNow()) / total
-			end
+			local fraction = patienceFraction(model)
 			if model:GetAttribute("AssignedUserId") == Players.LocalPlayer.UserId then
 				prompt.Enabled = true
 				prompt.ActionText = "Serve"
-			elseif clockedIn and fraction < 0.3 then
+			elseif clockedIn and fraction < CustomerConfig.RESCUE_FRACTION then
 				prompt.Enabled = true
 				prompt.ActionText = "Rescue"
 			else
 				prompt.Enabled = false
+			end
+			local cuesOk, cuesErr = pcall(runPatienceCues, model, root :: BasePart, fraction, clockedIn)
+			if not cuesOk and not patienceCuesWarned then
+				patienceCuesWarned = true
+				warn("[KitchenController] Patience cues failed: " .. tostring(cuesErr))
 			end
 		end
 	end
