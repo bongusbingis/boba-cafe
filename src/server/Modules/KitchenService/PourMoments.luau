@@ -3,7 +3,8 @@
 	Description: Server side of the station skill moment (REVIVAL-001 BIG-B7, DEC-058 redesign).
 	Coordinates two-phase station pour moments: creates windows, awaits client taps
 	with bounded timeouts and cancellation guards, applies drink craft attributes,
-	and calculates pour tips at NPC serve.
+	and calculates pour tips at NPC serve. A pour never lowers the drink's grade:
+	a miss or a timeout is Good with no tip (AUDIT-FIX D2.1).
 --]]
 
 ---> Services
@@ -39,7 +40,7 @@ export type PourMoments = {
 	_unlocked: { [Player]: boolean },
 	_pendingThreads: { [Player]: thread },
 	_pendingCancels: { [Player]: () -> () },
-	_pendingFinish: { [Player]: (PourMeter.PourTier?) -> () },
+	_pendingFinish: { [Player]: (PourMeter.PourTier?, string?) -> () },
 	Start: (self: PourMoments) -> (),
 	AwaitPour: (self: PourMoments, player: Player, recipeData: RecipeData, model: Model?) -> PourMeter.PourTier?,
 	ReportTap: (self: PourMoments, player: Player, windowId: any, claimedElapsed: any) -> PourMeter.PourTier?,
@@ -53,7 +54,6 @@ local PourMoments = {}
 PourMoments.__index = PourMoments
 
 local PERFECT_ATTRIBUTE = "PerfectPours"
-local POOR_ATTRIBUTE = "PoorPours"
 
 local function pourConfig(): PourMeter.Config
 	return KitchenConfig.POUR_METER
@@ -191,12 +191,14 @@ function PourMoments:AwaitPour(player: Player, recipeData: RecipeData, model: Mo
 
 	-- The single resolve path. Idempotent; resumes the awaiting thread exactly once.
 	local resumed = false
-	local function finish(tier: PourMeter.PourTier?)
+	local reason = "Ok"
+	local function finish(tier: PourMeter.PourTier?, why: string?)
 		cleanup()
 		if resumed then
 			return
 		end
 		resumed = true
+		reason = why or reason
 		if coroutine.status(currentThread) == "suspended" then
 			task.spawn(currentThread, tier)
 		end
@@ -208,10 +210,11 @@ function PourMoments:AwaitPour(player: Player, recipeData: RecipeData, model: Mo
 	self._pendingCancels[player] = cancelSelf
 	self._pendingFinish[player] = finish
 
-	-- Timeout fallback: no tap in time resolves as "Poor" (Jack-confirmed, every pour station).
+	-- Timeout fallback: no tap in time is Good with no tip; skipping the meter never
+	-- costs the drink its grade (AUDIT-FIX D2.1, DEC-058).
 	local timeoutSeconds = window.Duration + config.LATENCY_ALLOWANCE_SECONDS
 	timeoutTask = task.delay(timeoutSeconds, function()
-		finish("Poor")
+		finish("Good", "Expired")
 	end)
 
 	-- Un-equip, death (character removed) or a swapped tool cancels the pour.
@@ -256,29 +259,22 @@ function PourMoments:AwaitPour(player: Player, recipeData: RecipeData, model: Mo
 		return nil
 	end
 
-	-- Apply attributes and liquid appearance
+	-- A perfect adds to the drink's tip count; nothing else touches the drink.
 	local tool = getHeldTool(player)
 	if tool then
 		if tier == "Perfect" then
 			local current = tool:GetAttribute(PERFECT_ATTRIBUTE)
 			tool:SetAttribute(PERFECT_ATTRIBUTE, PourMeter.AddPerfect(current, config.MAX_PERFECT_PER_DRINK))
-		elseif tier == "Poor" then
-			local current = tool:GetAttribute(POOR_ATTRIBUTE)
-			local count = if typeof(current) == "number" and current == current then math.floor(current) else 0
-			tool:SetAttribute(POOR_ATTRIBUTE, count + 1)
 		end
-
 		local liquid = tool:FindFirstChild("Liquid")
 		if liquid and liquid:IsA("BasePart") then
-			if tier == "Poor" then
-				liquid.Transparency = 0.2
-			else
-				liquid.Transparency = 0
-			end
+			liquid.Transparency = 0
 		end
 	end
 
-	self._service.Client.PourResolved:Fire(player, windowId, tier)
+	-- The reason ("Ok", "Miss", "Expired", "Early") lets the client say "Messy pour"
+	-- for a missed tip without the drink being graded down.
+	self._service.Client.PourResolved:Fire(player, windowId, tier, reason)
 	return tier
 end
 
@@ -289,24 +285,19 @@ function PourMoments:ReportTap(player: Player, windowId: any, claimedElapsed: an
 		return nil
 	end
 	local config = pourConfig()
-	local tier, _ = PourMeter.Resolve(window, claimedElapsed, os.clock(), config.LATENCY_ALLOWANCE_SECONDS)
+	local tier, reason = PourMeter.Resolve(window, claimedElapsed, os.clock(), config.LATENCY_ALLOWANCE_SECONDS)
 	local finish = self._pendingFinish[player]
 	if finish then
-		finish(tier)
+		finish(tier, reason)
 	end
 	return tier
 end
 
 -- The flat BobaBuck tip for a set of served tools' PerfectPours attributes.
--- If any served tool has PoorPours > 0, that tool does not earn pour tips.
 function PourMoments:TipForTools(tools: { Instance }): number
 	local config = pourConfig()
 	local counts = {}
 	for _, tool in tools do
-		local poor = tool:GetAttribute(POOR_ATTRIBUTE)
-		if typeof(poor) == "number" and poor > 0 then
-			continue
-		end
 		table.insert(counts, tool:GetAttribute(PERFECT_ATTRIBUTE))
 	end
 	return PourMeter.TipFor(counts, config.TIP_PER_PERFECT, config.MAX_PERFECT_PER_DRINK)

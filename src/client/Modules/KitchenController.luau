@@ -932,7 +932,12 @@ local function showPourMeter(view: any)
 	end)
 end
 
-local function showPourFeedback(tier: string)
+-- A miss or a skipped meter is still a Good drink (AUDIT-FIX D2.1); "Messy" only
+-- tells the player the tip was lost.
+local function showPourFeedback(tier: string, reason: any)
+	if tier == "Good" and typeof(reason) == "string" and reason ~= "Ok" then
+		tier = "Messy"
+	end
 	local text: string
 	local textColor: Color3
 	local strokeColor: Color3
@@ -945,8 +950,8 @@ local function showPourFeedback(tier: string)
 		text = "Good pour"
 		textColor = Styles.GREEN
 		strokeColor = Styles.GREEN_DEEP
-	elseif tier == "Poor" then
-		text = "Messy pour"
+	elseif tier == "Messy" then
+		text = "Messy pour, no tip"
 		textColor = Styles.CORAL
 		strokeColor = Styles.CORAL:Lerp(Color3.new(0, 0, 0), 0.3)
 	else
@@ -1016,9 +1021,9 @@ local function startPourMeter()
 		return
 	end
 	kitchenService.PourWindowOpened:Connect(showPourMeter)
-	kitchenService.PourResolved:Connect(function(_id: number, tier: any)
+	kitchenService.PourResolved:Connect(function(_id: number, tier: any, reason: any)
 		if typeof(tier) == "string" then
-			showPourFeedback(tier)
+			showPourFeedback(tier, reason)
 		end
 	end)
 end

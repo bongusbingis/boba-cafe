@@ -240,12 +240,12 @@ return function()
 		end)
 
 		describe("craft quality (PoorPours)", function()
-			it("an otherwise perfect drink with PoorPours = 1 evaluates to Close with reason PoorPour", function()
-				expectMatch(specA(), with(attrsA(), { PoorPours = 1 }), "Close", { "PoorPour" })
+			it("a stale PoorPours never downgrades an otherwise perfect drink (AUDIT-FIX D2.1)", function()
+				expectMatch(specA(), with(attrsA(), { PoorPours = 1 }), "Perfect", {})
 			end)
 
-			it("a drink with a minor mistake (e.g. wrong size) and PoorPours = 1 evaluates to Wrong", function()
-				expectMatch(specA(), with(attrsA(), { Size = "Large", PoorPours = 1 }), "Wrong", { "Size", "PoorPour" })
+			it("a stale PoorPours never turns one minor mistake into Wrong", function()
+				expectMatch(specA(), with(attrsA(), { Size = "Large", PoorPours = 1 }), "Close", { "Size" })
 			end)
 
 			it("a drink with PoorPours = 0 (or nil) and PerfectPours = 1 evaluates to Perfect", function()

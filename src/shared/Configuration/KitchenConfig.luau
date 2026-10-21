@@ -24,7 +24,7 @@ KitchenConfig.POUR_METER = {
 	ZONE_CENTER_MIN = 0.45, -- DEC-058 Opus-set, Jack to tune
 	ZONE_CENTER_MAX = 0.8, -- DEC-058 Opus-set, Jack to tune
 	LATENCY_ALLOWANCE_SECONDS = 0.3, -- DEC-058 Opus-set, Jack to tune: max ping credit
-	TIP_PER_PERFECT = 1, -- DEC-058 Opus-set, Jack to tune: BB per perfect pour, paid at NPC serve
+	TIP_PER_PERFECT = 2, -- DEC-058 agent-set, Jack to tune: BB per perfect pour, paid at NPC serve (was 1; AUDIT-FIX D2.1)
 	MAX_PERFECT_PER_DRINK = 2, -- DEC-058 Opus-set, Jack to tune
 	MIN_CUSTOMERS_SERVED = 1, -- DEC-058 Opus-set, Jack to tune: hidden until the first serve
 }

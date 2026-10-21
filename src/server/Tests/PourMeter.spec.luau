@@ -119,12 +119,12 @@ return function()
 			expect(tier).to.equal("Good")
 		end)
 
-		it("grades a tap outside outer zone as poor miss", function()
+		it("grades a tap outside outer zone as a good miss (no downgrade)", function()
 			-- Elapsed 0.1 puts the marker at 0.125, far from a 0.62 centre.
 			local window = windowAt(0.62)
 			local tier, reason = PourMeter.Resolve(window, 0.1, 100.1, 0.3)
 			expect(reason).to.equal("Miss")
-			expect(tier).to.equal("Poor")
+			expect(tier).to.equal("Good")
 		end)
 
 		it("credits a claim within one ping of the zone", function()
@@ -134,18 +134,18 @@ return function()
 			expect(tier).to.equal("Perfect")
 		end)
 
-		it("expires a tap past the window plus allowance as poor expired", function()
+		it("expires a tap past the window plus allowance as good expired", function()
 			local window = windowAt(0.62)
 			local tier, reason = PourMeter.Resolve(window, 3.1, 103.6, 0.3)
 			expect(reason).to.equal("Expired")
-			expect(tier).to.equal("Poor")
+			expect(tier).to.equal("Good")
 		end)
 
-		it("rejects a tap from before the window opened as poor early", function()
+		it("rejects a tap from before the window opened as good early", function()
 			local window = windowAt(0.62, 100)
 			local tier, reason = PourMeter.Resolve(window, 0, 99.5, 0.3)
 			expect(reason).to.equal("Early")
-			expect(tier).to.equal("Poor")
+			expect(tier).to.equal("Good")
 		end)
 	end)
 
@@ -174,16 +174,9 @@ return function()
 			expect(PourMeter.TipFor({}, 1, 2)).to.equal(0)
 		end)
 
-		it("pays nothing for a drink with poor pours", function()
-			expect(PourMeter.TipFor({ { PerfectPours = 2, PoorPours = 1 } }, 1, 2)).to.equal(0)
-			expect(PourMeter.TipFor({ { Perfect = 2, Poor = 1 } }, 1, 2)).to.equal(0)
-		end)
-
-		it("skips only the drinks with poor pours when multiple drinks are served", function()
-			expect(PourMeter.TipFor({
-				{ PerfectPours = 2, PoorPours = 0 },
-				{ PerfectPours = 2, PoorPours = 1 },
-			}, 1, 2)).to.equal(2)
+		it("pays the perfects on a drink that also had a missed pour", function()
+			expect(PourMeter.TipFor({ { PerfectPours = 1, PoorPours = 1 } }, 2, 2)).to.equal(2)
+			expect(PourMeter.TipFor({ { Perfect = 2 } }, 2, 2)).to.equal(4)
 		end)
 	end)
 end

@@ -221,16 +221,6 @@ function InteractionRunner:_runSequence(
 			end
 		end
 
-		-- If a poor pour was recorded, do not overwrite Liquid.Transparency back to 0
-		if
-			seqState.PourTier == "Poor"
-			and actionName == "SetToolHoldingProperty"
-			and actionData[2] == "Liquid"
-			and actionData[3] == "Transparency"
-		then
-			continue
-		end
-
 		local actionFn = self._registry.Get(actionName)
 		if not actionFn then
 			warn(string.format("[InteractionRunner] Unknown action: '%s'", actionName))

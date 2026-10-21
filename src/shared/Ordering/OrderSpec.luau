@@ -321,25 +321,6 @@ local function findProblem(spec: OrderSpec, chain: Chain, attrs: Table, current:
 			table.insert(reasons, field)
 		end
 	end
-	if typeof(attrs.PoorPours) == "number" and attrs.PoorPours > 0 then
-		if #reasons == 0 then
-			return {
-				Step = nil,
-				Severity = "Close",
-				Reason = "PoorPour",
-				Reasons = { "PoorPour" },
-			}
-		else
-			table.insert(reasons, "PoorPour")
-			return {
-				Step = chain.FieldSteps[reasons[1]],
-				Severity = "Wrong",
-				Reason = reasons[1],
-				Reasons = reasons,
-			}
-		end
-	end
-
 	if #reasons == 0 then
 		return nil
 	end
@@ -458,7 +439,9 @@ end
 --   Grab item                    -> Perfect
 --   Syrup differs                -> Wrong
 --   0 / 1 / 2+ minor mistakes    -> Perfect / Close / Wrong
--- A missing boolean attribute counts as false.
+-- A missing boolean attribute counts as false. Pour attributes (PerfectPours,
+-- a stale PoorPours) never change the grade: a pour only earns or loses a tip
+-- (AUDIT-FIX D2.1).
 function OrderSpec.Match(spec: OrderSpec, attrs: Table): (Grade, { string })
 	if attrs.Item ~= spec.Item then
 		return "Wrong", { "Item" }
@@ -482,15 +465,6 @@ function OrderSpec.Match(spec: OrderSpec, attrs: Table): (Grade, { string })
 	end
 	if spec.Sugar ~= nil and (attrs.Sugar == true) ~= spec.Sugar then
 		table.insert(mistakes, "Sugar")
-	end
-
-	if typeof(attrs.PoorPours) == "number" and attrs.PoorPours > 0 then
-		if #mistakes == 0 then
-			return "Close", { "PoorPour" }
-		else
-			table.insert(mistakes, "PoorPour")
-			return "Wrong", mistakes
-		end
 	end
 
 	if #mistakes == 0 then

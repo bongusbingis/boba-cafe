@@ -5,13 +5,15 @@
 
 	After a pour station finishes, the server opens a short window: a marker sweeps
 	a track (0 -> 1 -> 0, a triangle wave) and the player may tap once. Stopping the
-	marker inside the sweet spot is a Perfect pour, inside the outer zone is Good,
-	and missing or expiring is Poor.
+	marker inside the sweet spot is a Perfect pour (a tip at serve). Anything else
+	(the outer zone, a miss, an early tap, or no tap before it expires) is Good: the
+	drink keeps its grade and only the tip is lost (AUDIT-FIX D2.1). The reason says
+	which, so the client can call a miss "Messy" without the server grading it down.
 --]]
 
 ---> types
 
-export type PourTier = "Perfect" | "Good" | "Poor"
+export type PourTier = "Perfect" | "Good"
 
 export type Config = {
 	PERIOD_SECONDS: number,
@@ -102,17 +104,18 @@ function PourMeter.EffectiveElapsed(claimed: any, serverElapsed: number, allowan
 end
 
 -- Grades one tap. Returns (PourTier, reason): reason is "Ok", "Miss", "Expired" or "Early".
+-- Only an "Ok" tap can be Perfect; every other reason is Good with no tip.
 function PourMeter.Resolve(window: Window, claimed: any, now: number, allowance: number): (PourTier, string)
 	local serverElapsed = now - window.StartedAt
 	if serverElapsed < 0 then
-		return "Poor", "Early"
+		return "Good", "Early"
 	end
 	if serverElapsed > window.Duration + allowance then
-		return "Poor", "Expired"
+		return "Good", "Expired"
 	end
 	local elapsed = PourMeter.EffectiveElapsed(claimed, serverElapsed, allowance)
 	if elapsed > window.Duration then
-		return "Poor", "Expired"
+		return "Good", "Expired"
 	end
 	local position = PourMeter.Position(elapsed, window.Period)
 	local dist = math.abs(position - window.ZoneCenter)
@@ -121,7 +124,7 @@ function PourMeter.Resolve(window: Window, claimed: any, now: number, allowance:
 	elseif dist <= window.ZoneWidth / 2 then
 		return "Good", "Ok"
 	else
-		return "Poor", "Miss"
+		return "Good", "Miss"
 	end
 end
 
@@ -131,31 +134,15 @@ function PourMeter.AddPerfect(current: any, cap: number): number
 	return math.clamp(count + 1, 0, math.max(0, cap))
 end
 
--- The flat tip for a set of served tools' PerfectPours values.
--- If a tool has poor pours (or passed as 0), no tip.
+-- The flat tip for a set of served tools' PerfectPours values (a number, or a
+-- table with Perfect / PerfectPours). Only perfects pay; a missed pour costs its
+-- own tip and nothing else.
 function PourMeter.TipFor(drinks: { any }, tipPerPerfect: number, capPerDrink: number): number
 	local total = 0
 	for _, value in drinks do
-		local perfectCount = 0
-		local hasPoor = false
-		if typeof(value) == "table" then
-			if
-				(typeof(value.Poor) == "number" and value.Poor > 0)
-				or (typeof(value.PoorPours) == "number" and value.PoorPours > 0)
-			then
-				hasPoor = true
-			else
-				local count = value.Perfect or value.PerfectPours
-				if typeof(count) == "number" and count == count and count > 0 then
-					perfectCount = count
-				end
-			end
-		elseif typeof(value) == "number" and value == value and value > 0 then
-			perfectCount = value
-		end
-
-		if not hasPoor and perfectCount > 0 then
-			total += math.min(math.floor(perfectCount), capPerDrink)
+		local count = if typeof(value) == "table" then (value.Perfect or value.PerfectPours) else value
+		if typeof(count) == "number" and count == count and count > 0 then
+			total += math.min(math.floor(count), capPerDrink)
 		end
 	end
 	return total * tipPerPerfect
