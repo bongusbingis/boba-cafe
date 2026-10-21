@@ -22,6 +22,7 @@ local UI = Shared:WaitForChild("UI")
 
 local Knit = require(Packages.Knit)
 local React = require(Packages.React)
+local ReactSpring = require(Packages.ReactSpring)
 local ShiftConfig = require(Shared.Configuration.ShiftConfig)
 local WorldPath = require(Shared.Utility.WorldPath)
 
@@ -42,35 +43,40 @@ local STAR_NOTE_GAP = 0.2
 local STAR_NOTE_MAX = 3
 local STAR_NOTE_LIFETIME = 3
 
+-- UI-REVISION: body text is GREEN_LIGHT on the light panel (OrderQueue / dialog body
+-- rule; it was OFFWHITE, nearly invisible), numbers are GREEN_DEEP rich text, and the
+-- star row is GOLD (rank, FEEDBACK-VOICE 5). Copy follows FEEDBACK-VOICE 1.
+local VALUE_HEX = "#" .. Styles.GREEN_DEEP:ToHex()
+local OPEN_SPRING = { mass = 1, tension = 2500, friction = 100 } -- Page open spring (STYLE 5)
+
+local function v(value: any): string
+	return `<font color="{VALUE_HEX}">{value}</font>`
+end
+
 local function buildLines(summary): { string }
-	local served = `Served {summary.Served or 0}`
+	local served = `Served {v(summary.Served or 0)}`
 	if (summary.Walkouts or 0) > 0 then
-		served ..= ` · Walkouts {summary.Walkouts}`
+		served ..= ` · Walkouts {v(summary.Walkouts)}`
 	end
-	local pay = `Pay {summary.Pay or 0} · Bonus {summary.Bonus or 0}`
+	local pay = `{v("+" .. (summary.Pay or 0) .. " BB")} pay · {v("+" .. (summary.Bonus or 0))} bonus`
 	if (summary.Tips or 0) > 0 then
-		pay ..= ` · Tips {summary.Tips}`
+		pay ..= ` · {v("+" .. summary.Tips)} tips`
 	end
-	local lines = {
-		string.rep("★", summary.Stars or 0)
-			.. (if summary.NewBestShiftPay == true then " · Best shift ever!" else ""),
-		served,
-		pay,
-	}
+	local lines = { served, pay }
 	if (summary.BestCombo or 0) >= 2 then
 		if summary.NewBestCombo == true then
-			table.insert(lines, `New best combo! x {summary.BestCombo}`)
+			table.insert(lines, `New best combo! {v("×" .. summary.BestCombo)}`)
 		else
-			table.insert(lines, `Best combo x {summary.BestCombo}`)
+			table.insert(lines, `Best combo {v("×" .. summary.BestCombo)}`)
 		end
 	end
 	if summary.ShiftStreak ~= nil then
 		local streak = summary.ShiftStreak
 		if (summary.StreakBonus or 0) > 0 then
-			table.insert(lines, `Streak {streak} · +{summary.StreakBonus} BB streak bonus!`)
+			table.insert(lines, `Streak {v(streak)} · {v("+" .. summary.StreakBonus .. " BB")} streak bonus!`)
 		else
 			local remaining = ShiftConfig.STREAK_LENGTH - (streak % ShiftConfig.STREAK_LENGTH)
-			table.insert(lines, `Streak {streak} · streak bonus in {remaining}`)
+			table.insert(lines, `Streak {v(streak)} · bonus in {v(remaining)}`)
 		end
 	end
 	if summary.Xp ~= nil then
@@ -78,12 +84,13 @@ local function buildLines(summary): { string }
 		if summary.XpIntoLevel ~= nil and summary.XpForLevel ~= nil then
 			progress = ` ({summary.XpIntoLevel}/{summary.XpForLevel})`
 		end
+		local xp = v("+" .. summary.Xp .. " XP")
 		if summary.LevelBefore ~= nil and summary.LevelAfter ~= nil and summary.LevelAfter > summary.LevelBefore then
-			table.insert(lines, `XP +{summary.Xp} · Level up! Level {summary.LevelAfter}{progress}`)
+			table.insert(lines, `{xp} · Level up! {v("Level " .. summary.LevelAfter)}`)
 		elseif summary.LevelAfter ~= nil then
-			table.insert(lines, `XP +{summary.Xp} · Level {summary.LevelAfter}{progress}`)
+			table.insert(lines, `{xp} · Level {summary.LevelAfter}{progress}`)
 		else
-			table.insert(lines, `XP +{summary.Xp}`)
+			table.insert(lines, xp)
 		end
 	end
 	if summary.NextUnlock ~= nil then
@@ -92,6 +99,16 @@ local function buildLines(summary): { string }
 		table.insert(lines, "Next shift starts now")
 	end
 	return lines
+end
+
+-- The headline row: stars, plus "Best shift ever!" on a record.
+local function starText(summary): string
+	local stars = math.clamp(math.floor(summary.Stars or 0), 0, STAR_NOTE_MAX)
+	local text = string.rep("★", stars) .. string.rep("☆", STAR_NOTE_MAX - stars)
+	if summary.NewBestShiftPay == true then
+		text ..= "  Best shift ever!"
+	end
+	return text
 end
 
 local function playStarJingle(stars: any)
@@ -153,14 +170,45 @@ return function()
 		end
 	end, { summary })
 
+	-- Pops in with the Page open spring each time a summary arrives.
+	local styles, api = ReactSpring.useSpring(function()
+		return { scale = 0.6, config = OPEN_SPRING }
+	end)
+	React.useEffect(function()
+		-- Hidden (nil) resets to 0.6 off screen, so the next card pops in again.
+		api.start({ scale = if summary ~= nil then 1 else 0.6, config = OPEN_SPRING })
+	end, { summary })
+
 	if summary == nil then
 		return nil
 	end
 
 	local lines = buildLines(summary)
 	-- Rows share the Container height so any line count fits (REVIEW-FIX P3-4); 0.12 is the usual row.
-	local rowHeight = math.min(ROW_HEIGHT, (1 - ROW_GAP * (#lines - 1)) / math.max(#lines, 1))
-	local rows = {}
+	-- The star row counts as 1.5 rows.
+	local rowHeight = math.min(ROW_HEIGHT, (1 - ROW_GAP * #lines) / (#lines + 1.5))
+	local rows = {
+		Stars = c(Pane, {
+			ClassName = "TextLabel",
+			MaxTextSize = 30,
+			Native = {
+				BackgroundTransparency = 1,
+				FontFace = Styles.FONT_FREDOKA,
+				LayoutOrder = 0,
+				Size = UDim2.fromScale(0.95, rowHeight * 1.5),
+				Text = starText(summary),
+				TextColor3 = Styles.GOLD,
+				TextScaled = true,
+				TextXAlignment = Enum.TextXAlignment.Center,
+			},
+		}, {
+			Stroke = c("UIStroke", {
+				Color = Styles.GOLD_DEEP,
+				Thickness = 1,
+				ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual,
+			}),
+		}),
+	}
 	for index, line in lines do
 		rows["Row" .. index] = c(Pane, {
 			ClassName = "TextLabel",
@@ -169,9 +217,10 @@ return function()
 				BackgroundTransparency = 1,
 				FontFace = Styles.FONT_FREDOKA,
 				LayoutOrder = index,
+				RichText = true,
 				Size = UDim2.fromScale(0.95, rowHeight),
 				Text = line,
-				TextColor3 = Styles.OFFWHITE,
+				TextColor3 = Styles.GREEN_LIGHT,
 				TextScaled = true,
 				TextWrapped = true,
 				TextXAlignment = Enum.TextXAlignment.Center,
@@ -183,6 +232,7 @@ return function()
 	return c(Pane, {
 		ClassName = "Frame",
 		AspectRatio = 1.2,
+		Scale = styles.scale,
 		Native = {
 			Active = false,
 			AnchorPoint = Vector2.new(1, 0),
