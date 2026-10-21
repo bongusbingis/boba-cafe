@@ -109,6 +109,7 @@ export type Props = {
 	LayoutOrder: number?,
 	Color: Color3?,
 	OnPurchase: ((item: Item) -> ())?,
+	PriceGlyph: string?, -- forwarded to ShopItem ("" = no currency glyph)
 }
 
 return function(props: Props)
@@ -175,19 +176,24 @@ return function(props: Props)
 		children[item.Label] = c(ShopItem, {
 			Label = item.Label,
 			Price = item.Price,
+			PriceGlyph = props.PriceGlyph,
 			Color = itemColor,
 			LayoutOrder = baseOrder,
-			OnClick = if item.SubItems then function()
-				if isExpanded then
-					setClosingItem(item.Label)
-					setExpandedItem(nil)
-				else
-					setClosingItem(expandedItem)
-					setExpandedItem(item.Label)
+			OnClick = if item.SubItems
+				then function()
+					if isExpanded then
+						setClosingItem(item.Label)
+						setExpandedItem(nil)
+					else
+						setClosingItem(expandedItem)
+						setExpandedItem(item.Label)
+					end
 				end
-			end else (if props.OnPurchase then function()
-				props.OnPurchase(item)
-			end else nil),
+				else (if props.OnPurchase
+					then function()
+						props.OnPurchase(item)
+					end
+					else nil),
 		})
 
 		if item.SubItems and (isExpanded or isThisClosing) then

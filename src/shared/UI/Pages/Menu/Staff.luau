@@ -1,4 +1,14 @@
+--[[
+	Staff (Menu tab)
+	Your rank at a glance: a rank card (level and title on a ShopCategory header,
+	the HUD LevelBar's gold XP bar, the next title to earn), six work stats in the
+	Statistics card style, then the title roadmap as ShopCategory rows.
+	UI-REVISION: restructured from a loose bar + ten-card dump; title rows no longer
+	carry the currency glyph.
+--]]
+
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 local Packages = ReplicatedStorage:WaitForChild("Packages")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local UI = Shared:WaitForChild("UI")
@@ -17,8 +27,19 @@ local ShopCategory = require(UI.Pages.Shop.ShopCategory)
 local Progression = require(Shared.Configuration.Progression)
 local Titles = require(Shared.Configuration.Titles)
 
+---> constants
+local HEADER_IMAGE = "http://www.roblox.com/asset/?id=13465572823"
+local FOOTER_IMAGE = "http://www.roblox.com/asset/?id=13465749908"
+local ROW_WIDTH = 0.981
+
 ---> private
 local c = React.createElement
+
+local function formatThousands(n: number): string
+	local s = tostring(math.floor(n))
+	local formatted = s:reverse():gsub("(%d%d%d)", "%1,"):reverse()
+	return (formatted:gsub("^,", ""))
+end
 
 -- Stat card copied from Statistics.luau (Denk label over Fredoka value).
 local function StatCard(props: {
@@ -30,7 +51,6 @@ local function StatCard(props: {
 		BackgroundTransparency = 1,
 		LayoutOrder = props.LayoutOrder,
 	}, {
-		UICorner = c("UICorner", { CornerRadius = Styles.CORNER_CARD }),
 		UIPadding = c("UIPadding", {
 			PaddingLeft = UDim.new(0.07, 0),
 			PaddingRight = UDim.new(0.07, 0),
@@ -64,10 +84,118 @@ local function StatCard(props: {
 	})
 end
 
+-- ShopCategory anatomy (header slice, GREEN body, footer slice) holding the XP bar.
+local function RankCard(props: {
+	Heading: string,
+	Progress: number,
+	BarText: string,
+	Caption: string,
+	LayoutOrder: number,
+})
+	return c("Frame", {
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundTransparency = 1,
+		LayoutOrder = props.LayoutOrder,
+		Size = UDim2.fromScale(1, 0),
+	}, {
+		UIListLayout = c("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder }),
+		Header = c("ImageLabel", {
+			BackgroundTransparency = 1,
+			Image = HEADER_IMAGE,
+			ImageColor3 = Styles.GREEN_LIGHT,
+			LayoutOrder = 1,
+			Size = UDim2.fromScale(ROW_WIDTH, 0.065),
+			SizeConstraint = Enum.SizeConstraint.RelativeXX,
+			SliceCenter = Rect.new(0, 0, 1019, 40),
+		}, {
+			Title = c("TextLabel", {
+				AnchorPoint = Vector2.new(0.5, 0),
+				BackgroundTransparency = 1,
+				FontFace = Styles.FONT_FREDOKA,
+				Position = UDim2.fromScale(0.5, 0.132084),
+				Size = UDim2.fromScale(0.94, 0.7),
+				Text = props.Heading,
+				TextColor3 = Color3.new(1, 1, 1),
+				TextScaled = true,
+				TextXAlignment = Enum.TextXAlignment.Left,
+			}),
+		}),
+		Body = c("Frame", {
+			BackgroundColor3 = Styles.GREEN,
+			BorderSizePixel = 0,
+			LayoutOrder = 2,
+			Size = UDim2.fromScale(ROW_WIDTH, 0.12),
+			SizeConstraint = Enum.SizeConstraint.RelativeXX,
+		}, {
+			Bar = c("Frame", {
+				AnchorPoint = Vector2.new(0.5, 0),
+				BackgroundColor3 = Styles.OFFWHITE,
+				BorderSizePixel = 0,
+				Position = UDim2.fromScale(0.5, 0.14),
+				Size = UDim2.fromScale(0.94, 0.36),
+			}, {
+				Corner = c("UICorner", { CornerRadius = Styles.CORNER_FULL }),
+				Fill = c("Frame", {
+					BackgroundColor3 = Styles.GOLD,
+					BorderSizePixel = 0,
+					Size = UDim2.fromScale(math.max(props.Progress, 0.04), 1),
+					Visible = props.Progress > 0,
+				}, {
+					Corner = c("UICorner", { CornerRadius = Styles.CORNER_FULL }),
+				}),
+				Text = c("TextLabel", {
+					AnchorPoint = Vector2.new(0.5, 0.5),
+					BackgroundTransparency = 1,
+					FontFace = Styles.FONT_FREDOKA,
+					Position = UDim2.fromScale(0.5, 0.5),
+					Size = UDim2.fromScale(0.6, 0.78),
+					Text = props.BarText,
+					TextColor3 = Styles.GREEN_DEEP,
+					TextScaled = true,
+					ZIndex = 2,
+				}),
+			}),
+			Caption = c("TextLabel", {
+				AnchorPoint = Vector2.new(0.5, 0),
+				BackgroundTransparency = 1,
+				FontFace = Styles.FONT_FREDOKA,
+				Position = UDim2.fromScale(0.5, 0.6),
+				Size = UDim2.fromScale(0.94, 0.28),
+				Text = props.Caption,
+				TextColor3 = Color3.new(1, 1, 1),
+				TextScaled = true,
+				TextXAlignment = Enum.TextXAlignment.Left,
+			}),
+		}),
+		Footer = c("ImageLabel", {
+			BackgroundTransparency = 1,
+			Image = FOOTER_IMAGE,
+			ImageColor3 = Styles.GREEN_LIGHT,
+			LayoutOrder = 3,
+			Size = UDim2.fromScale(ROW_WIDTH, 0.02),
+			SizeConstraint = Enum.SizeConstraint.RelativeXX,
+		}),
+	})
+end
+
+-- Story preview: a level 3 player part way to level 4.
+local function sampleData()
+	return {
+		Level = 3,
+		XP = 33,
+		Titles = nil,
+		Statistics = { OrdersPrepared = 12, ShiftsCompleted = 2, SpillsCleaned = 3 },
+	}
+end
+
 return function()
 	local playerData, setPlayerData = React.useState(nil)
 
 	React.useEffect(function()
+		if not RunService:IsRunning() then
+			setPlayerData(sampleData())
+			return
+		end
 		local DataController = Knit.GetController("DataController")
 		DataController:GetDataAsync():andThen(function(data)
 			setPlayerData(data)
@@ -114,36 +242,39 @@ return function()
 	end
 
 	local stats = if isLoaded and typeof(playerData.Statistics) == "table" then playerData.Statistics else nil
-	local ordersServed = if stats then stats.OrdersPrepared or 0 else 0
-	local shiftsCompleted = if stats then stats.ShiftsCompleted or 0 else 0
-	local spillsCleaned = if stats then stats.SpillsCleaned or 0 else 0
+	local function stat(key: string): string
+		if not isLoaded then
+			return "..."
+		end
+		return formatThousands(if stats then stats[key] or 0 else 0)
+	end
+
+	local heading = if not isLoaded
+		then "Loading..."
+		elseif equippedText ~= "" then `Level {level} · {equippedText}`
+		else `Level {level}`
+	local barText = if not isLoaded
+		then ""
+		elseif atMax then "Max level!"
+		else `{formatThousands(xpInto)} / {formatThousands(xpForLevel)} XP`
+	local caption = if not isLoaded
+		then ""
+		elseif nextTitle then `Next title: {nextTitle.Text} at Level {nextTitle.Level}`
+		else "Every level title earned!"
 
 	local cards = {
-		{ Label = "Level", Value = if isLoaded then tostring(level) else "..." },
-		{ Label = "Title", Value = if isLoaded then (if equippedText ~= "" then equippedText else "None") else "..." },
-		{
-			Label = "XP",
-			Value = if not isLoaded then "..." elseif atMax then "Max level!" else `{xpInto} / {xpForLevel}`,
-		},
-		{ Label = "Order Tickets", Value = if isLoaded then tostring(Progression.SlotsFor(level)) else "..." },
-		{ Label = "Orders Served", Value = if isLoaded then tostring(ordersServed) else "..." },
-		{ Label = "Shifts Completed", Value = if isLoaded then tostring(shiftsCompleted) else "..." },
+		{ Label = "Orders Served", Value = stat("OrdersPrepared") },
+		{ Label = "Shifts Completed", Value = stat("ShiftsCompleted") },
 		{ Label = "Recipes Unlocked", Value = if isLoaded then `{unlockedRecipes} / {totalRecipes}` else "..." },
+		{ Label = "Order Tickets", Value = if isLoaded then tostring(Progression.SlotsFor(level)) else "..." },
 		{ Label = "Titles Earned", Value = if isLoaded then `{ownedCount} / {#allTitles}` else "..." },
-		{
-			Label = "Next Title",
-			Value = if not isLoaded
-				then "..."
-				elseif nextTitle then `{nextTitle.Text} (Level {nextTitle.Level})`
-				else "All earned!",
-		},
-		{ Label = "Spills Cleaned", Value = if isLoaded then tostring(spillsCleaned) else "..." },
+		{ Label = "Spills Cleaned", Value = stat("SpillsCleaned") },
 	}
 
 	local gridChildren = {
 		UIGridLayout = c("UIGridLayout", {
-			CellSize = UDim2.fromScale(0.47, 0.17),
-			CellPadding = UDim2.fromScale(0.025, 0.025),
+			CellSize = UDim2.fromScale(0.47, 0.3),
+			CellPadding = UDim2.fromScale(0.025, 0.03),
 			FillDirection = Enum.FillDirection.Horizontal,
 			HorizontalAlignment = Enum.HorizontalAlignment.Center,
 			SortOrder = Enum.SortOrder.LayoutOrder,
@@ -157,32 +288,28 @@ return function()
 		})
 	end
 
+	-- Title roadmap: the name on the left, its status on the right.
+	local function statusFor(def, isOwned: boolean): string
+		if titlesData.Equipped == def.Id then
+			return "Equipped"
+		elseif isOwned then
+			return "Earned"
+		elseif def.Source == "Level" then
+			return `Level {def.Level}`
+		end
+		return def.Description
+	end
+
 	local levelItems = {}
 	local manualItems = {}
 	for _, def in allTitles do
 		local isOwned = titlesData.Owned[def.Id] == true
 		if def.Source == "Level" then
-			table.insert(levelItems, {
-				Label = `Level {def.Level} — {def.Text}`,
-				Price = if isOwned then "Earned" else def.Description,
-			})
-		else
-			if isOwned then
-				table.insert(manualItems, {
-					Label = def.Text,
-					Price = "Earned",
-				})
-			elseif Titles.IsSecret(def, isOwned) then
-				table.insert(manualItems, {
-					Label = "???",
-					Price = "???",
-				})
-			elseif not Titles.IsHidden(def, isOwned) then
-				table.insert(manualItems, {
-					Label = def.Text,
-					Price = def.Description,
-				})
-			end
+			table.insert(levelItems, { Label = def.Text, Price = statusFor(def, isOwned) })
+		elseif Titles.IsSecret(def, isOwned) then
+			table.insert(manualItems, { Label = "???", Price = "???" })
+		elseif isOwned or not Titles.IsHidden(def, isOwned) then
+			table.insert(manualItems, { Label = def.Text, Price = statusFor(def, isOwned) })
 		end
 	end
 
@@ -196,30 +323,24 @@ return function()
 			LayoutOrder = math.huge,
 			Size = UDim2.fromScale(1, 0.05),
 		}),
-		ProgressBar = c("Frame", {
-			BackgroundColor3 = Styles.OFFWHITE,
-			BorderSizePixel = 0,
+		Rank = c(RankCard, {
+			Heading = heading,
+			Progress = progress,
+			BarText = barText,
+			Caption = caption,
 			LayoutOrder = 1,
-			Size = UDim2.fromScale(0.981, 0.045),
-		}, {
-			UICorner = c("UICorner", { CornerRadius = UDim.new(0.5, 0) }),
-			Fill = c("Frame", {
-				BackgroundColor3 = Styles.GREEN,
-				BorderSizePixel = 0,
-				Size = UDim2.fromScale(progress, 1),
-			}, {
-				UICorner = c("UICorner", { CornerRadius = UDim.new(0.5, 0) }),
-			}),
 		}),
 		Cards = c("Frame", {
 			BackgroundTransparency = 1,
 			LayoutOrder = 2,
-			Size = UDim2.fromScale(1, 0.95),
+			Size = UDim2.fromScale(ROW_WIDTH, 0.42),
+			SizeConstraint = Enum.SizeConstraint.RelativeXX,
 		}, gridChildren),
 		LevelTitles = c(ShopCategory, {
 			Title = "Level Titles",
 			Items = levelItems,
 			LayoutOrder = 3,
+			PriceGlyph = "",
 		}),
 	}
 	if #manualItems > 0 then
@@ -227,6 +348,7 @@ return function()
 			Title = "Event Titles",
 			Items = manualItems,
 			LayoutOrder = 4,
+			PriceGlyph = "",
 		})
 	end
 

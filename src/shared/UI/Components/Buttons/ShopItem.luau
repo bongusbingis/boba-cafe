@@ -26,6 +26,9 @@ export type Props = {
 	Color: Color3?,
 	LayoutOrder: number?,
 	OnClick: (() -> ())?,
+	-- Prefix for Price; defaults to the currency glyph. Pass "" for rows whose
+	-- right-hand text is not a price (a status or a requirement).
+	PriceGlyph: string?,
 }
 
 return function(props: Props)
@@ -96,7 +99,7 @@ return function(props: Props)
 				FontFace = Styles.FONT_FREDOKA,
 				LayoutOrder = 1,
 				Size = UDim2.fromScale(0.234582, 0.57),
-				Text = "\u{e002} " .. props.Price,
+				Text = (if props.PriceGlyph ~= nil then props.PriceGlyph else "\u{e002} ") .. props.Price,
 				TextColor3 = Color3.new(1, 1, 1),
 				TextScaled = true,
 				TextXAlignment = Enum.TextXAlignment.Right,
