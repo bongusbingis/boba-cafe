@@ -317,10 +317,13 @@ local function patienceFraction(model: Model): number
 end
 
 -- C1 (own customer turns red) and C3 (nearby rescuable customer) toasts. Client-only.
+-- Patience runs at the register and at pickup, so both states count as waiting
+-- (AUDIT-FIX D4.1).
 local function runPatienceCues(model: Model, root: BasePart, fraction: number, clockedIn: boolean)
 	local localPlayer = Players.LocalPlayer
 	local assigned = model:GetAttribute("AssignedUserId")
-	local atCounter = model:GetAttribute("State") == "AtCounter"
+	local state = model:GetAttribute("State")
+	local atCounter = state == "AtCounter" or state == "AtPickup"
 
 	-- C1
 	if
@@ -386,8 +389,11 @@ local function runPatienceCues(model: Model, root: BasePart, fraction: number, c
 	end
 end
 
--- Local view of each NPC ServePrompt (design 4.6): "Serve" for the assigned barista,
--- "Rescue" for a clocked-in barista once patience is below 30%, else hidden. The
+-- Local view of each NPC CustomerPrompt (design 4.6). The server names it
+-- "CustomerPrompt" and mirrors its ActionText to the model's PromptAction attribute
+-- (CustomerService:_ensureNpcPrompt). "Take Order" is left as the server set it.
+-- "Serve" shows for the assigned barista only; another clocked-in barista sees
+-- "Rescue" once patience is below RESCUE_FRACTION; anyone else sees nothing. The
 -- server enforces every rule; this only decides what the player sees.
 local function updateServePrompts()
 	local customers = workspace:FindFirstChild("Customers")
@@ -396,20 +402,23 @@ local function updateServePrompts()
 	end
 	local clockedIn = not isClockedOut()
 	for _, model in customers:GetChildren() do
-		local root = model:FindFirstChild("HumanoidRootPart")
-		local prompt = root and root:FindFirstChild("ServePrompt")
-		if prompt and prompt:IsA("ProximityPrompt") then
+		local prompt = model:FindFirstChild("CustomerPrompt", true)
+		local root = prompt and prompt.Parent
+		if prompt and prompt:IsA("ProximityPrompt") and root and root:IsA("BasePart") then
 			local fraction = patienceFraction(model)
-			if model:GetAttribute("AssignedUserId") == Players.LocalPlayer.UserId then
-				prompt.Enabled = true
-				prompt.ActionText = "Serve"
-			elseif clockedIn and fraction < CustomerConfig.RESCUE_FRACTION then
-				prompt.Enabled = true
-				prompt.ActionText = "Rescue"
-			else
-				prompt.Enabled = false
+			local action = model:GetAttribute("PromptAction")
+			if action == "Serve" then
+				if model:GetAttribute("AssignedUserId") == Players.LocalPlayer.UserId then
+					prompt.Enabled = true
+					prompt.ActionText = "Serve"
+				elseif clockedIn and fraction < CustomerConfig.RESCUE_FRACTION then
+					prompt.Enabled = true
+					prompt.ActionText = "Rescue"
+				else
+					prompt.Enabled = false
+				end
 			end
-			local cuesOk, cuesErr = pcall(runPatienceCues, model, root :: BasePart, fraction, clockedIn)
+			local cuesOk, cuesErr = pcall(runPatienceCues, model, root, fraction, clockedIn)
 			if not cuesOk and not patienceCuesWarned then
 				patienceCuesWarned = true
 				warn("[KitchenController] Patience cues failed: " .. tostring(cuesErr))
