@@ -293,7 +293,21 @@ end
 
 function ProgressionService:_onLevelUp(player: Player, level: number, proxy: any)
 	local ok, err = pcall(function()
-		self:_ensureTitles(player, proxy)
+		local titles = self:_ensureTitles(player, proxy)
+		-- TAKEOVER-REVIEW-FIX P3-5: the overhead follows level-ups again. Only a player still wearing the previous
+		-- highest level title moves up; a manual title, an older pick or an unequip is left alone.
+		local previousBest = Titles.HighestLevelTitleId(level - 1)
+		local newBest = Titles.HighestLevelTitleId(level)
+		if
+			titles.Equipped ~= ""
+			and titles.Equipped == previousBest
+			and newBest ~= previousBest
+			and titles.Owned[newBest]
+		then
+			titles.Equipped = newBest
+			proxy:SetValue({ "Titles" }, titles)
+			setEquippedTitleAttribute(player, titles)
+		end
 		local reward = Progression.COSMETIC_REWARDS[level]
 		if reward ~= nil then
 			proxy:SetValue({ "Inventory", "Items", reward.ItemType, HttpService:GenerateGUID(false) }, {
