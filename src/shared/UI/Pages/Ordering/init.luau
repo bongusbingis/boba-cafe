@@ -162,14 +162,22 @@ return function(props: {
 			and props.Args[1].NpcId ~= nil
 		then props.Args[1]
 		else nil
-	if npcOrderData == nil then
-		pcall(function()
-			local controller = Knit.GetController("OrderController")
-			if controller and controller.ActiveNpcOrder then
-				npcOrderData = controller.ActiveNpcOrder
+
+	-- TAKEOVER-REVIEW-FIX P2-1: the tablet's NPC comes only from this page's own Args. The page can close without
+	-- closeMenu (HUD page switch), so clear the controller's copy on unmount and never fall back to it.
+	React.useEffect(function()
+		return function()
+			if npcOrderData == nil then
+				return
 			end
-		end)
-	end
+			pcall(function()
+				local controller = Knit.GetController("OrderController")
+				if controller and controller.ActiveNpcOrder == npcOrderData then
+					controller.ActiveNpcOrder = nil
+				end
+			end)
+		end
+	end, {})
 
 	local function closeMenu()
 		pcall(function()

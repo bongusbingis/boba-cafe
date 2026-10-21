@@ -24,6 +24,7 @@ local function App()
 	local extraData = React.useRef(nil)
 	local closePreviousPageCallback = React.useRef(nil)
 	local currentPage, setCurrentPage = React.useState(nil)
+	local pageMountKey, setPageMountKey = React.useState(0)
 
 	local function closeCurrentPageIfExists()
 		if closePreviousPageCallback.current then
@@ -56,7 +57,16 @@ local function App()
 			local pages = UI:FindFirstChild("Pages")
 			local orderingPage = pages and pages:FindFirstChild("Ordering")
 			if orderingPage then
-				handleSetCurrentPage(orderingPage, npcOrderData)
+				-- TAKEOVER-REVIEW-FIX P2-1: Take Order always opens the tablet for this NPC (never toggles it shut),
+				-- and a new mount key resets the page when it was already open for another NPC.
+				extraData.current = { npcOrderData }
+				setCurrentPage(function()
+					closeCurrentPageIfExists()
+					return orderingPage
+				end)
+				setPageMountKey(function(n)
+					return n + 1
+				end)
 			end
 		end)
 
@@ -106,7 +116,7 @@ local function App()
 				Size = FULL_SCALE,
 			},
 		}, {
-			CurrentPage = pageToRender,
+			["CurrentPage" .. pageMountKey] = pageToRender,
 		}),
 		HUD = React.createElement(Hud, {
 			CurrentPage = currentPage,
