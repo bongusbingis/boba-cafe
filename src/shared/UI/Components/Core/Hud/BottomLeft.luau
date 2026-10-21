@@ -40,6 +40,7 @@ local Styles = require(UI.Styles)
 local Pane = require(UI.Components.Pane)
 local NormalButton = require(UI.Components.Buttons.NormalButton)
 local SmallNotification = require(script.Parent.SmallNotification)
+local LevelBar = require(script.Parent.LevelBar)
 
 ---> private
 local c = React.createElement
@@ -392,6 +393,8 @@ return function(props: {
 				},
 			}, {
 				Notification = c(SmallNotification.Component, {}),
+
+				LevelBar = c(LevelBar.Component, { LayoutOrder = -1 }),
 
 				ShiftTimer = clockedIn and shiftCount ~= nil and shiftTarget ~= nil and c(NormalButton, {
 					Icon = "rbxassetid://8184068342",
