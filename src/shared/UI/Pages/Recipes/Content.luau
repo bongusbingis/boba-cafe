@@ -12,16 +12,32 @@ Match the size and flavor on the ticket.
 
 Perfect drinks pay the most.]]
 
--- RichText for every item NPCs can order, generated from OrderSpec.Steps.
-function Content.build(): string
-	local blocks = {}
+local LOCKED_TRANSPARENCY = 0.35 -- STYLE 3.3 disabled text
+
+-- RichText for every drink NPCs can order, generated from OrderSpec.Steps. One block per
+-- ORDER_POOL entry (deduped by Key). Drinks above `level` show "Unlocks at Level N" dimmed and
+-- sit last. Order: focused unlocked blocks, other unlocked blocks, then locked by level.
+function Content.build(focusItem: string?, level: number?): string
+	local playerLevel = level or 1
+	local focused = {}
+	local unlocked = {}
+	local locked = {}
 	local seen = {}
-	for _, entry in CustomerConfig.ORDER_POOL do
+	for index, entry in CustomerConfig.ORDER_POOL do
 		local orderItem = entry.OrderItem
-		if seen[orderItem.Item] then
+		local key = entry.Key or orderItem.Item
+		if seen[key] then
 			continue
 		end
-		seen[orderItem.Item] = true
+		seen[key] = true
+		local title = entry.Label or orderItem.Item
+
+		if entry.MinLevel > playerLevel then
+			local text = `<font transparency="{LOCKED_TRANSPARENCY}"><b>{title}</b>\n`
+				.. `<font face="DenkOne">Unlocks at Level {entry.MinLevel}</font></font>`
+			table.insert(locked, { Text = text, MinLevel = entry.MinLevel, Index = index })
+			continue
+		end
 
 		-- Sized entries get their Size when an order is picked; any size shows the same steps.
 		local customInfo = table.clone(orderItem.CustomInfo or {})
@@ -37,16 +53,33 @@ function Content.build(): string
 			continue
 		end
 
-		local lines = { "<b>" .. orderItem.Item .. "</b>" }
+		local lines = { "<b>" .. title .. "</b>" }
 		local rows = OrderSpec.Steps(spec)
 		if #rows == 0 then
 			table.insert(lines, '<font face="DenkOne">Grab it from the display.</font>')
 		else
-			for index, row in rows do
-				table.insert(lines, `<font face="DenkOne">{index}. {row.Label}</font>`)
+			for stepIndex, row in rows do
+				table.insert(lines, `<font face="DenkOne">{stepIndex}. {row.Label}</font>`)
 			end
 		end
-		table.insert(blocks, table.concat(lines, "\n"))
+		table.insert(
+			if focusItem ~= nil and orderItem.Item == focusItem then focused else unlocked,
+			table.concat(lines, "\n")
+		)
+	end
+
+	table.sort(locked, function(a, b)
+		if a.MinLevel ~= b.MinLevel then
+			return a.MinLevel < b.MinLevel
+		end
+		return a.Index < b.Index
+	end)
+
+	local blocks = {}
+	table.move(focused, 1, #focused, #blocks + 1, blocks)
+	table.move(unlocked, 1, #unlocked, #blocks + 1, blocks)
+	for _, block in locked do
+		table.insert(blocks, block.Text)
 	end
 	return table.concat(blocks, "\n\n")
 end

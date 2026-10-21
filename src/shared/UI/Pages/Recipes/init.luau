@@ -20,6 +20,23 @@ local usePx = require(UI.Hooks.usePx)
 
 return function(props)
 	local px = usePx()
+	local player = Players.LocalPlayer
+	local function readLevel(): number
+		local value = player and player:GetAttribute("Level")
+		return if typeof(value) == "number" then value else 1
+	end
+	local level, setLevel = React.useState(readLevel)
+	React.useEffect(function()
+		if player == nil then
+			return nil
+		end
+		local connection = player:GetAttributeChangedSignal("Level"):Connect(function()
+			setLevel(readLevel())
+		end)
+		return function()
+			connection:Disconnect()
+		end
+	end, {})
 	local page, setPage = React.useState("Recipes")
 
 	local isRecipes = page == "Recipes"
@@ -57,7 +74,7 @@ return function(props)
 				TextColor3 = Styles.OFFWHITE,
 				TextSize = px(35),
 				TextWrapped = true,
-				Text = if isRecipes then Content.build() else Content.Tips,
+				Text = if isRecipes then Content.build(nil, level) else Content.Tips,
 				RichText = true,
 			},
 		}),
