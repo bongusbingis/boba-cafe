@@ -194,6 +194,40 @@ return function()
 		it("should keep the classic picks at level 2", function()
 			expect(Rules.PickOrder(sequence({ 0.5, 0 }), nil, 2).Item).to.equal("Regular")
 		end)
+
+		it("should never pick Espresso or Mango Boba below their level", function()
+			for step = 0, 99 do
+				local order = Rules.PickOrder(sequence({ step / 100, 0 }), nil, 6)
+				expect(order.Item ~= "Espresso").to.equal(true)
+				expect(order.CustomInfo["Syrup Flavor"] ~= "Mango").to.equal(true)
+			end
+		end)
+
+		it("should pick Espresso at level 7", function()
+			local order = Rules.PickOrder(sequence({ 0.95, 0 }), nil, 7)
+			expect(order.Category).to.equal("Coffees")
+			expect(order.Item).to.equal("Espresso")
+			expect(order.CustomInfo.Iced).to.equal(false)
+			expect(order.CustomInfo.Sugar).to.equal(false)
+			expect(order.CustomInfo.Size).to.equal("Small")
+		end)
+
+		it("should keep Strawberry Boba below Espresso at level 7", function()
+			local order = Rules.PickOrder(sequence({ 0.9, 0 }), nil, 7)
+			expect(order.CustomInfo["Syrup Flavor"]).to.equal("Strawberry")
+		end)
+
+		it("should pick Mango Boba at level 8", function()
+			local order = Rules.PickOrder(sequence({ 0.97, 0 }), nil, 8)
+			expect(order.Item).to.equal("Custom Boba")
+			expect(order.CustomInfo["Syrup Flavor"]).to.equal("Mango")
+			expect(order.CustomInfo["Tapioca Flavor"]).to.equal("Normal")
+		end)
+
+		it("should pick Espresso at level 8", function()
+			local order = Rules.PickOrder(sequence({ 0.91, 0 }), nil, 8)
+			expect(order.Item).to.equal("Espresso")
+		end)
 	end)
 
 	-- A pool entry OrderSpec rejects makes CustomerService skip the spawn silently, so
@@ -288,6 +322,16 @@ return function()
 			expect(#two).to.equal(2)
 			expect(two[1]).to.equal("Taro Boba")
 			expect(two[2]).to.equal("Strawberry Boba")
+		end)
+
+		it("should list Espresso at 7 and Mango Boba at 8", function()
+			local seven = Rules.NewDrinksAt(7)
+			expect(#seven).to.equal(1)
+			expect(seven[1]).to.equal("Espresso")
+			local eight = Rules.NewDrinksAt(8)
+			expect(#eight).to.equal(1)
+			expect(eight[1]).to.equal("Mango Boba")
+			expect(#Rules.NewDrinksAt(6)).to.equal(0)
 		end)
 	end)
 

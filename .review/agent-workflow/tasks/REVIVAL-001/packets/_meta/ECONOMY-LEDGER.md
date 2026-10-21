@@ -7,3 +7,5 @@
 | PATIENCE-RAMP | CustomerConfig.PATIENCE_RAMP_MAX_TRIM | 0.10 | C6: floor x0.90 keeps the Fast window (>=50%) reachable; inside the 5-10% brief |
 | BIG-B1-P2-POOL | CustomerConfig.ORDER_POOL Taro Boba Weight (L2) | 10 | ~1 in 12 orders at L2 (8.3%); classics keep 83.3% |
 | BIG-B1-P2-POOL | CustomerConfig.ORDER_POOL Strawberry Boba Weight (L2) | 10 | same as Taro; base pay unchanged (Boba Teas 3), avg pay/item 2.40 -> 2.50 from mix only |
+| BIG-B1-P2-POOL ext | CustomerConfig.ORDER_POOL Espresso Weight (L7) | 8 | BIG-B1 D5; 6.25% at L7 (total 128), classics 78.1%; pays existing Coffees 2. APPROVED (Jack, 2026-10-20) |
+| BIG-B1-P2-POOL ext | CustomerConfig.ORDER_POOL Mango Boba Weight (L8) | 8 | BIG-B1 D5; 5.9% at L8+ (total 136), classics 73.5%; pays existing Boba Teas 3; avg pay/item 2.47 from mix only. APPROVED (Jack, 2026-10-20) |

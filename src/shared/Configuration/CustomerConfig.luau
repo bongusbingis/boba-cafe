@@ -116,6 +116,30 @@ local CustomerConfig = {
 				CustomInfo = { ["Syrup Flavor"] = "Strawberry", ["Tapioca Flavor"] = "Normal" },
 			},
 		},
+		{
+			Key = "Espresso",
+			Label = "Espresso",
+			Weight = 8, -- PROPOSED (Jack): Espresso
+			MinLevel = Progression.MIN_LEVEL_BY_ITEM["Espresso"], -- PROPOSED (Jack) via Progression
+			Sized = true,
+			OrderItem = {
+				Category = "Coffees",
+				Item = "Espresso",
+				CustomInfo = { Iced = false, Sugar = false },
+			},
+		},
+		{
+			Key = "Mango Syrup",
+			Label = "Mango Boba",
+			Weight = 8, -- PROPOSED (Jack): Mango Boba
+			MinLevel = Progression.MIN_LEVEL_BY_ITEM["Mango Syrup"], -- PROPOSED (Jack) via Progression
+			Sized = true,
+			OrderItem = {
+				Category = "Boba Teas",
+				Item = "Custom Boba",
+				CustomInfo = { ["Syrup Flavor"] = "Mango", ["Tapioca Flavor"] = "Normal" },
+			},
+		},
 	} :: { PoolEntry },
 	CLASSIC_MIN_SHARE = 0.6, -- TUNING: classics keep at least this share of the eligible weight at every level
 	NEW_ENTRY_MAX_WEIGHT = 10, -- TUNING: no level-2+ entry may weigh more than this
