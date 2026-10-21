@@ -78,6 +78,18 @@ function RealOrderService.CountsForTeamChain(multiplier: number): boolean
 	return multiplier > 1
 end
 
+-- CustomerResult for ShiftService:RecordCustomer from a real-order serve (REALORDER-SHIFT D2, D5).
+function RealOrderService.ShiftResult(grade: any, pay: number, tipExtra: number): { [string]: any }
+	return {
+		Kind = "Served",
+		Grade = if grade == "Perfect" then "Perfect" else "Close",
+		Pay = math.max(0, pay - tipExtra),
+		Fast = false,
+		Combo = 0,
+		Tip = nil,
+	}
+end
+
 -- Records a serve and drops timestamps outside the window.
 function RealOrderService.Record(history: History, baristaId: number, customerId: number, now: number)
 	local key = pairKey(baristaId, customerId)
@@ -273,12 +285,14 @@ function RealOrderService:_onOrderPickedUp(
 	-- Pass/pet tip boost multiplies the serve pay (DEC-036 B1).
 	-- barista.Parent is nil once they left during the tip-bonus yield; skip so TakeTipExtra
 	-- does not re-create a _tipRemainder entry that PlayerRemoving already cleared.
+	local tipExtra = 0
 	if tipBonus > 0 and barista.Parent ~= nil then
 		local okExtra, extra = pcall(function()
 			return Knit.GetService("PerkService"):TakeTipExtra(barista, pay, tipBonus)
 		end)
 		if okExtra and typeof(extra) == "number" and extra > 0 then
 			pay += extra
+			tipExtra = extra
 			pcall(function()
 				Knit.GetService("ShiftService"):AddTip(barista, extra)
 			end)
@@ -289,7 +303,7 @@ function RealOrderService:_onOrderPickedUp(
 	end)
 	if okCombo and RealOrderService.CountsForTeamChain(multiplier) then
 		pcall(function()
-			customerService:RecordTeamServe(grade or "Close")
+			customerService:RecordTeamServe(grade or "Close", barista)
 		end)
 	end
 	pcall(function()
@@ -299,6 +313,15 @@ function RealOrderService:_onOrderPickedUp(
 	pcall(function()
 		self._progression:AddXp(barista, Progression.XP_PER_ITEM * #specs)
 	end)
+	-- REALORDER-SHIFT: counts toward the barista's shift N (Q-G10), after the payout, non-yielding.
+	if RealOrderService.CountsForTeamChain(multiplier) then
+		local result = RealOrderService.ShiftResult(grade, pay, tipExtra)
+		task.defer(function()
+			pcall(function()
+				Knit.GetService("ShiftService"):RecordCustomer(barista, result)
+			end)
+		end)
+	end
 	pcall(function()
 		Knit.GetService("QuestService"):AdvanceQuest(barista, "RegularOrders", 1)
 	end)
