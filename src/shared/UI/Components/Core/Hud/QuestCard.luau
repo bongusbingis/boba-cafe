@@ -332,10 +332,12 @@ local function QuestRow(props: {
 			TextXAlignment = Enum.TextXAlignment.Center,
 		})
 	else
+		-- UI-REVISION: the button names its action ("20 BB" alone read like a second
+		-- reward pill) and is not GOLD (FEEDBACK-VOICE 5: gold is money/rank, not buttons).
 		actionElement = c(QuestActionButton, {
-			Text = if props.hasFreeReroll then "Free" else `{QuestConfig.REROLL_COST_BOBABUCKS} BB`,
-			Color = if props.hasFreeReroll then Styles.GREEN_LIGHT else Styles.GOLD_MID,
-			TextColor = if props.hasFreeReroll then Color3.new(1, 1, 1) else Styles.GOLD_DEEP,
+			Text = if props.hasFreeReroll then "Free\nReroll" else `Reroll\n{QuestConfig.REROLL_COST_BOBABUCKS} BB`,
+			Color = Styles.GREEN_LIGHT,
+			TextColor = Color3.new(1, 1, 1),
 			Size = UDim2.fromOffset(actionWidth, actionHeight),
 			Disabled = props.isActing,
 			OnClick = function()
