@@ -867,7 +867,7 @@ function CustomerService:_onServeTriggered(npc: Npc.Npc, player: Player)
 			end
 		end)
 	end)
-	self:_showServePay(npc, pay)
+	self:_showServePay(npc, pay, grade)
 
 	npc.Rescue = rescue
 	local holder = self._assignee[npc]
@@ -902,7 +902,7 @@ function CustomerService:HasTicket(player: Player): boolean
 end
 
 -- A floating "+N" over the NPC for 1.5 s. Styles tokens only (DEC-013).
-function CustomerService:_showServePay(npc: Npc.Npc, pay: number)
+function CustomerService:_showServePay(npc: Npc.Npc, pay: number, grade: Rules.ServeGrade)
 	local head = npc.Model:FindFirstChild("Head")
 	if head == nil then
 		return
@@ -913,13 +913,20 @@ function CustomerService:_showServePay(npc: Npc.Npc, pay: number)
 	gui.Size = UDim2.fromOffset(120, 40)
 	gui.StudsOffset = Vector3.new(0, 4.5, 0)
 	gui.AlwaysOnTop = true
+	gui.MaxDistance = 80
+	gui:SetAttribute("Grade", grade)
 	local payLabel = Instance.new("TextLabel")
 	payLabel.Size = UDim2.fromScale(1, 1)
 	payLabel.BackgroundTransparency = 1
 	payLabel.FontFace = Styles.FONT_FREDOKA
-	payLabel.TextColor3 = Styles.GREEN_DEEP
+	payLabel.TextColor3 = Styles.GOLD
 	payLabel.TextScaled = true
-	payLabel.Text = `+{pay}`
+	payLabel.Text = `+{pay} BB`
+	local payStroke = Instance.new("UIStroke")
+	payStroke.Color = Styles.GOLD:Lerp(Color3.new(0, 0, 0), 0.3)
+	payStroke.Thickness = 1
+	payStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+	payStroke.Parent = payLabel
 	payLabel.Parent = gui
 	gui.Parent = npc.Model
 	task.delay(1.5, function()
