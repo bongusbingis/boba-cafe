@@ -32,19 +32,38 @@ local BASE_IMAGE = "http://www.roblox.com/asset/?id=13473433246"
 local BORDER_IMAGE = "http://www.roblox.com/asset/?id=13382163077"
 
 local function buildLines(summary): { string }
+	local served = `Served {summary.Served or 0}`
+	if (summary.Walkouts or 0) > 0 then
+		served ..= ` · Walkouts {summary.Walkouts}`
+	end
+	local pay = `Pay {summary.Pay or 0} · Bonus {summary.Bonus or 0}`
+	if (summary.Tips or 0) > 0 then
+		pay ..= ` · Tips {summary.Tips}`
+	end
 	local lines = {
 		string.rep("★", summary.Stars or 0),
-		`Customers served: {summary.Served or 0}`,
-		`Pay: {summary.Pay or 0}  Bonus: {summary.Bonus or 0}`,
-		`Best combo: x {summary.BestCombo or 0}`,
+		served,
+		pay,
 	}
+	if (summary.BestCombo or 0) >= 2 then
+		table.insert(lines, `Best combo x {summary.BestCombo}`)
+	end
 	if summary.Xp ~= nil then
-		table.insert(lines, `XP: +{summary.Xp}`)
+		local progress = ""
+		if summary.XpIntoLevel ~= nil and summary.XpForLevel ~= nil then
+			progress = ` ({summary.XpIntoLevel}/{summary.XpForLevel})`
+		end
 		if summary.LevelBefore ~= nil and summary.LevelAfter ~= nil and summary.LevelAfter > summary.LevelBefore then
-			table.insert(lines, `Level up! Level {summary.LevelAfter}`)
+			table.insert(lines, `XP +{summary.Xp} · Level up! Level {summary.LevelAfter}{progress}`)
+		elseif summary.LevelAfter ~= nil then
+			table.insert(lines, `XP +{summary.Xp} · Level {summary.LevelAfter}{progress}`)
+		else
+			table.insert(lines, `XP +{summary.Xp}`)
 		end
 	end
-	if summary.First then
+	if summary.NextUnlock ~= nil then
+		table.insert(lines, `Next: {summary.NextUnlock}`)
+	elseif summary.First then
 		table.insert(lines, "Next shift starts now")
 	end
 	return lines

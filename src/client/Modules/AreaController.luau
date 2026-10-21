@@ -62,8 +62,19 @@ function AreaController:KnitStart()
 		return
 	end
 
+	local lastLevel: number? = nil
 	local function refresh()
 		applyGates(gates)
+		local level = LocalPlayer:GetAttribute(LEVEL_ATTRIBUTE)
+		if typeof(level) ~= "number" then
+			return
+		end
+		if lastLevel ~= nil and lastLevel < OPEN_LEVEL and level >= OPEN_LEVEL then
+			pcall(function()
+				Knit.GetController("DialogController"):Toast("Break areas are open!")
+			end)
+		end
+		lastLevel = level
 	end
 
 	LocalPlayer:GetAttributeChangedSignal(LEVEL_ATTRIBUTE):Connect(refresh)

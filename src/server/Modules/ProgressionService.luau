@@ -16,6 +16,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Packages = ReplicatedStorage:WaitForChild("Packages")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Knit = require(Packages.Knit)
+local CustomerConfig = require(Shared.Configuration.CustomerConfig)
 local Progression = require(Shared.Configuration.Progression)
 local ShiftConfig = require(Shared.Configuration.ShiftConfig)
 
@@ -32,6 +33,44 @@ local function setAttributes(player: Player, level: number)
 		player:SetAttribute("Level", level)
 		player:SetAttribute("LevelTitle", Progression.TitleFor(level))
 	end)
+end
+
+-- What opens at `level`, read from shared config only (GAMEPLAY-PROGRESS-CALLOUTS).
+local function unlocksAt(level: number): { string }
+	local out: { string } = {}
+	local title = Progression.TITLES[level]
+	if level > 1 and title ~= nil then
+		table.insert(out, `New title: {title}`)
+	end
+	local slots = Progression.TICKET_SLOTS[level]
+	if slots ~= nil then
+		table.insert(out, `{slots} order tickets`)
+	end
+	local items = CustomerConfig.ITEM_COUNT_BY_LEVEL[level]
+	if items ~= nil then
+		table.insert(out, `Orders with {items} items`)
+	end
+	for _, name in { "VIP", "Karen" } do
+		local variant = CustomerConfig.VARIANTS[name]
+		if variant ~= nil and variant.MinLevel == level then
+			table.insert(out, `{name} customers`)
+		end
+	end
+	local reward = Progression.COSMETIC_REWARDS[level]
+	if reward ~= nil then
+		table.insert(out, `New nametag: {reward.Name}`)
+	end
+	return out
+end
+
+local function nextUnlock(level: number): string?
+	for n = level + 1, Progression.MAX_LEVEL do
+		local list = unlocksAt(n)
+		if #list > 0 then
+			return `Level {n} · {list[1]}`
+		end
+	end
+	return nil
 end
 
 ---> public
@@ -152,6 +191,7 @@ function ProgressionService:KnitStart()
 			-- AddXp finishes after the profile loads; predict from the cache for the card.
 			local state = self._state[player]
 			local after = levelBefore
+			local xpInto = 0
 			if state ~= nil then
 				local xp = state.XP + granted
 				after = state.Level
@@ -159,8 +199,16 @@ function ProgressionService:KnitStart()
 					xp -= Progression.XpToNext(after)
 					after += 1
 				end
+				xpInto = xp
 			end
 			summary.LevelAfter = after
+			if state ~= nil then
+				if after < Progression.MAX_LEVEL then
+					summary.XpIntoLevel = math.floor(xpInto)
+					summary.XpForLevel = Progression.XpToNext(after)
+				end
+				summary.NextUnlock = nextUnlock(after)
+			end
 		end)
 		if not ok then
 			warn(`[ProgressionService] Shift XP failed: {err}`)
