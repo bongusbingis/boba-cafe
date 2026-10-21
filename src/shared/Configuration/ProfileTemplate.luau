@@ -117,6 +117,10 @@ export type ProfileTemplate = {
 	InvitedFriends: { [string]: boolean },
 	-- Lifetime Robux donated through the Donate! board (sum of granted donation receipts).
 	RobuxDonated: number,
+	-- UserId of the inviter who was paid for bringing this player in (0 = none). One invite reward per player ever.
+	InviteRewardedBy: number,
+	-- Invite rewards this player earned as inviter on UTC day `Day` (daily cap in SocialInviteService).
+	InviteRewardsToday: { Day: number, Count: number },
 }
 
 return {
@@ -188,4 +192,9 @@ return {
 	},
 	InvitedFriends = {},
 	RobuxDonated = 0,
+	InviteRewardedBy = 0,
+	InviteRewardsToday = {
+		Day = 0,
+		Count = 0,
+	},
 }

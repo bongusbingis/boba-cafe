@@ -11,19 +11,37 @@ return function()
 	local Promise = require(ReplicatedStorage.Packages.Promise)
 	local service = require(ServerScriptService.Server.Modules.SocialInviteService)
 
-	local function makePlayer(userId: number, followUserId: number?, joinData: any?)
+	-- Friendships the fake IsFriendsWith reports, as friendships["a:b"] = true (either order).
+	local friendships: { [string]: boolean } = {}
+	local friendsCallErrors = false
+
+	local function befriend(a: number, b: number)
+		friendships[`{a}:{b}`] = true
+		friendships[`{b}:{a}`] = true
+	end
+
+	local function makePlayer(userId: number, followUserId: number?, joinData: any?, accountAge: number?)
 		return {
 			UserId = userId,
 			Name = "Player_" .. userId,
 			FollowUserId = followUserId,
+			AccountAge = accountAge or 30,
 			GetJoinData = function(_)
 				return joinData or {}
+			end,
+			IsFriendsWith = function(self, otherUserId: number)
+				if friendsCallErrors then
+					error("HTTP 500")
+				end
+				return friendships[`{self.UserId}:{otherUserId}`] == true
 			end,
 		}
 	end
 
 	local function makeProfile(initialInvited: { [string]: boolean }?)
 		local data = {
+			InviteRewardedBy = 0,
+			InviteRewardsToday = { Day = 0, Count = 0 },
 			InvitedFriends = initialInvited or {},
 			Currency = {
 				BobaBucks = 0,
@@ -60,8 +78,17 @@ return function()
 	local notifyCalls: { { player: any, args: { any } } }
 	local originalGetService = service._getService
 	local originalGetPlayerByUserId = service._getPlayerByUserId
+	local originalGetDay = service._getDay
+	local currentDay = 20000
 
 	beforeEach(function()
+		friendships = {}
+		friendsCallErrors = false
+		currentDay = 20000
+		service._getDay = function()
+			return currentDay
+		end
+		befriend(100, 200)
 		playersByUserId = {}
 		profilesByUserId = {}
 		currencyCalls = {}
@@ -110,6 +137,7 @@ return function()
 	afterEach(function()
 		service._getService = originalGetService
 		service._getPlayerByUserId = originalGetPlayerByUserId
+		service._getDay = originalGetDay
 	end)
 
 	describe("Constants", function()
@@ -254,6 +282,74 @@ return function()
 
 			expect(#currencyCalls).to.equal(0)
 			expect(#notifyCalls).to.equal(0)
+		end)
+	end)
+
+	describe("X10-HARDEN anti-farm gates", function()
+		local function setup(joinerId: number, accountAge: number?)
+			local inviter = playersByUserId[200] or makePlayer(200)
+			playersByUserId[200] = inviter
+			if not profilesByUserId[200] then
+				profilesByUserId[200] = makeProfile()
+			end
+			local joiner = makePlayer(joinerId, 200, nil, accountAge)
+			profilesByUserId[joinerId] = profilesByUserId[joinerId] or makeProfile()
+			return joiner, profilesByUserId[200], profilesByUserId[joinerId]
+		end
+
+		it("does not reward when the joiner is not the inviter's friend", function()
+			local joiner, inviterProfile = setup(300)
+			service:ProcessPlayerJoin(joiner :: any)
+			expect(#currencyCalls).to.equal(0)
+			expect(inviterProfile.Data.InvitedFriends["300"]).to.equal(nil)
+		end)
+
+		it("does not reward when IsFriendsWith errors", function()
+			friendsCallErrors = true
+			local joiner = setup(100)
+			expect(function()
+				service:ProcessPlayerJoin(joiner :: any)
+			end).never.to.throw()
+			expect(#currencyCalls).to.equal(0)
+		end)
+
+		it("does not reward when the joiner's account is younger than 7 days", function()
+			local joiner, inviterProfile = setup(100, 6)
+			service:ProcessPlayerJoin(joiner :: any)
+			expect(#currencyCalls).to.equal(0)
+			expect(inviterProfile.Data.InvitedFriends["100"]).to.equal(nil)
+		end)
+
+		it("rewards at exactly 7 days and marks the joiner as rewarded", function()
+			local joiner, _, joinerProfile = setup(100, 7)
+			service:ProcessPlayerJoin(joiner :: any)
+			expect(#currencyCalls).to.equal(1)
+			expect(joinerProfile.Data.InviteRewardedBy).to.equal(200)
+		end)
+
+		it("pays at most one reward per invited UserId ever, across inviters", function()
+			local joiner, _, joinerProfile = setup(100)
+			joinerProfile.Data.InviteRewardedBy = 999
+			service:ProcessPlayerJoin(joiner :: any)
+			expect(#currencyCalls).to.equal(0)
+		end)
+
+		it("caps rewards per inviter per day and resets the next day", function()
+			local cap = service.MAX_INVITE_REWARDS_PER_DAY
+			for i = 1, cap + 1 do
+				local joinerId = 1000 + i
+				befriend(200, joinerId)
+				local joiner = setup(joinerId)
+				service:ProcessPlayerJoin(joiner :: any)
+			end
+			expect(#currencyCalls).to.equal(cap)
+			expect(profilesByUserId[200].Data.InviteRewardsToday.Count).to.equal(cap)
+
+			currentDay += 1
+			befriend(200, 2000)
+			service:ProcessPlayerJoin(setup(2000) :: any)
+			expect(#currencyCalls).to.equal(cap + 1)
+			expect(profilesByUserId[200].Data.InviteRewardsToday.Count).to.equal(1)
 		end)
 	end)
 end
