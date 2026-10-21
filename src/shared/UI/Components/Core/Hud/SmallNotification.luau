@@ -5,12 +5,23 @@
 	If a new notification is pushed while one is showing, it is queued (max 3) and shown
 	next; queued toasts hold for a shorter time. Hints never interrupt gameplay toasts.
 
+	Queue policy (REVIEW-FIX P2-2, FEEDBACK-VOICE 3): every toast has a tier, read from
+	an optional `Priority` (1 high .. 5 low) or inferred from its text. The queue is
+	ordered by tier, FIFO within a tier. When it is full, the oldest toast of the lowest
+	tier is dropped; tier 1 (level up, quest complete/claimed, first order) is never
+	dropped. A toast whose text is already showing or queued is ignored, a new
+	"Order served!" replaces a queued one, and corrective toasts (wrong drink, wrong
+	station, Clock In, or `Corrective = true`) replace the active toast at once; a
+	displaced tier 1-2 toast goes back to the front of the queue.
+
 	External API (call from any client script):
 		SmallNotification.Push({
 			Title       = "Badge Earned!",
 			Description = "You earned your first badge.",
 			Image       = "rbxassetid://XXXX",
 			SoundEnabled = true,   -- optional
+			Priority = 2,          -- optional, 1 (never dropped) .. 5 (hint)
+			Corrective = true,     -- optional, replaces the active toast
 		})
 ]]
 
@@ -69,6 +80,8 @@ export type Notification = {
 	_hint: boolean?,
 	Image: string?,
 	SoundEnabled: boolean?,
+	Priority: number?,
+	Corrective: boolean?,
 }
 
 local module = {}
@@ -113,6 +126,134 @@ local function soundFor(data): { string }?
 		return { "Pop1" }
 	end
 	return nil
+end
+
+-- Tier 1 is never dropped; 5 is the rotating hint.
+local TIER_TOP = 1
+local TIER_DEFAULT = 3
+local TIER_HINT = 5
+
+local function localDisplayName(): string?
+	local ok, name = pcall(function()
+		local player = game:GetService("Players").LocalPlayer
+		return player and player.DisplayName
+	end)
+	return if ok then name else nil
+end
+
+-- Tier and kind ("Corrective", "Served" or nil) of a toast (FEEDBACK-VOICE 3).
+function module.Classify(data: Notification): (number, string?)
+	local text = if typeof(data.Text) == "string" then data.Text else ""
+	local kind: string? = nil
+	if
+		data.Corrective == true
+		or startsWith(text, "Wrong drink")
+		or startsWith(text, "Next: ")
+		or startsWith(text, "Clock In to use the kitchen")
+	then
+		kind = "Corrective"
+	elseif startsWith(text, "Order served!") then
+		kind = "Served"
+	end
+	if typeof(data.Priority) == "number" then
+		return math.clamp(math.floor(data.Priority), TIER_TOP, TIER_HINT), kind
+	end
+	if data._hint then
+		return TIER_HINT, kind
+	end
+	if
+		startsWith(text, "Level up!")
+		or startsWith(text, "Quest complete:")
+		or startsWith(text, "Quest claimed!")
+		or startsWith(text, "Your first order!")
+	then
+		return TIER_TOP, kind
+	end
+	if startsWith(text, "Team Combo!") or startsWith(text, "New title:") or startsWith(text, "Rush Hour!") then
+		return 2, kind
+	end
+	local name = string.match(text, "^(.-) completed the Team Combo!")
+	if name ~= nil then
+		return if name == localDisplayName() then 2 else 3, kind
+	end
+	if
+		kind == "Served"
+		or text == "Team Combo is over."
+		or text == "Rush Hour is over."
+		or startsWith(text, "Welcome to Boba Cafe!")
+		or startsWith(text, "You can afford a capsule!")
+		or startsWith(text, "Thank ")
+	then
+		return 4, kind
+	end
+	return TIER_DEFAULT, kind
+end
+
+-- Applies the queue policy for one pushed toast. Mutates `queue` and returns
+-- "Show" (nothing active), "Replace" (show now over the active toast), "Queued" or "Dropped".
+function module.Route(queue: { Notification }, active: Notification?, data: Notification): string
+	if active ~= nil and active.Text == data.Text then
+		return "Dropped"
+	end
+	for _, queued in queue do
+		if queued.Text == data.Text then
+			return "Dropped"
+		end
+	end
+	if active == nil then
+		return "Show"
+	end
+	local tier, kind = module.Classify(data)
+	if tier == TIER_HINT then
+		return "Dropped" -- hints never wait behind or interrupt gameplay toasts
+	end
+	if kind == "Corrective" then
+		local activeTier, activeKind = module.Classify(active)
+		if activeKind ~= "Corrective" and activeTier <= 2 then
+			table.insert(queue, 1, active)
+		end
+		for index = #queue, 1, -1 do
+			local _, queuedKind = module.Classify(queue[index])
+			if queuedKind == "Corrective" then
+				table.remove(queue, index)
+			end
+		end
+		return "Replace"
+	end
+	if kind == "Served" then
+		for index, queued in queue do
+			local _, queuedKind = module.Classify(queued)
+			if queuedKind == "Served" then
+				queue[index] = data
+				return "Queued"
+			end
+		end
+	end
+	local position = #queue + 1
+	for index, queued in queue do
+		if module.Classify(queued) > tier then
+			position = index
+			break
+		end
+	end
+	table.insert(queue, position, data)
+	while #queue > QUEUE_CAP do
+		local lowest, drop = TIER_TOP, nil
+		for index, queued in queue do
+			local queuedTier = module.Classify(queued)
+			if queuedTier > lowest then
+				lowest, drop = queuedTier, index
+			end
+		end
+		if drop == nil then
+			break -- only tier 1 left: never dropped
+		end
+		local removed = table.remove(queue, drop)
+		if removed == data then
+			return "Dropped"
+		end
+	end
+	return "Queued"
 end
 
 function module.Push(notification: Notification)
@@ -207,22 +348,13 @@ module.Component = function()
 			if not notification._hint then
 				lastGameplayAt = os.clock()
 			end
-			if activeRef.current == nil then
+			local active = activeRef.current
+			local route = module.Route(queueRef.current, active and active.Data, notification)
+			if route == "Show" or route == "Replace" then
 				show(notification)
-				return
+			elseif route == "Dropped" and active == nil and #queueRef.current == 0 then
+				idleSince = os.clock()
 			end
-			local queue = queueRef.current
-			if #queue >= QUEUE_CAP then
-				local drop = 1
-				for i, queued in queue do
-					if queued._hint then
-						drop = i
-						break
-					end
-				end
-				table.remove(queue, drop)
-			end
-			table.insert(queue, notification)
 		end)
 		return function()
 			conn:Disconnect()
