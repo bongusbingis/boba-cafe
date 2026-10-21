@@ -11,12 +11,15 @@
 --!nonstrict
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 local Packages = ReplicatedStorage:WaitForChild("Packages")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local UI = Shared:WaitForChild("UI")
 
 ---> dependencies
+local Knit = require(Packages.Knit)
 local React = require(Packages.React)
+local usePx = require(UI.Hooks.usePx)
 
 ---> styles
 local Styles = require(UI.Styles)
@@ -39,6 +42,52 @@ return function(props: {
 	QuestsOpen: boolean?,
 	OnToggleQuests: (() -> ())?,
 })
+	local px = usePx()
+	local claimable, setClaimable = React.useState(false)
+
+	if RunService:IsRunning() then
+		React.useEffect(function()
+			local conn
+			local alive = true
+
+			local function refresh(quests)
+				if not alive or typeof(quests) ~= "table" then
+					return
+				end
+				local any = false
+				for _, entry in quests do
+					if entry.Completed == true and entry.Claimed ~= true then
+						any = true
+						break
+					end
+				end
+				setClaimable(any)
+			end
+
+			task.spawn(function()
+				pcall(function()
+					local questService = Knit.GetService("QuestService")
+					local res = questService:GetQuests()
+					if typeof(res) == "table" and res.andThen then
+						res:andThen(refresh)
+					elseif typeof(res) == "table" then
+						refresh(res)
+					end
+					if alive then
+						conn = questService.QuestsUpdated:Connect(refresh)
+					end
+				end)
+			end)
+
+			return function()
+				alive = false
+				if conn then
+					conn:Disconnect()
+				end
+			end
+		end, {})
+	end
+
 	return c(Pane, {
 		ClassName = "Frame",
 		ListLayout = {
@@ -53,17 +102,43 @@ return function(props: {
 			--BackgroundTransparency = 0.5
 		},
 	}, {
-		Quests = c(NormalButton, {
-			Icon = "",
-			Size = BUTTON_SIZE,
-			Color = Styles.GREEN_MID,
-			Text = "Quests",
-			OnClick = function()
-				if props.OnToggleQuests then
-					props.OnToggleQuests()
-				end
-			end,
-			LayoutOrder = 1,
+		Quests = c(Pane, {
+			ClassName = "Frame",
+			AspectRatio = 7,
+			Native = {
+				BackgroundTransparency = 1,
+				Size = BUTTON_SIZE,
+				LayoutOrder = 1,
+			},
+		}, {
+			Button = c(NormalButton, {
+				Icon = "",
+				Position = UDim2.fromScale(0.5, 0.5),
+				Size = BUTTON_SIZE,
+				Color = Styles.GREEN_MID,
+				Text = "Quests",
+				OnClick = function()
+					if props.OnToggleQuests then
+						props.OnToggleQuests()
+					end
+				end,
+			}),
+			ClaimDot = if claimable
+				then c(Pane, {
+					ClassName = "Frame",
+					CornerRadius = Styles.CORNER_FULL,
+					Stroke = { Color = Styles.OFFWHITE, Thickness = 2 },
+					Native = {
+						Name = "QuestClaimDot",
+						AnchorPoint = Vector2.new(0.5, 0.5),
+						BackgroundColor3 = Styles.GREEN_BADGE,
+						BackgroundTransparency = 0,
+						Position = UDim2.fromScale(0.94, 0.1),
+						Size = UDim2.fromOffset(px(16), px(16)),
+						ZIndex = 5,
+					},
+				})
+				else nil,
 		}),
 	})
 end

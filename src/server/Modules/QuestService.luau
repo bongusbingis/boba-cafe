@@ -13,6 +13,7 @@ local GamepassUtil = require(Shared.Utility.GamepassUtil)
 export type QuestEntry = QuestConfig.QuestEntry
 
 local DATA_TIMEOUT_SECONDS = 10
+local HALFWAY_MIN_TARGET = 4
 local questLocks: { [number]: boolean } = {}
 
 -- Ensure legacy / off-sale More Quests pass is registered on GamepassUtil
@@ -127,6 +128,7 @@ function QuestService:AdvanceQuest(player: Player, questType: string, amount: nu
 	local activeQuests = self:_ensureDailyQuests(player, playerData)
 	local changed = false
 	local newlyCompleted = {}
+	local halfwayEntries = {}
 
 	for _, quest in activeQuests do
 		if quest.Type == questType and not quest.Completed then
@@ -134,6 +136,15 @@ function QuestService:AdvanceQuest(player: Player, questType: string, amount: nu
 			if quest.Progress >= quest.Target then
 				quest.Completed = true
 				table.insert(newlyCompleted, quest)
+			end
+			if
+				not quest.Completed
+				and quest.Target >= HALFWAY_MIN_TARGET
+				and (quest :: any).HalfwayPinged ~= true
+				and quest.Progress >= math.ceil(quest.Target / 2)
+			then
+				(quest :: any).HalfwayPinged = true
+				table.insert(halfwayEntries, quest)
 			end
 			changed = true
 		end
@@ -159,6 +170,29 @@ function QuestService:AdvanceQuest(player: Player, questType: string, amount: nu
 								Text = "Quest complete: "
 									.. QuestConfig.GetQuestTitle(entry)
 									.. "! Open Quests to claim.",
+							} :: any
+						)
+					end
+				end
+			end)
+		end)
+	end
+
+	if #halfwayEntries > 0 then
+		task.defer(function()
+			pcall(function()
+				local dialog = self:_getService("DialogService")
+				if dialog then
+					for _, quest in halfwayEntries do
+						dialog:Notify(
+							player,
+							{
+								Text = string.format(
+									"%s: %d/%d",
+									QuestConfig.GetQuestTitle(quest),
+									quest.Progress,
+									quest.Target
+								),
 							} :: any
 						)
 					end
