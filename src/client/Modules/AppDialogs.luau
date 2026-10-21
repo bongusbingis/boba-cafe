@@ -1,7 +1,6 @@
 ---> services
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
-local SoundService = game:GetService("SoundService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -10,7 +9,7 @@ local UI = Shared:WaitForChild("UI")
 
 local Dialogs = UI.Components.Dialogs
 local Styles = require(UI.Styles)
-local WorldPath = require(Shared.Utility.WorldPath)
+local UiSfx = require(UI.Utility.UiSfx)
 local SmallNotification = require(UI.Components.Core.Hud.SmallNotification)
 
 ---> dependencies
@@ -34,11 +33,7 @@ local dialogEvent = GoodSignal.new()
 -- UI sounds are authored in the place (SoundService.SFX.UI, else SoundService.UISounds).
 -- They are looked up on use, and a missing sound is skipped.
 local function playUiSound(name: string)
-	local sound = WorldPath.find(SoundService, { "SFX", "UI", name })
-		or WorldPath.find(SoundService, { "UISounds", name })
-	if sound and sound:IsA("Sound") then
-		sound:Play()
-	end
+	UiSfx.Play(name)
 end
 
 ---> constants

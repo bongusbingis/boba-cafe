@@ -34,6 +34,7 @@ local React = require(Packages.React)
 local Styles = require(UI.Styles)
 local OrderSpec = require(Ordering.OrderSpec)
 local RecipeCard = require(script.Parent.RecipeCard)
+local UiSfx = require(UI.Utility.UiSfx)
 
 ---> Private
 
@@ -229,6 +230,7 @@ return function(props: { stacked: boolean?, slot: number?, layoutOrder: number? 
 	-- Phones start collapsed to the header line; a tap on the header toggles.
 	local canCollapse = UserInputService.TouchEnabled
 	local collapsed, setCollapsed = React.useState(canCollapse)
+	local lastStep = React.useRef({ spec = nil, tool = nil, done = 0 })
 
 	if RunService:IsRunning() then
 		React.useEffect(function()
@@ -333,6 +335,20 @@ return function(props: { stacked: boolean?, slot: number?, layoutOrder: number? 
 				end
 			end
 		end, { character })
+
+		-- Step tick (SOUNDS D6): progress on the same held tool for the same order only.
+		React.useEffect(function()
+			if isSecond or spec == nil then
+				return
+			end
+			local current = OrderSpec.StepState(spec, toolAttrs)
+			local done = math.clamp(current - 1, 0, #OrderSpec.Steps(spec))
+			local last = lastStep.current
+			if done > last.done and last.spec == spec and toolInst ~= nil and last.tool == toolInst then
+				UiSfx.Play("StepDone")
+			end
+			lastStep.current = { spec = spec, tool = toolInst, done = done }
+		end, { spec, toolAttrs, toolInst })
 	end
 
 	-- A new order (different Id, or non-nil after nil) re-opens a collapsed ticket.

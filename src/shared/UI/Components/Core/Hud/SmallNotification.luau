@@ -27,6 +27,7 @@ local ReactSpring = require(Packages.ReactSpring)
 ---> components / styles
 local Pane = require(UI.Components.Pane)
 local Styles = require(UI.Styles)
+local UiSfx = require(UI.Utility.UiSfx)
 
 ---> private
 local c = React.createElement
@@ -84,6 +85,34 @@ end
 
 local function isNonEmptyString(value): boolean
 	return typeof(value) == "string" and value ~= ""
+end
+
+local function startsWith(text: string, prefix: string): boolean
+	return string.sub(text, 1, #prefix) == prefix
+end
+
+-- Sound cue names for a toast, or nil (FEEDBACK-VOICE 4). Text matching is plain and case-sensitive.
+local function soundFor(data): { string }?
+	local text = data and data.Text
+	if typeof(text) ~= "string" then
+		return nil
+	end
+	if startsWith(text, "Level up!") then
+		return nil -- LevelBar owns the level-up sound
+	elseif startsWith(text, "Quest claimed!") then
+		return { "Success" }
+	elseif startsWith(text, "Quest complete:") then
+		return { "Pop1" }
+	elseif string.find(text, "completed the Team Combo!", 1, true) or startsWith(text, "Team Combo!") then
+		return { "Pop1" }
+	elseif startsWith(text, "Your first order!") then
+		return { "Success" }
+	end
+	local combo = string.match(text, "^Combo ×(%d+)")
+	if combo and UiSfx.IsComboMilestone(tonumber(combo)) then
+		return { "Pop1" }
+	end
+	return nil
 end
 
 function module.Push(notification: Notification)
@@ -209,13 +238,11 @@ module.Component = function()
 		local thread = task.spawn(function()
 			local currentEntryId = activeEntry.Id
 
-			-- -- optional sound
-			-- if current.SoundEnabled then
-			-- 	pcall(function()
-			-- 		ReplicatedStorage:WaitForChild("Shared"):WaitForChild("SoundProvider")
-			-- 			:WaitForChild("Get")("Announcement"):Play()
-			-- 	end)
-			-- end
+			-- toast sound (SOUNDS D9): only the big beats; everything else stays silent
+			local cues = soundFor(activeEntry.Data)
+			if cues then
+				pcall(UiSfx.Play, cues)
+			end
 
 			-- slide in (Back-style spring). 'from' hard-resets state so replacement
 			-- notifications animate cleanly even when interrupting mid-cycle.

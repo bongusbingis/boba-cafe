@@ -16,6 +16,7 @@ local Packages = ReplicatedStorage:WaitForChild("Packages")
 
 local Knit = require(Packages.Knit)
 local GoodSignal = require(Packages.GoodSignal)
+local UiSfx = require(ReplicatedStorage:WaitForChild("Shared").UI.Utility.UiSfx)
 local WorldPath = require(ReplicatedStorage:WaitForChild("Shared").Utility.WorldPath)
 
 ---> Controller
@@ -174,6 +175,21 @@ function OrderController:KnitStart()
 	OrderService.QueueUpdated:Connect(function(position: number?)
 		self.QueuePosition = position
 		self.QueueChanged:Fire(position)
+	end)
+
+	-- Serve chime (SOUNDS D5): the serve toast is the client signal; pitch rises with combo.
+	Knit.GetService("DialogService").NotificationSignal:Connect(function(n)
+		if typeof(n) ~= "table" then
+			return
+		end
+		local text = if typeof(n.Text) == "string" and n.Text ~= ""
+			then n.Text
+			else (n.Title or "") .. " " .. (n.Description or "")
+		if string.sub(text, 1, 13) ~= "Order served!" then
+			return
+		end
+		local comboN = tonumber(string.match(text, "Combo ×(%d+)"))
+		UiSfx.Play("Serve", { Speed = UiSfx.ServeSpeed(comboN) })
 	end)
 end
 

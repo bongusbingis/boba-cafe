@@ -12,6 +12,7 @@
 ---> Services
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 
 ---> Dependencies
@@ -28,6 +29,7 @@ local Progression = require(Shared.Configuration.Progression)
 local Styles = require(UI.Styles)
 local Banner = require(UI.Components.Buttons.Banner)
 local Pane = require(UI.Components.Pane)
+local UiSfx = require(UI.Utility.UiSfx)
 
 ---> Constants
 
@@ -73,6 +75,28 @@ local function LevelBarComponent(props: { LayoutOrder: number? })
 				for _, conn in conns do
 					conn:Disconnect()
 				end
+			end
+		end, {})
+
+		-- Level-up (SOUNDS D8): flash and sound on a rise of the Level attribute, not on first read.
+		React.useEffect(function()
+			local player = Players.LocalPlayer
+			if player == nil then
+				return
+			end
+			local lastLevel = player:GetAttribute("Level")
+			local conn = player:GetAttributeChangedSignal("Level"):Connect(function()
+				local now = player:GetAttribute("Level")
+				if typeof(now) == "number" and typeof(lastLevel) == "number" and now > lastLevel then
+					flashEvent:Fire()
+					UiSfx.Play({ "LevelUp", "Success" })
+				end
+				if typeof(now) == "number" then
+					lastLevel = now
+				end
+			end)
+			return function()
+				conn:Disconnect()
 			end
 		end, {})
 

@@ -24,6 +24,7 @@ local React = require(Packages.React)
 local Styles = require(UI.Styles)
 local Banner = require(UI.Components.Buttons.Banner)
 local Pane = require(UI.Components.Pane)
+local UiSfx = require(UI.Utility.UiSfx)
 
 ---> Private
 
@@ -42,7 +43,13 @@ return function()
 	if RunService:IsRunning() then
 		React.useEffect(function()
 			local player = Players.LocalPlayer
+			local lastRush = workspace:GetAttribute("RushHour") == true
 			local function refresh()
+				local rushNow = workspace:GetAttribute("RushHour") == true
+				if rushNow and not lastRush and player:GetAttribute("ClockedIn") ~= false then
+					UiSfx.Play("Rush")
+				end
+				lastRush = rushNow
 				local value = workspace:GetAttribute("CafeRating")
 				setRating(if typeof(value) == "number" then value else 50)
 				setRush(workspace:GetAttribute("RushHour") == true)
