@@ -922,6 +922,10 @@ function OrderService.Client:CreateOrder(player: Player, customerId: any, orderI
 	if customerId ~= player.UserId then
 		return { Success = false, Message = "You can only place orders for yourself." }
 	end
+	-- R3 (REVIVAL-001 BOBA-PHONE): the phone and ClockedIn are mutually exclusive.
+	if server:_isClockedIn(player) then
+		return { Success = false, Message = "Clock out to order with the phone." }
+	end
 	if server._orderDebounces[player.UserId] then
 		return { Success = false, Message = "Please wait before placing another order." }
 	end

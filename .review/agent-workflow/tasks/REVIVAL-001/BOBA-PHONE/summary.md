@@ -67,10 +67,13 @@ register "Use Ordering System" prompt removed in the same change.
   UISizeConstraint exact values (code uses body AnchorPoint .5,1 / Size {0.3,0},{1,-20} /
   Position {0.5,0},{1,-70}, aspect 0.5, max-height 500, corner 0.125 from evidence +
   MobileOrder precedent).
-- Server-side `CreateOrder`-while-clocked-in refusal is NOT implemented: editing
-  `OrderService.luau` is forbidden by this packet, so enforcement is grant removal +
-  client guard. If Jack wants it unbypassable, that is a follow-up OrderService edit
-  (PENDING JACK).
+- Server-side `CreateOrder`-while-clocked-in refusal IS implemented (Jack approved the
+  small OrderService edit, follow-up commit): `Client:CreateOrder` returns
+  `{ Success = false, Message = "Clock out to order with the phone." }` when
+  `server:_isClockedIn(player)`, before the debounce check; no order stored, no debounce
+  started. Same message as the phone client guard. Covered by three
+  `OrderService.spec.luau` cases (refuse + no state change, order-after-clock-out,
+  unresolved-ShiftService still orders). Serve path untouched (attribute read only).
 
 ## R1 findings (verify, do not fix; no kitchen/serve file touched)
 - `OrderService.collectTools` collects every Tool (character + Backpack); `FindServeTools`
