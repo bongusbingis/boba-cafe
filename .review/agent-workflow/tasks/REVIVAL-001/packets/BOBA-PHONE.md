@@ -81,7 +81,7 @@ Worker rules: `_meta/WORKER-PRIMER.md`, `docs/AI_AGENT_WORKFLOW.md`. Spec: `BOBA
 - Menu: `src/shared/Ordering/Menu.luau` `FoodService.FoodTable`, `LaunchItems`, `LaunchChoices`, `IsLaunchItem(category, item, customInfo?)` (about L703-L790).
 - Options and customizations in OrderSpec: `Select` (Size Small/Medium/Large; Mug for cocoas), `Options` (Iced / Sugar booleans), `RequiredSelection` (Syrup Flavor, Tapioca Flavor). `OrderSpec.FromOrderItem` builds the spec server-side from `{Category, Item, CustomInfo}`; wrong or missing choices are rejected as `Invalid order.`. So the phone must always send the Select and Options defaults plus both RequiredSelection picks; Add Item is only reachable after the required popups (as in legacy and MobileOrder).
 - Tablet ordering and Dedicated staff assignment (`CustomerConfig.ASSIGNMENT_MODE = "Dedicated"`; `CustomerService.OpenOrderingTablet` -> `OrderController.OpenOrderingRequested` -> `Pages/Ordering` with `npcOrderData`): this is a BARISTA taking an NPC order, submitted through `CustomerService:SubmitNpcOrder`. It is a separate path from a real player's own order. The phone never calls `SubmitNpcOrder` or the tablet and needs no staff or NPC logic. The player's phone order is a normal `OrderService` order that baristas pick up through the existing queue.
-- Clock-in: `ShiftService` attribute `ClockedIn` (default true). DEC-046 hid the register prompt for clocked-in players. The phone does NOT gate on `ClockedIn`: `CreateOrder` has no such check and the brief gives every player the Tool (R3).
+- Clock-in: `ShiftService` attribute `ClockedIn` (default true). DEC-046 hid the register prompt for clocked-in players. The phone and `ClockedIn` are mutually exclusive (R3, decided by Jack 2026-10-21).
 - Toast: D7.
 - Code that can see a held or carried phone (R1): `FindFirstChildWhichIsA("Tool")` on the character in `KitchenService/Actions/*`, `KitchenService/InteractionRunner.luau`, `KitchenService/PourMoments.luau`, `client/Modules/KitchenController.luau` L110, `UI/Components/Core/Hud/OrderTicket.luau` L322; `OrderService.collectTools` (character + Backpack) feeding `FindServeTools`.
 - The Ordering page is mounted only by `TopBar` (register prompt) and `OrderController` signals through `App.luau`; `Pages/MobileOrder` is referenced only by its story and `OrderSpec.spec.luau`.
@@ -163,7 +163,13 @@ Not needed and not to be resurrected: `ReplicatedStorage.Boba`, `RemoteStorage`,
 ## 11. Open items and risks
 - R1 (verify, do not fix): a held `Boba Phone` is a Tool, so the `FindFirstChildWhichIsA("Tool")` kitchen and ticket helpers (section 2) and `OrderService.collectTools` / `FindServeTools` can see it. `FindServeTools` grades by tool attributes and the phone has none. Read `OrderSpec.PickTools` and state in summary.md whether an attribute-less extra tool can change a grade or the tools picked, and which kitchen actions misbehave while the phone is equipped (GiveTool, SetToolAttributes, InteractionRunner, PourMoments, OrderTicket). These are kitchen and serve-path files: do not edit them. If a fix is needed, report it as PENDING JACK with the exact guard (`tool:GetAttribute("BobaPhone") ~= true`).
 - R2 Item pictures: a nil `View.Model` gives a text-only card (D13). The models are place content.
-- R3 PENDING JACK: clocked-in baristas can also order for themselves from the phone (the register prompt was hidden for them under DEC-046 only to avoid fighting the NPC Serve prompt; the phone is an explicit equip, so no conflict). Not gated; confirm.
+- R3 DECIDED (Jack 2026-10-21): being clocked in and having the Boba Phone are mutually exclusive. BobaPhoneService listens to the `ClockedIn` attribute:
+  - On clock-in, unequip and remove the phone from Backpack and StarterGear.
+  - On clock-out, give it back.
+  - Server `CreateOrder` from a clocked-in player is refused with a toast reason, so it can't be bypassed.
+  - The phone UI closes if it's open at clock-in.
+  - Check `ClockedIn`'s default (section 2 says default true). Players must start with the phone unless they are actually clocked in. If the default would keep it from everyone, report it instead of changing ShiftService defaults.
+  - This also resolves R1 for kitchen work, since staff can't hold the phone. Still note R1's findings in summary.md.
 - R4 Legacy image ids may be unavailable to this experience; report load failures, do not substitute.
 - R5 `__REACT_SCREEN` is 3,444 lines; only lines 549-1380 and the shell/body are in scope.
 - R6 TestEZ and Play belong to Jack/Studio (DEC-019); mark UNVERIFIED if not run.
