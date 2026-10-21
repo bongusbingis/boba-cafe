@@ -31,6 +31,7 @@ local React = require(Packages.React)
 
 local Styles = require(UI.Styles)
 local OrderSpec = require(Ordering.OrderSpec)
+local CustomerConfig = require(Shared.Configuration.CustomerConfig)
 local ViewportModel = require(UI.Components.ViewportModel)
 
 ---> Private
@@ -115,6 +116,10 @@ return function(props)
 	-- Header sub-line: "Shift 1 · 1/4", or just "1/4" with no shift source.
 	local countText = ("%d/%d"):format(doneCount, total)
 	local subText = if props.shiftText ~= nil then (props.shiftText .. " · " .. countText) else countText
+	-- Fast-bonus cue (T4): shown while patience is at or above the Fast threshold.
+	if typeof(props.patience) == "number" and props.patience >= CustomerConfig.FAST_FRACTION and current <= total then
+		subText ..= " · Fast bonus!"
+	end
 
 	local rows = {}
 	for index, step in steps do
