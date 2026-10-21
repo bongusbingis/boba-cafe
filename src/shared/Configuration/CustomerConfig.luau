@@ -10,8 +10,17 @@
 --]]
 
 export type OrderItem = { Category: string, Item: string, CustomInfo: { [string]: any } }
-export type PoolEntry = { Weight: number, MinLevel: number, Sized: boolean, OrderItem: OrderItem }
+export type PoolEntry = {
+	Key: string,
+	Label: string,
+	Weight: number,
+	MinLevel: number,
+	Sized: boolean,
+	OrderItem: OrderItem,
+}
 export type SizeWeight = { Size: string, Weight: number }
+
+local Progression = require(script.Parent.Progression)
 
 local CustomerConfig = {
 	---> pacing (design 4.2)
@@ -48,8 +57,10 @@ local CustomerConfig = {
 	-- Sized entries get CustomInfo.Size from SIZE_WEIGHTS when an order is picked.
 	ORDER_POOL = {
 		{
+			Key = "Classic Milk Tea Boba",
+			Label = "Classic Milk Tea Boba",
 			Weight = 55, -- TUNING: Classic Milk Tea Boba
-			MinLevel = 1, -- PROPOSED (Jack): see Progression.MIN_LEVEL_BY_ITEM
+			MinLevel = Progression.MIN_LEVEL_BY_ITEM["Classic Milk Tea Boba"], -- PROPOSED (Jack) via Progression
 			Sized = true,
 			OrderItem = {
 				Category = "Boba Teas",
@@ -58,8 +69,10 @@ local CustomerConfig = {
 			},
 		},
 		{
+			Key = "Regular Coffee",
+			Label = "Regular Coffee",
 			Weight = 30, -- TUNING: Regular coffee, hot, no sugar (Iced and Sugar are off in the slice)
-			MinLevel = 1, -- PROPOSED (Jack): see Progression.MIN_LEVEL_BY_ITEM
+			MinLevel = Progression.MIN_LEVEL_BY_ITEM["Regular Coffee"], -- PROPOSED (Jack) via Progression
 			Sized = true,
 			OrderItem = {
 				Category = "Coffees",
@@ -68,8 +81,10 @@ local CustomerConfig = {
 			},
 		},
 		{
+			Key = "Fudge Brownie",
+			Label = "Fudge Brownie",
 			Weight = 15, -- TUNING: Fudge Brownie
-			MinLevel = 1, -- PROPOSED (Jack): see Progression.MIN_LEVEL_BY_ITEM
+			MinLevel = Progression.MIN_LEVEL_BY_ITEM["Fudge Brownie"], -- PROPOSED (Jack) via Progression
 			Sized = false,
 			OrderItem = {
 				Category = "Pastries",
@@ -77,7 +92,33 @@ local CustomerConfig = {
 				CustomInfo = {},
 			},
 		},
+		{
+			Key = "Taro Syrup",
+			Label = "Taro Boba",
+			Weight = 10, -- PROPOSED (Jack): Taro Boba
+			MinLevel = Progression.MIN_LEVEL_BY_ITEM["Taro Syrup"], -- PROPOSED (Jack) via Progression
+			Sized = true,
+			OrderItem = {
+				Category = "Boba Teas",
+				Item = "Custom Boba",
+				CustomInfo = { ["Syrup Flavor"] = "Taro", ["Tapioca Flavor"] = "Normal" },
+			},
+		},
+		{
+			Key = "Strawberry Syrup",
+			Label = "Strawberry Boba",
+			Weight = 10, -- PROPOSED (Jack): Strawberry Boba
+			MinLevel = Progression.MIN_LEVEL_BY_ITEM["Strawberry Syrup"], -- PROPOSED (Jack) via Progression
+			Sized = true,
+			OrderItem = {
+				Category = "Boba Teas",
+				Item = "Custom Boba",
+				CustomInfo = { ["Syrup Flavor"] = "Strawberry", ["Tapioca Flavor"] = "Normal" },
+			},
+		},
 	} :: { PoolEntry },
+	CLASSIC_MIN_SHARE = 0.6, -- TUNING: classics keep at least this share of the eligible weight at every level
+	NEW_ENTRY_MAX_WEIGHT = 10, -- TUNING: no level-2+ entry may weigh more than this
 
 	-- Items per NPC order by level: the value of the highest key at or below the level.
 	ITEM_COUNT_BY_LEVEL = { [1] = 1, [5] = 2, [15] = 3 } :: { [number]: number }, -- PROPOSED (Jack)

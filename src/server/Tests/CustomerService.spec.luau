@@ -17,6 +17,7 @@ return function()
 	local CustomerConfig = require(ReplicatedStorage.Shared.Configuration.CustomerConfig)
 	local OrderSpec = require(ReplicatedStorage.Shared.Ordering.OrderSpec)
 	local Menu = require(ReplicatedStorage.Shared.Ordering.Menu)
+	local Progression = require(ReplicatedStorage.Shared.Configuration.Progression)
 
 	-- An rng that returns the given rolls in order, then 0.
 	local function sequence(rolls: { number }): () -> number
@@ -168,6 +169,31 @@ return function()
 				expect(typeof(order.Item)).to.equal("string")
 			end
 		end)
+
+		it("should never pick a level-2 drink at level 1", function()
+			for step = 0, 99 do
+				local order = Rules.PickOrder(sequence({ step / 100, 0 }), nil, 1)
+				local syrup = order.CustomInfo["Syrup Flavor"]
+				expect(syrup == nil or syrup == "Classic Milk Tea").to.equal(true)
+			end
+		end)
+
+		it("should pick Taro Boba at level 2", function()
+			local order = Rules.PickOrder(sequence({ 0.85, 0 }), nil, 2)
+			expect(order.Item).to.equal("Custom Boba")
+			expect(order.CustomInfo["Syrup Flavor"]).to.equal("Taro")
+			expect(order.CustomInfo["Tapioca Flavor"]).to.equal("Normal")
+			expect(order.CustomInfo.Size).to.equal("Small")
+		end)
+
+		it("should pick Strawberry Boba at level 2", function()
+			local order = Rules.PickOrder(sequence({ 0.95, 0 }), nil, 2)
+			expect(order.CustomInfo["Syrup Flavor"]).to.equal("Strawberry")
+		end)
+
+		it("should keep the classic picks at level 2", function()
+			expect(Rules.PickOrder(sequence({ 0.5, 0 }), nil, 2).Item).to.equal("Regular")
+		end)
 	end)
 
 	-- A pool entry OrderSpec rejects makes CustomerService skip the spawn silently, so
@@ -217,6 +243,51 @@ return function()
 					expect(spec).to.be.ok()
 				end
 			end
+		end)
+	end)
+
+	describe("ORDER_POOL level ladder (B1)", function()
+		it("should give every entry a unique Key and Label and the level from Progression", function()
+			local seen = {}
+			for _, entry in CustomerConfig.ORDER_POOL do
+				expect(#entry.Key > 0).to.equal(true)
+				expect(#entry.Label > 0).to.equal(true)
+				expect(seen[entry.Key]).to.equal(nil)
+				seen[entry.Key] = true
+				expect(entry.MinLevel).to.equal(Progression.MIN_LEVEL_BY_ITEM[entry.Key])
+			end
+		end)
+
+		it("should keep the classics at or above CLASSIC_MIN_SHARE at every level", function()
+			for level = 1, Progression.MAX_LEVEL do
+				local classic, total = 0, 0
+				for _, entry in CustomerConfig.ORDER_POOL do
+					if entry.MinLevel <= level then
+						total += entry.Weight
+						if entry.MinLevel == 1 then
+							classic += entry.Weight
+						end
+					end
+				end
+				expect(classic / total >= CustomerConfig.CLASSIC_MIN_SHARE).to.equal(true)
+			end
+		end)
+
+		it("should cap new entry weights at NEW_ENTRY_MAX_WEIGHT", function()
+			for _, entry in CustomerConfig.ORDER_POOL do
+				if entry.MinLevel > 1 then
+					expect(entry.Weight <= CustomerConfig.NEW_ENTRY_MAX_WEIGHT).to.equal(true)
+				end
+			end
+		end)
+
+		it("should list the new drinks by level", function()
+			expect(#Rules.NewDrinksAt(1)).to.equal(0)
+			expect(#Rules.NewDrinksAt(3)).to.equal(0)
+			local two = Rules.NewDrinksAt(2)
+			expect(#two).to.equal(2)
+			expect(two[1]).to.equal("Taro Boba")
+			expect(two[2]).to.equal("Strawberry Boba")
 		end)
 	end)
 

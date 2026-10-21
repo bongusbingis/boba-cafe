@@ -130,6 +130,21 @@ function Rules.ItemCountForLevel(level: number, config: Config?): number
 	return count
 end
 
+-- Labels of the ORDER_POOL drinks that open exactly at `level`, in pool order (BIG-B1-P2-POOL).
+function Rules.NewDrinksAt(level: number, config: Config?): { string }
+	local c = config or CustomerConfig
+	local out: { string } = {}
+	if level <= 1 then
+		return out
+	end
+	for _, entry in c.ORDER_POOL do
+		if entry.MinLevel == level then
+			table.insert(out, entry.Label)
+		end
+	end
+	return out
+end
+
 -- Pays one serve (design 3.5): base x grade x speed x combo x rescue, at least
 -- MIN_PAY. `items` are order items ({ Category, CustomInfo }); a multi-item
 -- order pays the sum. `comboCount` is the consecutive Perfect serves before this

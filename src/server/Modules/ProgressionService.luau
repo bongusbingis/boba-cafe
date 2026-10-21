@@ -19,6 +19,7 @@ local Knit = require(Packages.Knit)
 local CustomerConfig = require(Shared.Configuration.CustomerConfig)
 local Progression = require(Shared.Configuration.Progression)
 local ShiftConfig = require(Shared.Configuration.ShiftConfig)
+local Rules = require(script.Parent.CustomerService.Rules)
 
 ---> service declaration
 local ProgressionService = Knit.CreateService({
@@ -38,6 +39,12 @@ end
 -- What opens at `level`, read from shared config only (GAMEPLAY-PROGRESS-CALLOUTS).
 local function unlocksAt(level: number): { string }
 	local out: { string } = {}
+	local drinks = Rules.NewDrinksAt(level)
+	if #drinks == 1 then
+		table.insert(out, `New drink: {drinks[1]}`)
+	elseif #drinks > 1 then
+		table.insert(out, `New drinks: {table.concat(drinks, ", ")}`)
+	end
 	local title = Progression.TITLES[level]
 	if level > 1 and title ~= nil then
 		table.insert(out, `New title: {title}`)
