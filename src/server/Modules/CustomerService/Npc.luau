@@ -433,7 +433,7 @@ end
 
 -- The NPC stops waiting: it frees its spots and CustomerService is told once with
 -- the reason ("PatienceOut" or "Despawned"). Does not walk or destroy; _run does.
-function Npc.Leave(self: Npc, reason: string)
+function Npc.Leave(self: Npc, reason: string, grade: string?)
 	if self.Left then
 		return
 	end
@@ -441,7 +441,11 @@ function Npc.Leave(self: Npc, reason: string)
 	self:_setState("Leaving")
 	self:_stopTrack("Idle")
 	if reason ~= "Despawned" then
-		self:_say("Leaving")
+		local thanked = reason == "Served" and (self.Variant ~= "Karen" or grade == "Perfect")
+		if thanked then
+			self:_playTrack("Wave", false, Enum.AnimationPriority.Action)
+		end
+		self:_say(if thanked then "LeavingServed" else "Leaving")
 	end
 	self._ctx.Release(self)
 	self._ctx.OnLeft(self, reason)
@@ -639,6 +643,7 @@ end
 -- Ticks patience down until it runs out or the NPC is made to leave.
 function Npc._waitOutPatience(self: Npc)
 	local last = os.clock()
+	local confusedPlayed = false
 	while self.State == "AtCounter" and not self._destroyed do
 		task.wait(WAIT_POLL_SECONDS)
 		local now = os.clock()
@@ -653,6 +658,10 @@ function Npc._waitOutPatience(self: Npc)
 		else
 			local remaining = self._patienceEnd - workspace:GetServerTimeNow()
 			self:_setPatienceBar(remaining / self.PatienceTotal)
+			if not confusedPlayed and Rules.PatienceState(remaining / self.PatienceTotal) ~= "Green" then
+				confusedPlayed = true
+				self:PlayConfused()
+			end
 			if remaining <= 0 then
 				return
 			end

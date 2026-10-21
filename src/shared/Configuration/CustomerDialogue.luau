@@ -1,5 +1,6 @@
 --!strict
 -- Source: v4 CustomerConfig (DEC-015 bonus). Lines are verbatim.
+-- LeavingServed = after a served order; Leaving = walkout (PatienceOut).
 
 return {
 	Default = {
@@ -24,6 +25,8 @@ return {
 		},
 		Leaving = {
 			"Wow... Ok...",
+		},
+		LeavingServed = {
 			"Cya later!",
 			"Goodbye!",
 			"Bye!",
@@ -56,6 +59,14 @@ return {
 			"Fine.. I'll just go to the cafe across the street!",
 			"I can't believe this place!",
 			"You're going to regret this.",
+		},
+		LeavingServed = {
+			"Cya later!",
+			"Goodbye!",
+			"Bye!",
+			"Thanks, see ya!",
+			"Later!",
+			"I’m out, have a good one!",
 		},
 	},
 }

@@ -882,7 +882,7 @@ function CustomerService:_onServeTriggered(npc: Npc.Npc, player: Player)
 	if variantConfig ~= nil and variantConfig.StompOnClose == true and grade == "Close" then
 		npc:PlayConfused() -- Karen stomps out (Confused is the approved angry animation, DEC-015)
 	end
-	npc:Leave("Served")
+	npc:Leave("Served", grade)
 	pcall(function()
 		self.CustomerResolved:Fire(player, {
 			Kind = "Served",
