@@ -532,10 +532,10 @@ end
 
 local POUR_GUI_NAME = "PourMeter"
 local POUR_POSITION = UDim2.fromScale(0.5, 0.66)
-local POUR_SIZE = UDim2.fromScale(0.265, 0.175) -- OrderQueue's footprint
-local POUR_ASPECT = 2.23008
-local POUR_MIN_SIZE = Vector2.new(240, 108)
-local POUR_MAX_SIZE = Vector2.new(360, 162)
+local POUR_SIZE = UDim2.fromScale(0.265, 0.2)
+local POUR_ASPECT = 1.85 -- taller than OrderQueue so the button is a real tap target
+local POUR_MIN_SIZE = Vector2.new(280, 151)
+local POUR_MAX_SIZE = Vector2.new(380, 205)
 local POUR_BASE_IMAGE = "http://www.roblox.com/asset/?id=13473433246"
 local POUR_BORDER_IMAGE = "http://www.roblox.com/asset/?id=13382163077"
 local POUR_BANNER_BACK = "http://www.roblox.com/asset/?id=13369767169"
@@ -698,8 +698,8 @@ local function buildPourMeter(): ScreenGui
 	local banner = Instance.new("Frame")
 	banner.Name = "Banner"
 	banner.AnchorPoint = Vector2.new(0.5, 0.5)
-	banner.Position = UDim2.fromScale(0.5, 0.21)
-	banner.Size = UDim2.fromScale(0.8, 0.371931)
+	banner.Position = UDim2.fromScale(0.5, 0.17)
+	banner.Size = UDim2.fromScale(0.8, 0.3)
 	banner.BackgroundTransparency = 1
 	banner.ZIndex = 10
 	banner.Parent = base
@@ -739,16 +739,16 @@ local function buildPourMeter(): ScreenGui
 	local content = Instance.new("Frame")
 	content.Name = "Content"
 	content.AnchorPoint = Vector2.new(0.5, 0)
-	content.Position = UDim2.fromScale(0.5, 0.39)
-	content.Size = UDim2.fromScale(0.84, 0.52)
+	content.Position = UDim2.fromScale(0.5, 0.34)
+	content.Size = UDim2.fromScale(0.84, 0.58)
 	content.BackgroundTransparency = 1
 	content.Parent = base
 
 	local track = Instance.new("Frame")
 	track.Name = "Track"
 	track.AnchorPoint = Vector2.new(0.5, 0)
-	track.Position = UDim2.fromScale(0.5, 0.04)
-	track.Size = UDim2.fromScale(1, 0.24)
+	track.Position = UDim2.fromScale(0.5, 0.06)
+	track.Size = UDim2.fromScale(1, 0.2)
 	track.BackgroundColor3 = Styles.GRAY
 	track.BorderSizePixel = 0
 	track.ClipsDescendants = true
@@ -777,8 +777,8 @@ local function buildPourMeter(): ScreenGui
 	local markerLane = Instance.new("Frame")
 	markerLane.Name = "MarkerLane"
 	markerLane.AnchorPoint = Vector2.new(0.5, 0.5)
-	markerLane.Position = UDim2.fromScale(0.5, 0.04 + 0.12)
-	markerLane.Size = UDim2.fromScale(1, 0.42)
+	markerLane.Position = UDim2.fromScale(0.5, 0.06 + 0.1)
+	markerLane.Size = UDim2.fromScale(1, 0.34)
 	markerLane.BackgroundTransparency = 1
 	markerLane.ZIndex = 3
 	markerLane.Parent = content
@@ -802,8 +802,8 @@ local function buildPourMeter(): ScreenGui
 	local hint = Instance.new("TextLabel")
 	hint.Name = "Hint"
 	hint.AnchorPoint = Vector2.new(0.5, 0)
-	hint.Position = UDim2.fromScale(0.5, 0.39)
-	hint.Size = UDim2.fromScale(1, 0.2)
+	hint.Position = UDim2.fromScale(0.5, 0.36)
+	hint.Size = UDim2.fromScale(1, 0.19)
 	hint.BackgroundTransparency = 1
 	hint.FontFace = Styles.FONT_FREDOKA
 	hint.Text = pourHintText()
@@ -819,7 +819,7 @@ local function buildPourMeter(): ScreenGui
 	tapButton.Name = "PourButton"
 	tapButton.AnchorPoint = Vector2.new(0.5, 1)
 	tapButton.Position = UDim2.fromScale(0.5, 1)
-	tapButton.Size = UDim2.fromScale(0.5, 0.36)
+	tapButton.Size = UDim2.fromScale(0.56, 0.38)
 	tapButton.AutoButtonColor = false
 	tapButton.BackgroundColor3 = Styles.GREEN
 	tapButton.BorderSizePixel = 0
