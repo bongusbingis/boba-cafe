@@ -169,6 +169,9 @@ local CustomerService = Knit.CreateService({
 	_pickupHolders = {} :: { [BasePart]: Npc.Npc }, -- pickup spot -> the NPC that holds it
 	_npcPickupSpot = {} :: { [Npc.Npc]: BasePart }, -- NPC -> claimed pickup spot
 	_activeOrderingNpc = {} :: { [Player]: Npc.Npc }, -- barista -> NPC whose order is currently being taken
+	-- AUDIT-FIX submit: NPC -> baristas who pressed its Take Order. Submit falls back to this when the
+	-- single binding above went stale, so a tablet for a still-waiting NPC never fails.
+	_orderTakers = setmetatable({}, { __mode = "k" }) :: { [Npc.Npc]: { [Player]: boolean } },
 	_baristas = 0, -- clocked-in players, refreshed every pacing tick
 	_emptySince = nil :: number?, -- os.clock() when the barista count last dropped to 0 (P2-3 dismiss)
 	_lastSpawnClock = 0,
@@ -1018,6 +1021,12 @@ function CustomerService:_onTakeOrderTriggered(npc: Npc.Npc, player: Player)
 	end
 	npc:ExtendRegisterPatience(CustomerConfig.REGISTER_TAKE_ORDER_GRACE_SECONDS)
 	self._activeOrderingNpc[player] = npc
+	local takers = self._orderTakers[npc]
+	if takers == nil then
+		takers = setmetatable({}, { __mode = "k" }) :: any
+		self._orderTakers[npc] = takers
+	end
+	takers[player] = true
 
 	self.Client.OpenOrderingTablet:Fire(player, {
 		NpcId = npc.Id,
@@ -1042,9 +1051,21 @@ function CustomerService:_submitNpcOrder(
 		return { Success = false, Message = "Invalid order submission." }
 	end
 
-	-- Only the NPC whose tablet this player opened last (TAKEOVER-FIX 3: no Id fallback).
+	-- The NPC whose tablet this player opened last. AUDIT-FIX submit: when that binding is stale (another
+	-- Take Order since, or it was cleared), the NPC with this Id is accepted only if this player pressed
+	-- its Take Order (so they saw its order); TAKEOVER-FIX 3's "no blind Id fallback" still holds.
 	local npc = self._activeOrderingNpc[player]
-	if npc == nil or npc.Id ~= npcId or npc.Left or npc.State ~= "AtCounter" then
+	if npc == nil or npc.Id ~= npcId then
+		npc = nil
+		for candidate in self._npcs do
+			local takers = self._orderTakers[candidate]
+			if candidate.Id == npcId and takers ~= nil and takers[player] then
+				npc = candidate
+				break
+			end
+		end
+	end
+	if npc == nil or npc.Left or npc.State ~= "AtCounter" then
 		return { Success = false, Message = "Customer is no longer waiting at the counter." }
 	end
 	-- Re-checked at submit: another tablet may have filled the slot since Take Order.
@@ -1081,6 +1102,7 @@ function CustomerService:_submitNpcOrder(
 			self._activeOrderingNpc[taker] = nil
 		end
 	end
+	self._orderTakers[npc] = nil
 	if pickupSpot ~= nil then
 		npc:GoToPickup(pickupSpot)
 	end
