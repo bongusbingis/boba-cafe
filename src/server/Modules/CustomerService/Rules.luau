@@ -303,7 +303,7 @@ function Rules.PickAssignee(candidates: { Player }, idleSince: { [Player]: numbe
 	return best
 end
 
--- Formats one order item for the ordering tablet notepad (e.g. "Large Strawberry Boba, Tapioca, Ice").
+-- Formats one order item for the ordering tablet notepad (e.g. "Large Strawberry Boba, Normal Tapioca, Ice").
 function Rules.FormatOrderItemForNotepad(order: OrderItem, _spec: any?): string
 	local customInfo = order.CustomInfo or {}
 	local size = customInfo.Size
@@ -331,7 +331,7 @@ function Rules.FormatOrderItemForNotepad(order: OrderItem, _spec: any?): string
 
 	local extras = {}
 	if tapioca ~= nil then
-		table.insert(extras, if tapioca == "Normal" then "Tapioca" else (tapioca .. " Tapioca"))
+		table.insert(extras, tapioca .. " Tapioca")
 	end
 	if iced then
 		table.insert(extras, "Ice")

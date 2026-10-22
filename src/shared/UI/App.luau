@@ -88,6 +88,33 @@ local function App()
 		end
 	end, {})
 
+	-- "Get Boba Bucks" from a shortfall dialog: always land on the requested Shop tab (never toggle shut).
+	React.useEffect(function()
+		local ok, dialogController = pcall(function()
+			return Knit.GetController("DialogController")
+		end)
+		if not ok or not dialogController or not dialogController.OpenShopRequested then
+			return
+		end
+		local conn = dialogController.OpenShopRequested:Connect(function(pageKey)
+			local pages = UI:FindFirstChild("Pages")
+			local shopPage = pages and pages:FindFirstChild("Shop")
+			if shopPage then
+				extraData.current = { pageKey }
+				setCurrentPage(function()
+					closeCurrentPageIfExists()
+					return shopPage
+				end)
+				setPageMountKey(function(n)
+					return n + 1
+				end)
+			end
+		end)
+		return function()
+			conn:Disconnect()
+		end
+	end, {})
+
 	local pageToRender = currentPage
 		and c(Page, {
 			IsVisible = true,

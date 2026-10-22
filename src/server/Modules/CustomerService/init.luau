@@ -35,6 +35,7 @@
 
 ---> services
 
+local CollectionService = game:GetService("CollectionService")
 local PhysicsService = game:GetService("PhysicsService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -60,6 +61,7 @@ local WorldPath = require(Shared.Utility.WorldPath)
 local Npc = require(script.Npc)
 local Rules = require(script.Rules)
 local Seats = require(script.Seats)
+local CounterLock = require(script.CounterLock)
 local Styles = require(Shared.UI.Styles)
 
 ---> constants
@@ -72,6 +74,12 @@ local COMBO_MILESTONES = { [3] = true, [5] = true, [10] = true } -- TUNING: comb
 local TEAM_PROGRESS_FROM = 5 -- TUNING: show Team N/10 on the serve toast from this chain length
 local SERVED_COUNT_TIMEOUT_SECONDS = 5 -- budget for reading Statistics.CustomersServed
 local CUSTOMERS_FOLDER_NAME = "Customers"
+-- Counter ordering (DEC-059): real players at workspace["Ordering System"].CustomerAreas.
+local COUNTER_TICK_SECONDS = 0.3
+local COUNTER_TAKE_DISTANCE_STUDS = 12 -- same as the NPC Take Order check
+local COUNTER_SUBMIT_DEBOUNCE_SECONDS = 1
+local COUNTER_PROMPT_NAME = "CounterOrderPrompt"
+local COUNTER_PROMPT_TAG = "CounterOrderPrompt" -- the client hides it for the customer and non-takers
 -- Players get their own group so NPCs can pass through them. NPCs still collide
 -- with the Default group (the floor and walls).
 local PLAYER_COLLISION_GROUP = "CafePlayers"
@@ -223,7 +231,14 @@ local CustomerService = Knit.CreateService({
 	_lastSpawnClock = 0,
 	_characterConnections = {} :: { [Player]: RBXScriptConnection },
 	_baristaInventoryWatchers = {} :: { [Player]: { RBXScriptConnection } },
-	_tickets = {} :: { [Player]: { [number]: { [string]: any } } }, -- barista -> slot -> live ticket (at most Progression.SlotsFor(level))
+	_tickets = {} :: { [Player]: { [number]: { [string]: any } } }, -- barista -> slot -> live ticket (NPC or real order; at most Progression.SlotsFor(level))
+	_counterAreas = {} :: { { Part: BasePart, Spot: number? } }, -- CustomerArea parts, each with its NPC Counter spot
+	_counterSpotsMapped = false,
+	_counterCustomers = {} :: { [Player]: { Area: number, Prompt: ProximityPrompt, Lock: CounterLock.Lock? } },
+	_realOccupied = {} :: { [number]: boolean }, -- NPC counter spot -> a clocked-out player stands in its area
+	_counterLockSeq = 0,
+	_counterSubmitAt = {} :: { [Player]: number }, -- taker -> os.clock() of the last counter submit
+	_clockInPromptOpen = {} :: { [Player]: boolean }, -- clock-in upsell dialog already asking this player
 	_assignee = {} :: { [Npc.Npc]: Player }, -- NPC -> the barista holding its ticket
 	_idleSince = {} :: { [Player]: number }, -- os.clock() at clock-in and at ticket clear
 	_combo = {} :: { [Player]: number }, -- consecutive Perfect serves (session memory only)
@@ -361,11 +376,12 @@ function CustomerService:_pickRegisterSpot(): number
 		return 1
 	end
 
+	-- DEC-059: a register where a real player is standing is skipped.
 	local minLength = math.huge
 	for spot = 1, count do
 		local line = self._registerLines[spot]
 		local len = if line ~= nil then #line else 0
-		if len < minLength then
+		if len < minLength and not self._realOccupied[spot] then
 			minLength = len
 		end
 	end
@@ -374,7 +390,7 @@ function CustomerService:_pickRegisterSpot(): number
 	for spot = 1, count do
 		local line = self._registerLines[spot]
 		local len = if line ~= nil then #line else 0
-		if len <= minLength + 1 then
+		if len <= minLength + 1 and not self._realOccupied[spot] then
 			table.insert(candidates, spot)
 		end
 	end
@@ -423,6 +439,9 @@ function CustomerService:_makeContext(nodes: Npc.Nodes, folder: Folder): Npc.Con
 			local line = self._registerLines[spot]
 			if line == nil or line[1] ~= npc then
 				return nil
+			end
+			if self:_counterCustomerAtSpot(spot) then
+				return nil -- a real player is ordering at this register (DEC-059)
 			end
 			if self._counter[spot] == nil or self._counter[spot] == npc then
 				self._counter[spot] = npc
@@ -974,6 +993,29 @@ function CustomerService:_makeTicket(npc: Npc.Npc): { [string]: any }
 	}
 end
 
+-- Display name of another NPC this player holds a ticket for (nil when none),
+-- so a handoff to the wrong customer can name the right one instead of failing
+-- silently. `npc` is the handoff target being excluded.
+function CustomerService:_heldCustomerName(player: Player, npc: Npc.Npc): string?
+	local held = self._tickets[player]
+	if held == nil then
+		return nil
+	end
+	for _, ticket in held do
+		if ticket.NpcModel ~= npc.Model then
+			for other in self._npcs do
+				if other.Model == ticket.NpcModel then
+					local regular = other.Model:GetAttribute("RegularName")
+					local name = Rules.DisplayNames(other.Variant, if typeof(regular) == "string" then regular else nil)
+					return name
+				end
+			end
+			return "another customer"
+		end
+	end
+	return nil
+end
+
 -- `slot` is the ticket slot index; it rides as the 2nd argument so a nil ticket (clear) still names its slot.
 function CustomerService:_fireTicket(player: Player, ticket: { [string]: any }?, slot: number)
 	local ok, err = pcall(function()
@@ -1196,15 +1238,48 @@ function CustomerService:_onCustomerPromptTriggered(npc: Npc.Npc, player: Player
 	end
 end
 
+-- Clock-in upsell: the player tried a barista action while clocked out. Ask them
+-- to clock in (ButtonPrompt, DEC-013) instead of only toasting; confirming clocks
+-- them in through ShiftService, declining just dismisses. Returns true when the
+-- player ends up clocked in. Never yields when already clocked in.
+function CustomerService:_ensureClockedIn(player: Player): boolean
+	if self._shift:IsClockedIn(player) then
+		return true
+	end
+	if player.Parent == nil or self._clockInPromptOpen[player] then
+		return false
+	end
+	self._clockInPromptOpen[player] = true
+	local okChoice, choice = self._dialog
+		:CreateDialog(player, "ButtonPrompt", {
+			Title = "Clock In Required",
+			Text = "You need to be clocked in for this. Do you want to clock in?",
+			Buttons = {
+				{ Text = "Clock In", Color = Styles.GREEN },
+				{ Text = "Cancel", Color = Styles.RED },
+			},
+		})
+		:await()
+	self._clockInPromptOpen[player] = nil
+	if player.Parent == nil then
+		return false
+	end
+	if okChoice and choice == "Clock In" and not self._shift:IsClockedIn(player) then
+		-- Same state transition as the HUD clock-in button: ShiftService owns the
+		-- attribute, resumes the paused shift and fires ClockedInChanged.
+		self._shift:SetClockedIn(player, true)
+	end
+	return self._shift:IsClockedIn(player)
+end
+
 function CustomerService:_onTakeOrderTriggered(npc: Npc.Npc, player: Player)
 	if self._context == nil or npc.Left or npc.State ~= "AtCounter" then
 		return
 	end
-	if not self._shift:IsClockedIn(player) then
-		self._dialog:Notify(player, {
-			Title = "Clock In Required",
-			Description = "You must be clocked in to take orders!",
-		})
+	if not self:_ensureClockedIn(player) then
+		return
+	end
+	if npc.Left or npc.State ~= "AtCounter" then
 		return
 	end
 	local character = player.Character
@@ -1269,6 +1344,9 @@ function CustomerService:_onTakeOrderTriggered(npc: Npc.Npc, player: Player)
 		RequestedText = npc.RequestedDrinkText,
 		Orders = npc.Orders,
 		Specs = npc.Specs,
+		-- DEC-059: the tablet is filled in for the scripted first-session customer only
+		-- (the tutorial); every other order is typed from the notepad.
+		Prefill = npc.RolledScriptedFor == player.UserId,
 	})
 end
 
@@ -1389,6 +1467,14 @@ function CustomerService:_onServeTriggered(npc: Npc.Npc, player: Player)
 	local fractionLeft = npc:FractionLeft()
 	local assigned = npc.AssignedUserId == player.UserId
 	if not Rules.CanServe(assigned, fractionLeft) then
+		-- Wrong-customer handoff QOL: name the correct customer instead of failing silently.
+		local correct = self:_heldCustomerName(player, npc)
+		if correct ~= nil then
+			self._dialog:Notify(player, {
+				Title = "Wrong customer",
+				Description = `That order is for {correct}!`,
+			})
+		end
 		return
 	end
 	-- (5) a matching unserved tool. FindServeTools already skips Served tools.
@@ -1584,9 +1670,455 @@ function CustomerService:_onServeTriggered(npc: Npc.Npc, player: Player)
 	end)
 end
 
--- True while the player holds an open ticket.
+-- True while the player holds an open NPC ticket (ShiftService waits on these before
+-- ending a shift; real-order tickets do not hold a shift open).
 function CustomerService:HasTicket(player: Player): boolean
-	return next(self._tickets[player] or {}) ~= nil
+	for _, ticket in self._tickets[player] or {} do
+		if ticket.Real ~= true then
+			return true
+		end
+	end
+	return false
+end
+
+-- True while the barista has a free ticket slot (NPC and real tickets share slots).
+function CustomerService:HasFreeSlot(player: Player): boolean
+	return self:_hasFreeSlot(player)
+end
+
+-- OrderService: puts a real-player order in the barista's first free slot as a normal
+-- ticket tagged Real ("Real customer" on the HUD). `order` = { Id, CustomerName, Items }.
+-- Never yields.
+function CustomerService:IssueRealTicket(player: Player, order: { Id: string, CustomerName: string, Items: { any } })
+	local held = self._tickets[player]
+	if held == nil then
+		held = {}
+		self._tickets[player] = held
+	end
+	for slot, ticket in held do
+		if ticket.Id == order.Id then
+			self:_fireTicket(player, ticket, slot)
+			return
+		end
+	end
+	local slot = 1
+	while held[slot] ~= nil do
+		slot += 1
+	end
+	local items = {}
+	for _, item in order.Items do
+		local customInfo = if typeof(item.CustomInfo) == "table" then table.clone(item.CustomInfo) else {}
+		table.insert(items, { Category = item.Category, Item = item.Item, CustomInfo = customInfo })
+	end
+	local first = items[1] or {}
+	local ticket = {
+		Id = order.Id,
+		Real = true,
+		CustomerName = order.CustomerName,
+		Label = `{order.CustomerName}'s order`,
+		Items = items,
+		Spec = {
+			Category = first.Category,
+			Item = first.Item,
+			CustomInfo = first.CustomInfo,
+			Size = if first.CustomInfo then first.CustomInfo.Size else nil,
+		},
+		Scripted = false,
+		Rescue = false,
+		Slot = slot,
+	}
+	held[slot] = ticket
+	self:_fireTicket(player, ticket, slot)
+end
+
+-- OrderService: frees the slot a real order held (deposited, released, customer gone).
+-- Idempotent; never yields.
+function CustomerService:ClearRealTicket(player: Player, ticketId: string)
+	local held = self._tickets[player]
+	if held == nil then
+		return
+	end
+	for slot, ticket in held do
+		if ticket.Id == ticketId then
+			held[slot] = nil
+			self._idleSince[player] = os.clock()
+			self:_fireTicket(player, nil, slot)
+			break
+		end
+	end
+	if next(held) == nil then
+		self._tickets[player] = nil
+		self:_unwatchBaristaInventory(player)
+	end
+end
+
+-- A slot freed: let OrderService hand a waiting real order out. Deferred, so the serve
+-- path (which clears tickets after the payout) never waits on it.
+function CustomerService:_dispatchRealOrders()
+	task.defer(function()
+		local ok, err = pcall(function()
+			if self._order ~= nil then
+				self._order:DispatchPending()
+			end
+		end)
+		if not ok then
+			warnThrottled("dispatch", `[CustomerService] Real-order dispatch failed: {err}`)
+		end
+	end)
+end
+
+---> counter ordering (DEC-059)
+
+local function liveRoot(player: Player): BasePart?
+	local character = player.Character
+	if character == nil then
+		return nil
+	end
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	local root = character:FindFirstChild("HumanoidRootPart")
+	if humanoid == nil or humanoid.Health <= 0 or root == nil or not root:IsA("BasePart") then
+		return nil
+	end
+	return root
+end
+
+-- True while a counter customer is standing at this NPC counter spot.
+function CustomerService:_counterCustomerAtSpot(spot: number): boolean
+	for _, state in self._counterCustomers do
+		local area = self._counterAreas[state.Area]
+		if area ~= nil and area.Spot == spot then
+			return true
+		end
+	end
+	return false
+end
+
+-- True while an NPC holds, or is queued for, this counter spot.
+function CustomerService:_npcAtSpot(spot: number?): boolean
+	if spot == nil then
+		return false
+	end
+	local line = self._registerLines[spot]
+	return self._counter[spot] ~= nil or (line ~= nil and #line > 0)
+end
+
+-- workspace["Ordering System"].CustomerAreas: every BasePart child is one register's
+-- customer area. Missing: warn once; counter ordering stays off (phones still work).
+function CustomerService:_resolveCounterAreas(): boolean
+	local folder = WorldPath.waitFor(workspace, { "Ordering System", "CustomerAreas" }, WORLD_WAIT_SECONDS)
+	if folder == nil then
+		warn('[CustomerService] workspace["Ordering System"].CustomerAreas missing; counter ordering disabled.')
+		return false
+	end
+	for _, child in folder:GetChildren() do
+		if child:IsA("BasePart") then
+			table.insert(self._counterAreas, { Part = child, Spot = nil })
+		end
+	end
+	if #self._counterAreas == 0 then
+		warn('[CustomerService] workspace["Ordering System"].CustomerAreas has no parts; counter ordering disabled.')
+		return false
+	end
+	return true
+end
+
+-- Each area's NPC Counter spot, once the NPC world is known (nearest Counter part in XZ).
+function CustomerService:_mapCounterSpots()
+	if self._counterSpotsMapped or self._context == nil then
+		return
+	end
+	self._counterSpotsMapped = true
+	local positions: { Vector3 } = {}
+	for index, part in self._context.Nodes.Counter do
+		positions[index] = part.Position
+	end
+	for _, area in self._counterAreas do
+		area.Spot = CounterLock.MatchSpot(area.Part.Position, positions, CounterLock.SPOT_MATCH_STUDS)
+	end
+end
+
+-- The customer became eligible: a Take Order prompt on them. The server keeps it
+-- Enabled; each client hides it for the customer, clocked-out players and every
+-- barista but the lock holder (OrderController). The server checks everything again.
+function CustomerService:_startCounterCustomer(customer: Player, areaIndex: number)
+	local root = liveRoot(customer)
+	if root == nil then
+		return
+	end
+	local prompt = Instance.new("ProximityPrompt")
+	prompt.Name = COUNTER_PROMPT_NAME
+	prompt.ActionText = "Take Order"
+	prompt.ObjectText = customer.DisplayName
+	prompt.HoldDuration = 0
+	prompt.MaxActivationDistance = COUNTER_TAKE_DISTANCE_STUDS
+	prompt.RequiresLineOfSight = false
+	prompt:SetAttribute("CustomerUserId", customer.UserId)
+	prompt:SetAttribute("TakerUserId", 0)
+	prompt:SetAttribute("BuiltBy", "REVIVAL-001-ORDER-FLOW-REWORK")
+	CollectionService:AddTag(prompt, COUNTER_PROMPT_TAG)
+	prompt.Triggered:Connect(function(barista: Player)
+		local ok, err = pcall(self._onCounterTakeOrder, self, customer, barista)
+		if not ok then
+			warnThrottled("counterTake", `[CustomerService] Counter Take Order failed: {err}`)
+		end
+	end)
+	prompt.Parent = root
+	self._counterCustomers[customer] = { Area = areaIndex, Prompt = prompt, Lock = nil }
+end
+
+-- Drops the lock (prompt shows to every barista again). `reason` is told to the taker.
+function CustomerService:_releaseCounterLock(customer: Player, reason: string?)
+	local state = self._counterCustomers[customer]
+	if state == nil or state.Lock == nil then
+		return
+	end
+	local taker = state.Lock.Taker
+	state.Lock = nil
+	pcall(function()
+		state.Prompt:SetAttribute("TakerUserId", 0)
+	end)
+	if reason ~= nil and taker ~= nil and taker.Parent ~= nil then
+		pcall(function()
+			self._dialog:Notify(taker, { Title = "Order cancelled", Description = reason })
+		end)
+	end
+end
+
+-- The customer is no longer a counter customer (moved, ordered, clocked in, left).
+function CustomerService:_endCounterCustomer(customer: Player, reason: string?)
+	local state = self._counterCustomers[customer]
+	if state == nil then
+		return
+	end
+	self:_releaseCounterLock(customer, reason)
+	self._counterCustomers[customer] = nil
+	pcall(function()
+		state.Prompt:Destroy()
+	end)
+end
+
+-- One counter pass: who stands where, who is eligible, and whether each lock still holds.
+-- Never yields.
+function CustomerService:_counterTick()
+	self:_mapCounterSpots()
+
+	local occupants: { [number]: { Player } } = {}
+	for _, player in Players:GetPlayers() do
+		if self._shift:IsClockedIn(player) then
+			continue
+		end
+		local root = liveRoot(player)
+		if root == nil then
+			continue
+		end
+		for index, area in self._counterAreas do
+			if CounterLock.InArea(area.Part.CFrame, area.Part.Size, root.Position, CounterLock.DEPTH_MARGIN) then
+				local list = occupants[index]
+				if list == nil then
+					list = {}
+					occupants[index] = list
+				end
+				table.insert(list, player)
+				break
+			end
+		end
+	end
+
+	table.clear(self._realOccupied)
+	for index in occupants do
+		local spot = self._counterAreas[index].Spot
+		if spot ~= nil then
+			self._realOccupied[spot] = true
+		end
+	end
+
+	local eligible: { [Player]: number } = {}
+	for index, list in occupants do
+		local customer = CounterLock.EligibleCustomer(
+			list,
+			self:_npcAtSpot(self._counterAreas[index].Spot),
+			function(player: Player): boolean
+				return self._order:HasOpenOrder(player.UserId)
+			end
+		)
+		if customer ~= nil then
+			eligible[customer] = index
+		end
+	end
+
+	for customer, state in self._counterCustomers do
+		if eligible[customer] ~= state.Area or state.Prompt.Parent == nil then
+			self:_endCounterCustomer(customer, "The customer left the counter.")
+		end
+	end
+	for customer, index in eligible do
+		if self._counterCustomers[customer] == nil then
+			self:_startCounterCustomer(customer, index)
+		end
+	end
+
+	local now = os.clock()
+	for customer, state in self._counterCustomers do
+		local lock = state.Lock
+		if lock == nil then
+			continue
+		end
+		local taker: Player = lock.Taker
+		local reason: string? = nil
+		if now >= lock.Expires then
+			reason = "You took too long to take the order."
+		elseif taker.Parent == nil or not self._shift:IsClockedIn(taker) then
+			reason = "" -- the taker left or clocked out: nothing to tell
+		else
+			local takerRoot = liveRoot(taker)
+			local customerRoot = liveRoot(customer)
+			if
+				takerRoot == nil
+				or customerRoot == nil
+				or (takerRoot.Position - customerRoot.Position).Magnitude > SUBMIT_MAX_DISTANCE_STUDS
+			then
+				reason = "You moved away from the customer."
+			end
+		end
+		if reason ~= nil then
+			self:_releaseCounterLock(customer, if reason ~= "" then reason else nil)
+		end
+	end
+end
+
+function CustomerService:_counterLoop()
+	if not self:_resolveCounterAreas() then
+		return
+	end
+	while true do
+		local ok, err = pcall(self._counterTick, self)
+		if not ok then
+			warnThrottled("counter", `[CustomerService] Counter step failed: {err}`)
+		end
+		task.wait(COUNTER_TICK_SECONDS)
+	end
+end
+
+-- Take Order on a real customer: the first eligible barista takes the lock.
+function CustomerService:_onCounterTakeOrder(customer: Player, barista: Player)
+	local state = self._counterCustomers[customer]
+	if state == nil or barista == customer then
+		return
+	end
+	if not self:_ensureClockedIn(barista) then
+		return
+	end
+	local baristaRoot = liveRoot(barista)
+	local customerRoot = liveRoot(customer)
+	if
+		baristaRoot == nil
+		or customerRoot == nil
+		or (baristaRoot.Position - customerRoot.Position).Magnitude > COUNTER_TAKE_DISTANCE_STUDS
+	then
+		return
+	end
+	local now = os.clock()
+	if not CounterLock.CanTake(state.Lock, barista, now) then
+		self._dialog:Notify(barista, {
+			Title = "Order taken",
+			Description = "Another barista is taking this order.",
+		})
+		return
+	end
+	if not self:_hasFreeSlot(barista) then
+		self._dialog:Notify(barista, {
+			Title = "Slots Full",
+			Description = "You already have an active order ticket!",
+		})
+		return
+	end
+	-- One counter customer per barista at a time.
+	for other, otherState in self._counterCustomers do
+		if other ~= customer and otherState.Lock ~= nil and otherState.Lock.Taker == barista then
+			self:_releaseCounterLock(other)
+		end
+	end
+	self._counterLockSeq += 1
+	state.Lock = CounterLock.Take(barista, self._counterLockSeq, now)
+	state.Prompt:SetAttribute("TakerUserId", barista.UserId)
+
+	self.Client.OpenOrderingTablet:Fire(barista, {
+		CounterCustomerId = customer.UserId,
+		LockId = self._counterLockSeq,
+		CustomerName = customer.DisplayName,
+		RequestedText = `Ask {customer.DisplayName} what they'd like.`,
+	})
+end
+
+function CustomerService:_submitCounterOrder(
+	player: Player,
+	customerUserId: any,
+	lockId: any,
+	orderItems: any
+): { Success: boolean, Message: string? }
+	if typeof(customerUserId) ~= "number" or typeof(lockId) ~= "number" or typeof(orderItems) ~= "table" then
+		return { Success = false, Message = "Invalid order submission." }
+	end
+	local now = os.clock()
+	local last = self._counterSubmitAt[player]
+	if last ~= nil and now - last < COUNTER_SUBMIT_DEBOUNCE_SECONDS then
+		return { Success = false, Message = "Please wait a moment." }
+	end
+	self._counterSubmitAt[player] = now
+
+	local customer = Players:GetPlayerByUserId(customerUserId)
+	local state = if customer ~= nil then self._counterCustomers[customer] else nil
+	if customer == nil or state == nil then
+		return { Success = false, Message = "The customer is no longer at the counter." }
+	end
+	if not CounterLock.Holds(state.Lock, player, lockId, now) then
+		return { Success = false, Message = "This order isn't yours to take anymore." }
+	end
+	if not self._shift:IsClockedIn(player) then
+		return { Success = false, Message = "You must be clocked in." }
+	end
+	local takerRoot = liveRoot(player)
+	local customerRoot = liveRoot(customer)
+	if
+		takerRoot == nil
+		or customerRoot == nil
+		or (takerRoot.Position - customerRoot.Position).Magnitude > SUBMIT_MAX_DISTANCE_STUDS
+	then
+		return { Success = false, Message = "Stand by the customer to place their order." }
+	end
+	-- Still standing at their register, with no NPC there (the last tick is at most 0.3 s old).
+	local area = self._counterAreas[state.Area]
+	if
+		area == nil
+		or not CounterLock.InArea(area.Part.CFrame, area.Part.Size, customerRoot.Position, CounterLock.DEPTH_MARGIN)
+		or self:_npcAtSpot(area.Spot)
+	then
+		return { Success = false, Message = "The customer is no longer at the counter." }
+	end
+
+	local result = self._order:CreateCounterOrder(player, customer, orderItems)
+	if typeof(result) == "table" and result.Success == true then
+		self:_endCounterCustomer(customer)
+	end
+	return result
+end
+
+function CustomerService.Client:SubmitCounterOrder(player: Player, customerUserId: any, lockId: any, orderItems: any)
+	return self.Server:_submitCounterOrder(player, customerUserId, lockId, orderItems)
+end
+
+-- The taker closed the tablet. Only the lock with this Id is released, so a stale
+-- tablet closing after a newer Take Order changes nothing.
+function CustomerService.Client:CancelCounterOrder(player: Player, customerUserId: any, lockId: any)
+	if typeof(customerUserId) ~= "number" or typeof(lockId) ~= "number" then
+		return
+	end
+	local server = self.Server
+	local customer = Players:GetPlayerByUserId(customerUserId)
+	local state = if customer ~= nil then server._counterCustomers[customer] else nil
+	if state ~= nil and state.Lock ~= nil and state.Lock.Taker == player and state.Lock.Id == lockId then
+		server:_releaseCounterLock(customer)
+	end
 end
 
 -- A floating "+N" over the NPC for 1.5 s. Styles tokens only (DEC-013).
@@ -1647,6 +2179,7 @@ function CustomerService:_clearTicket(npc: Npc.Npc)
 				held[slot] = nil
 				self._idleSince[holder] = os.clock()
 				self:_fireTicket(holder, nil, slot)
+				self:_dispatchRealOrders() -- a waiting real order may take the freed slot
 				break
 			end
 		end
@@ -1721,6 +2254,9 @@ function CustomerService:KnitStart()
 	self._stats = Knit.GetService("StatisticsService")
 	self._dialog = Knit.GetService("DialogService")
 	self._data = Knit.GetService("DataService")
+
+	-- Counter ordering does not need the NPC world (it maps register spots once it exists).
+	task.spawn(self._counterLoop, self)
 
 	local nodes = self:_resolveNodes()
 	if nodes == nil or not self:_setUpCollisionGroups() then
@@ -1807,6 +2343,16 @@ end
 
 function CustomerService:PlayerRemoving(player: Player)
 	self:_unwatchBaristaInventory(player)
+	self._counterSubmitAt[player] = nil
+	self._clockInPromptOpen[player] = nil
+	pcall(function()
+		self:_endCounterCustomer(player)
+		for customer, state in self._counterCustomers do
+			if state.Lock ~= nil and state.Lock.Taker == player then
+				self:_releaseCounterLock(customer)
+			end
+		end
+	end)
 	self._activeOrderingNpc[player] = nil
 	self._firstServe[player] = nil
 	self._sessionShifts[player] = nil
@@ -1821,6 +2367,8 @@ function CustomerService:PlayerRemoving(player: Player)
 			warnThrottled("leaving", `[CustomerService] Release step failed: {err}`)
 		end
 	end
+	-- Real-order tickets are released by OrderService; drop whatever is left.
+	self._tickets[player] = nil
 end
 
 return CustomerService

@@ -72,6 +72,59 @@ local MAX_ORDER_ITEMS = 3
 ---> private
 local c = React.createElement
 
+-- The server's not-clocked-in rejection for tablet submits (barista clocked out
+-- between Take Order and submit). Matches CustomerService/OrderService exactly.
+local CLOCKED_OUT_MESSAGE = "You must be clocked in."
+
+-- Clock-in upsell: the tablet submit failed because the barista is clocked out.
+-- Asks to clock in (ButtonPrompt, DEC-013) instead of only toasting; confirming
+-- clocks in through the same ShiftService path as the HUD clock button and leaves
+-- the tablet open so the player can submit again, declining just dismisses.
+local clockInPromptOpen = false
+
+local function offerClockIn()
+	if clockInPromptOpen then
+		return
+	end
+	if Players.LocalPlayer:GetAttribute("ClockedIn") == true then
+		return -- clocked in since the server rejected (stale result)
+	end
+	clockInPromptOpen = true
+	local ok, dialog = pcall(function()
+		return Knit.GetController("DialogController").new("ButtonPrompt", {
+			Title = "Clock In Required",
+			Text = "You need to be clocked in for this. Do you want to clock in?",
+			Buttons = {
+				{ Text = "Clock In", Color = Styles.GREEN },
+				{ Text = "Cancel", Color = Styles.RED },
+			},
+		})
+	end)
+	if not ok or dialog == nil then
+		clockInPromptOpen = false
+		warn("[Ordering] Clock-in prompt failed: " .. tostring(dialog))
+		return
+	end
+	dialog
+		:Fire()
+		:andThen(function(choice)
+			clockInPromptOpen = false
+			if choice == "Clock In" then
+				task.spawn(function()
+					local clockOk, err = pcall(function()
+						Knit.GetService("ShiftService"):SetClockedIn(true)
+					end)
+					if not clockOk then
+						warn("[Ordering] Clock in request failed: " .. tostring(err))
+					end
+				end)
+			end
+		end)
+		:catch(function()
+			clockInPromptOpen = false
+		end)
+end
+
 local function resolveItemName(orderItem: { [string]: any }): string
 	local name: string = orderItem.DefaultInfo.ItemName
 	if orderItem.DefaultInfo.Select then
@@ -131,8 +184,9 @@ local function itemsMatch(a: any, b: any): boolean
 	return true
 end
 
--- AUDIT-FIX D3.1a: the NPC's order as tablet items, so Submit is one tap. Starts from the same
--- Select and Option defaults as onItemSelected, then the customer's choices. Unknown items are skipped.
+-- AUDIT-FIX D3.1a, narrowed by DEC-059: the scripted first-session NPC's order as tablet items, so the
+-- tutorial Submit is one tap. Used only when the server sets Prefill. Starts from the same Select and
+-- Option defaults as onItemSelected, then the customer's choices. Unknown items are skipped.
 local function prefillFromNpc(npcOrderData: any): { any }
 	local items = {}
 	if npcOrderData == nil or typeof(npcOrderData.Orders) ~= "table" then
@@ -246,11 +300,13 @@ return function(props: {
 	ClosePage: (() -> ())?,
 	OnClose: (() -> ())?,
 })
+	-- An NPC's tablet (NpcId) or a real customer at the counter (CounterCustomerId, DEC-059).
 	local npcOrderData = if props.Args
 			and typeof(props.Args[1]) == "table"
-			and props.Args[1].NpcId ~= nil
+			and (props.Args[1].NpcId ~= nil or props.Args[1].CounterCustomerId ~= nil)
 		then props.Args[1]
 		else nil
+	local counterData = if npcOrderData ~= nil and npcOrderData.CounterCustomerId ~= nil then npcOrderData else nil
 
 	-- TAKEOVER-REVIEW-FIX P2-1: the tablet's NPC comes only from this page's own Args. The page can close without
 	-- closeMenu (HUD page switch), so clear the controller's copy on unmount and never fall back to it.
@@ -265,6 +321,15 @@ return function(props: {
 					controller.ActiveNpcOrder = nil
 				end
 			end)
+			-- Closing a counter tablet frees the customer for another barista. The server only
+			-- releases this tablet's own lock (LockId), so a stale close changes nothing.
+			if counterData ~= nil and RunService:IsRunning() then
+				pcall(function()
+					Knit.GetService("CustomerService")
+						:CancelCounterOrder(counterData.CounterCustomerId, counterData.LockId)
+						:catch(warn)
+				end)
+			end
 		end
 	end, {})
 
@@ -299,7 +364,10 @@ return function(props: {
 
 	---> order accumulation
 	local orderItems, setOrderItems = React.useState(function(): { any }
-		return prefillFromNpc(npcOrderData)
+		if npcOrderData ~= nil and npcOrderData.Prefill == true then
+			return prefillFromNpc(npcOrderData)
+		end
+		return {}
 	end)
 
 	---> barista info (local player, loaded async)
@@ -476,6 +544,36 @@ return function(props: {
 			request[i] = { Category = orderItem.Category, Item = orderItem.Item, CustomInfo = orderItem.CustomInfo }
 		end
 
+		if counterData ~= nil then
+			-- A real customer's order: nothing to match on the client; the server rebuilds it.
+			isSubmitting.current = true
+			task.spawn(function()
+				local ok, result = pcall(function()
+					return Knit.GetService("CustomerService")
+						:SubmitCounterOrder(counterData.CounterCustomerId, counterData.LockId, request)
+						:expect()
+				end)
+				isSubmitting.current = false
+				local success = ok and typeof(result) == "table" and result.Success == true
+				local message = if ok and typeof(result) == "table" then result.Message else nil
+				if not success and message == CLOCKED_OUT_MESSAGE then
+					offerClockIn()
+					return
+				end
+				Knit.GetController("DialogController"):Notify({
+					Title = if success then "Order Placed" else "Order Error",
+					Description = message or (if success then "Order placed." else "Unable to submit order."),
+				})
+				if success then
+					closeMenu()
+					setOrderItems({})
+					setSelCategory(nil)
+					setPage("CategorySelect")
+				end
+			end)
+			return
+		end
+
 		if npcOrderData ~= nil then
 			local matches = validateSubmittedOrder(request, npcOrderData.Orders)
 			if not matches then
@@ -496,6 +594,10 @@ return function(props: {
 				local message = if ok and typeof(result) == "table" then result.Message else nil
 
 				if not success then
+					if message == CLOCKED_OUT_MESSAGE then
+						offerClockIn()
+						return
+					end
 					Knit.GetController("DialogController"):Notify({
 						Title = "Order Error",
 						Description = message or "That doesn't match what the customer asked for!",
@@ -616,8 +718,9 @@ return function(props: {
 					FontFace = Styles.FONT_FREDOKA,
 					Position = UDim2.fromScale(0.00462942, 0.0994445),
 					Size = UDim2.fromScale(0.991803, 0.0662963),
-					Text = if npcOrderData ~= nil
-						then "Customer's requested order:"
+					Text = if counterData ~= nil
+						then "Take the customer's order:"
+						elseif npcOrderData ~= nil then "Customer's requested order:"
 						else "Use this page to take notes on customer orders.",
 					TextColor3 = Color3.new(1, 1, 1),
 					TextScaled = true,

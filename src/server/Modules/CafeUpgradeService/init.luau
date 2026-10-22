@@ -287,7 +287,21 @@ function CafeUpgradeService:OpenMenu(player: Player)
 			return
 		end
 		if reason == "InsufficientFunds" then
-			self:_notify(player, `You need {price} Boba Bucks for that upgrade.`)
+			-- Explicit Buy click just failed on funds: offer the Currency tab (server text only; client opens Shop).
+			local dialogService = self:_getService("DialogService")
+			local okFunds, fundsChoice = dialogService
+				:CreateDialog(player, "ButtonPrompt", {
+					Title = "Not enough Boba Bucks",
+					Text = dialogService.FormatBrackets(`You need [{price} Boba Bucks] for that upgrade.`),
+					Buttons = {
+						{ Text = "Get Boba Bucks", Color = Styles.GREEN },
+						{ Text = "Cancel", Color = Styles.RED },
+					},
+				}, DIALOG_TIMEOUT_SECONDS)
+				:await()
+			if okFunds and fundsChoice == "Get Boba Bucks" and player.Parent ~= nil then
+				dialogService:OpenShop(player, "Currency")
+			end
 		elseif reason == "Changed" or reason == "Maxed" or reason == "Busy" then
 			self:_notify(player, "Someone just bought that upgrade! Check the board again.")
 		else

@@ -94,6 +94,12 @@ return function()
 		service:_addOrder(customerId, items, specsOf(items))
 	end
 
+	-- _addOrder for a counter order: assigned straight to `taker`.
+	local function addOrderFor(customerId: number, taker: any)
+		local items = { makeItem() }
+		service:_addOrder(customerId, items, specsOf(items), taker)
+	end
+
 	-- A Tool carrying the attributes the kitchen writes. `parent` defaults to nothing.
 	-- It holds a non-Handle part so the pick-up display model has something to clone.
 	local function makeTool(attrs: { [string]: any }?, parent: Instance?)
@@ -215,13 +221,13 @@ return function()
 		"_statusScreens",
 		"_staffScreens",
 		"_pickUpAreas",
-		"_queue",
+		"_customerService",
 		"_broadcastUpdate",
 		"_shiftService",
 		"_statisticsService",
+		"_handoffBeam",
 	}
-	local LIVE_CLIENT_FIELDS =
-		{ "NotepadUpdated", "PickUpNodeVisibilityChanged", "Announcement", "QueueUpdated", "Server" }
+	local LIVE_CLIENT_FIELDS = { "PickUpNodeVisibilityChanged", "Announcement", "HandoffTargetChanged", "Server" }
 	local savedFields, savedClientFields = {}, {}
 	for _, key in LIVE_FIELDS do
 		savedFields[key] = rawget(service, key)
@@ -243,6 +249,25 @@ return function()
 		service._shiftService = nil
 	end
 
+	-- A fake CustomerService ticket owner (DEC-059: real orders use the shared ticket
+	-- slots). `slots` free slots per barista; records every issued and cleared ticket.
+	local function mockCustomers(slots: number)
+		local fake = { issued = {}, cleared = {}, held = {} }
+		function fake:HasFreeSlot(player)
+			return (self.held[player] or 0) < slots
+		end
+		function fake:IssueRealTicket(player, order)
+			self.held[player] = (self.held[player] or 0) + 1
+			table.insert(self.issued, { player, order })
+		end
+		function fake:ClearRealTicket(player, id)
+			self.held[player] = math.max(0, (self.held[player] or 0) - 1)
+			table.insert(self.cleared, { player, id })
+		end
+		service._customerService = fake
+		return fake
+	end
+
 	-- ──────────────────────────────────────────────────────────────────────
 	-- Per-test state reset
 	-- ──────────────────────────────────────────────────────────────────────
@@ -255,14 +280,14 @@ return function()
 		service._statusScreens = {}
 		service._staffScreens = {}
 		service._pickUpAreas = {}
-		service._queue = {}
+		service._customerService = nil
+		service._handoffBeam = {}
 
 		-- Replace Knit RemoteSignals with local mock objects so we can track
 		-- fires without needing the full networking stack.
-		service.Client.NotepadUpdated = makeMockSignal()
 		service.Client.PickUpNodeVisibilityChanged = makeMockSignal()
 		service.Client.Announcement = makeMockSignal()
-		service.Client.QueueUpdated = makeMockSignal()
+		service.Client.HandoffTargetChanged = makeMockSignal()
 
 		-- Wire Client.Server so that Client methods (CreateOrder) work correctly.
 		service.Client.Server = service
@@ -611,17 +636,17 @@ return function()
 			expect(service._orders[1].statusColor).to.equal(COLOR_PREPARING)
 		end)
 
-		it("should fire NotepadUpdated with SetNewOrder", function()
+		it("should put the order in the barista's ticket stack as a real ticket", function()
 			mockClockedIn(true)
+			local fake = mockCustomers(1)
 			local items = { makeItem() }
-			service._orders = { makeOrder({ order = items }) }
+			service._orders = { makeOrder({ orderNum = "0007", order = items }) }
 			service:_claimNextOrder(player)
 
-			local calls = service.Client.NotepadUpdated._calls
-			expect(#calls).to.equal(1)
-			expect(calls[1][1]).to.equal(player) -- first arg is the player
-			expect(calls[1][2]).to.equal("SetNewOrder")
-			expect(calls[1][3]).to.equal(items)
+			expect(#fake.issued).to.equal(1)
+			expect(fake.issued[1][1]).to.equal(player)
+			expect(fake.issued[1][2].Id).to.equal("Real_0007")
+			expect(fake.issued[1][2].Items).to.equal(items)
 		end)
 
 		it("should claim the oldest pending order when multiple exist", function()
@@ -727,56 +752,150 @@ return function()
 	end)
 
 	-- ══════════════════════════════════════════════════════════════════════
-	-- Queue gating (_joinQueue / _handleClaimOrQueue)
+	-- Ticket slots (DEC-059: no claim prompt, no queue)
 	-- ══════════════════════════════════════════════════════════════════════
 
-	describe("queue gating", function()
-		it("should not let a clocked-out player join the queue", function()
-			mockClockedIn(false)
-			local player = makePlayer(400)
-			service:_joinQueue(player)
-			expect(#service._queue).to.equal(0)
+	describe("ticket slots", function()
+		it("should have no queue or claim API left", function()
+			expect(service._queue).to.equal(nil)
+			expect(service._joinQueue).to.equal(nil)
+			expect(service._leaveQueue).to.equal(nil)
+			expect(service._handleClaimOrQueue).to.equal(nil)
+			expect(service.Client.LeaveQueue).to.equal(nil)
+			expect(service.Client.QueueUpdated).to.equal(nil)
+			expect(service.Client.NotepadUpdated).to.equal(nil)
 		end)
 
-		it("should let a clocked-in player join the queue", function()
+		it("should refuse a barista whose ticket slots are full", function()
 			mockClockedIn(true)
-			local player = makePlayer(401)
-			service:_joinQueue(player)
-			expect(#service._queue).to.equal(1)
-			expect(service._queue[1]).to.equal(player.UserId)
-		end)
-
-		it("should ignore a clocked-out player at the staff screen", function()
-			mockClockedIn(false)
-			local player = makePlayer(402)
+			local fake = mockCustomers(1)
+			local player = makePlayer(410)
+			fake.held[player] = 1 -- an NPC ticket fills the only slot
 			service._orders = { makeOrder() }
-			service:_handleClaimOrQueue(player)
+			expect(service:_canClaimOrder(player)).to.equal(false)
+			service:_claimNextOrder(player)
 			expect(service._orders[1].status).to.equal("Pending Preparation")
-			expect(#service._queue).to.equal(0)
+			expect(#fake.issued).to.equal(0)
 		end)
 
-		it("should claim directly for a clocked-in player when orders are pending", function()
+		it("should give a level-5 barista (2 slots) a second real order", function()
 			mockClockedIn(true)
-			local player = makePlayer(403)
+			local fake = mockCustomers(2)
+			local player = makePlayer(411)
+			local first = makeOrder({ orderNum = "0001" })
+			local second = makeOrder({ orderNum = "0002", customer = 10002 })
+			service._orders = { first, second }
+			service:_claimNextOrder(player)
+			service:_claimNextOrder(player)
+			expect(first.preparedBy).to.equal(player.UserId)
+			expect(second.preparedBy).to.equal(player.UserId)
+			expect(#fake.issued).to.equal(2)
+			-- both slots are full now
+			expect(service:_canClaimOrder(player)).to.equal(false)
+		end)
+
+		it("should fall back to one real order at a time before CustomerService is resolved", function()
+			mockClockedIn(true)
+			local player = makePlayer(412)
+			service._orders = { makeOrder({ status = "Being Prepared", preparedBy = player.UserId }) }
+			expect(service:_canClaimOrder(player)).to.equal(false)
+		end)
+
+		it("should assign a counter order straight to the taker (not via dispatch)", function()
+			local fake = mockCustomers(1)
+			local taker = makePlayer(413)
+			addOrderFor(10001, taker)
+			local order = service._orders[1]
+			expect(order.status).to.equal("Being Prepared")
+			expect(order.preparedBy).to.equal(taker.UserId)
+			expect(#fake.issued).to.equal(1)
+			expect(fake.issued[1][1]).to.equal(taker)
+		end)
+
+		it("should not dispatch to a clocked-in barista whose slots are full", function()
+			mockClockedIn(true)
+			local fake = mockCustomers(1)
+			for _, online in game:GetService("Players"):GetPlayers() do
+				fake.held[online] = 1 -- every online barista is busy
+			end
 			service._orders = { makeOrder() }
-			service:_handleClaimOrQueue(player)
+			expect(service:_dispatchPending()).to.equal(0)
+			expect(service._orders[1].status).to.equal("Pending Preparation")
+		end)
+	end)
+
+	-- ══════════════════════════════════════════════════════════════════════
+	-- CreateCounterOrder (a barista enters a real customer's order at the counter)
+	-- ══════════════════════════════════════════════════════════════════════
+
+	describe("CreateCounterOrder", function()
+		local taker = makePlayer(420)
+		local customer = makePlayer(421)
+
+		-- ShiftService fake: only the taker is clocked in.
+		local function takerOnly()
+			service._shiftService = {
+				IsClockedIn = function(_, player)
+					return player == taker
+				end,
+			}
+		end
+
+		it("should create the order for the customer and give the taker its ticket", function()
+			takerOnly()
+			local fake = mockCustomers(1)
+			local result = service:CreateCounterOrder(taker, customer, { makeRequest() })
+			expect(result.Success).to.equal(true)
+			expect(#service._orders).to.equal(1)
+			expect(service._orders[1].customer).to.equal(customer.UserId)
+			expect(service._orders[1].preparedBy).to.equal(taker.UserId)
 			expect(service._orders[1].status).to.equal("Being Prepared")
-			expect(service._orders[1].preparedBy).to.equal(player.UserId)
+			expect(#fake.issued).to.equal(1)
 		end)
 
-		it("should queue a clocked-in player when no orders are pending", function()
-			mockClockedIn(true)
-			local player = makePlayer(404)
-			service:_handleClaimOrQueue(player)
-			expect(#service._queue).to.equal(1)
+		it("should rebuild items from the server Menu like CreateOrder", function()
+			takerOnly()
+			mockCustomers(1)
+			local result = service:CreateCounterOrder(taker, customer, { makeRequest("Pastries", "Not A Thing") })
+			expect(result.Success).to.equal(false)
+			expect(#service._orders).to.equal(0)
+			result = service:CreateCounterOrder(taker, customer, "nope")
+			expect(result.Success).to.equal(false)
+			result = service:CreateCounterOrder(taker, customer, {})
+			expect(result.Success).to.equal(false)
 		end)
 
-		it("should remove a player from the queue on _leaveQueue", function()
-			mockClockedIn(true)
-			local player = makePlayer(405)
-			service:_joinQueue(player)
-			service:_leaveQueue(player)
-			expect(#service._queue).to.equal(0)
+		it("should refuse a clocked-out taker or a clocked-in customer", function()
+			mockCustomers(1)
+			mockClockedIn(false)
+			expect(service:CreateCounterOrder(taker, customer, { makeRequest() }).Success).to.equal(false)
+			mockClockedIn(true) -- both clocked in: the customer is a barista
+			expect(service:CreateCounterOrder(taker, customer, { makeRequest() }).Success).to.equal(false)
+			expect(#service._orders).to.equal(0)
+		end)
+
+		it("should refuse when the customer already has an open order", function()
+			takerOnly()
+			mockCustomers(2)
+			service._orders = { makeOrder({ customer = customer.UserId }) }
+			local result = service:CreateCounterOrder(taker, customer, { makeRequest() })
+			expect(result.Success).to.equal(false)
+			expect(#service._orders).to.equal(1)
+		end)
+
+		it("should refuse when the taker has no free ticket slot", function()
+			takerOnly()
+			local fake = mockCustomers(1)
+			fake.held[taker] = 1
+			local result = service:CreateCounterOrder(taker, customer, { makeRequest() })
+			expect(result.Success).to.equal(false)
+			expect(#service._orders).to.equal(0)
+		end)
+
+		it("should refuse a player taking their own order", function()
+			takerOnly()
+			mockCustomers(1)
+			expect(service:CreateCounterOrder(taker, taker, { makeRequest() }).Success).to.equal(false)
 		end)
 	end)
 
@@ -904,10 +1023,10 @@ return function()
 				["Syrup Flavor"] = "Almond",
 				["Tapioca Flavor"] = "Normal",
 			}),
-			["a tapioca off the launch menu"] = makeRequest("Boba Teas", "Custom Boba", {
+			["an unknown tapioca flavor"] = makeRequest("Boba Teas", "Custom Boba", {
 				Size = "Medium",
 				["Syrup Flavor"] = "Classic Milk Tea",
-				["Tapioca Flavor"] = "Pumpkin Paradise",
+				["Tapioca Flavor"] = "Rainbow",
 			}),
 		}
 		for caseName, request in OFF_MENU_REQUESTS do
@@ -1357,7 +1476,6 @@ return function()
 			expect(area.OrderOwner.Value).to.equal(0)
 			expect(#area:GetChildren()).to.equal(2) -- OrderOwner and ProximityPrompt only
 			expect(ServerStorage.OrderPickUp:FindFirstChild("Order_" .. CUSTOMER_ID)).to.equal(nil)
-			expect(#service.Client.NotepadUpdated._calls).to.equal(0)
 			expect(#service.Client.PickUpNodeVisibilityChanged._calls).to.equal(0)
 		end
 
@@ -1421,12 +1539,6 @@ return function()
 			end
 			expect(models).to.equal(1)
 
-			-- The barista's notepad is cleared and free nodes are hidden for them
-			local notepad = service.Client.NotepadUpdated._calls
-			expect(#notepad).to.equal(1)
-			expect(notepad[1][1]).to.equal(staff)
-			expect(notepad[1][2]).to.equal("ResetOrder")
-
 			cleanPickUpFolder(CUSTOMER_ID)
 			area:Destroy()
 		end)
@@ -1468,6 +1580,42 @@ return function()
 			expect(order.status).to.equal("Ready for Pick Up")
 			expect(first.Parent).to.equal(folder)
 			expect(second.Parent).to.equal(folder)
+
+			cleanPickUpFolder(CUSTOMER_ID)
+			area:Destroy()
+		end)
+
+		it("should still hand tools over when the pick-up node has no CFrame", function()
+			local staff = makePlayer(614)
+			staff.Character = Instance.new("Model")
+			-- A Model node cannot be pivoted to: the display is skipped, but
+			-- the deposit itself must still complete instead of stranding
+			-- Served-marked tools in the barista's inventory.
+			local area = Instance.new("Model")
+			area.Name = "MockModelPickUpArea"
+			local ownerVal = Instance.new("IntValue")
+			ownerVal.Name = "OrderOwner"
+			ownerVal.Value = 0
+			ownerVal.Parent = area
+			local prompt = Instance.new("ProximityPrompt")
+			prompt.Name = "ProximityPrompt"
+			prompt.Parent = area
+			local order = makeOrder({
+				customer = CUSTOMER_ID,
+				status = "Being Prepared",
+				preparedBy = staff.UserId,
+				statusColor = COLOR_PREPARING,
+			})
+			service._orders = { order }
+			local tool = makeTool(regularMedium(), staff.Backpack)
+
+			service:_handlePickUp(staff, area)
+
+			expect(order.status).to.equal("Ready for Pick Up")
+			expect(order.grade).to.equal("Perfect")
+			expect(area.OrderOwner.Value).to.equal(CUSTOMER_ID)
+			expect(tool.Parent).to.equal(ServerStorage.OrderPickUp:FindFirstChild("Order_" .. CUSTOMER_ID))
+			expect(#service.Client.Announcement._calls).to.equal(0)
 
 			cleanPickUpFolder(CUSTOMER_ID)
 			area:Destroy()
@@ -1575,7 +1723,6 @@ return function()
 			expect(tool.Parent).to.equal(staff.Backpack)
 			expect(tool:GetAttribute("Served")).to.equal(nil)
 			expect(ServerStorage.OrderPickUp:FindFirstChild("Order_" .. CUSTOMER_ID)).to.equal(nil)
-			expect(#service.Client.NotepadUpdated._calls).to.equal(0)
 
 			local announcements = service.Client.Announcement._calls
 			expect(#announcements).to.equal(1)
@@ -1656,7 +1803,7 @@ return function()
 			return staff, order
 		end
 
-		it("should return a Being Prepared order to the queue when the barista clocks out", function()
+		it("should return a Being Prepared order for dispatch when the barista clocks out", function()
 			local staff, order = claimed(800)
 
 			service:_onClockedInChanged(staff, false)
@@ -1666,11 +1813,6 @@ return function()
 			expect(order.preparedBy).to.equal(nil)
 			expect(service:HasActiveOrder(staff)).to.equal(false)
 			expect(service:_getNextOrder()).to.equal(order)
-
-			local notepad = service.Client.NotepadUpdated._calls
-			expect(#notepad).to.equal(1)
-			expect(notepad[1][1]).to.equal(staff)
-			expect(notepad[1][2]).to.equal("ResetOrder")
 		end)
 
 		it("should let the barista, or another one, claim the order again", function()
@@ -1868,6 +2010,165 @@ return function()
 			expect(service._customerOrders["Cust_3"]).never.to.equal(nil)
 			service:RemoveCustomerOrder("Cust_3")
 			expect(service._customerOrders["Cust_3"]).to.equal(nil)
+		end)
+	end)
+
+	-- ══════════════════════════════════════════════════════════════════════
+	-- Direct-handoff mode (HandoffMode + _updateHandoff parking)
+	-- ══════════════════════════════════════════════════════════════════════
+
+	describe("HandoffMode", function()
+		it("should be direct within 25 studs", function()
+			expect(service.HandoffMode(0)).to.equal("direct")
+			expect(service.HandoffMode(24.9)).to.equal("direct")
+		end)
+
+		it("should be direct at exactly 25 studs", function()
+			expect(service.HandoffMode(25)).to.equal("direct")
+		end)
+
+		it("should be counter beyond 25 studs", function()
+			expect(service.HandoffMode(25.1)).to.equal("counter")
+			expect(service.HandoffMode(100)).to.equal("counter")
+		end)
+
+		it("should be counter when the distance is unknown", function()
+			expect(service.HandoffMode(nil)).to.equal("counter")
+		end)
+	end)
+
+	describe("_updateHandoff", function()
+		it("should park unreachable customers in counter mode without firing the beam", function()
+			-- Players:GetPlayerByUserId always returns nil here, so nobody is live.
+			local order = makeOrder({ customer = 701, status = "Being Prepared", preparedBy = 700 })
+			service._orders = { order }
+
+			service:_updateHandoff(order)
+
+			expect(order.handoff).to.equal("counter")
+			expect(order.handoffPrompt).to.equal(nil)
+			expect(#service.Client.HandoffTargetChanged._calls).to.equal(0)
+		end)
+
+		it("should clear handoff state for orders that are no longer Being Prepared", function()
+			local order = makeOrder({ customer = 701, status = "Ready for Pick Up", preparedBy = 700 })
+			order.handoff = "direct"
+			service._orders = { order }
+
+			service:_updateHandoff(order)
+
+			expect(order.handoff).to.equal(nil)
+			expect(#service.Client.HandoffTargetChanged._calls).to.equal(0)
+		end)
+	end)
+
+	-- ══════════════════════════════════════════════════════════════════════
+	-- _handlePickUp refuses counter deposits for direct-mode orders
+	-- ══════════════════════════════════════════════════════════════════════
+
+	describe("_handlePickUp (direct-mode deposit refusal)", function()
+		local CUSTOMER_ID = 10001
+
+		local function setup(userId: number, orderOverrides: { [string]: any }?)
+			local staff = makePlayer(userId)
+			staff.Character = Instance.new("Model")
+			local area = makeArea(0)
+			local overrides = {
+				customer = CUSTOMER_ID,
+				status = "Being Prepared",
+				preparedBy = staff.UserId,
+				statusColor = COLOR_PREPARING,
+			}
+			for key, value in orderOverrides or {} do
+				overrides[key] = value
+			end
+			local order = makeOrder(overrides)
+			service._orders = { order }
+			return staff, area, order
+		end
+
+		it("should refuse a deposit for a nearby customer and point at the Serve prompt", function()
+			local staff, area, order = setup(630, { handoff = "direct" })
+			local tool = makeTool(regularMedium(), staff.Backpack)
+
+			service:_handlePickUp(staff, area)
+
+			local calls = service.Client.Announcement._calls
+			expect(#calls).to.equal(1)
+			expect(calls[1][1]).to.equal(staff)
+			expect(calls[1][2]).to.equal("Serve Them Directly!")
+			expect(order.status).to.equal("Being Prepared")
+			expect(tool.Parent).to.equal(staff.Backpack)
+			expect(area.OrderOwner.Value).to.equal(0)
+			expect(ServerStorage.OrderPickUp:FindFirstChild("Order_" .. CUSTOMER_ID)).to.equal(nil)
+			area:Destroy()
+		end)
+
+		it("should still deposit a counter-mode order while another is direct", function()
+			local staff = makePlayer(631)
+			staff.Character = Instance.new("Model")
+			local area = makeArea(0)
+			local direct = makeOrder({
+				orderNum = "0001",
+				customer = 10002,
+				status = "Being Prepared",
+				preparedBy = staff.UserId,
+				statusColor = COLOR_PREPARING,
+				handoff = "direct",
+			})
+			local counter = makeOrder({
+				orderNum = "0002",
+				customer = CUSTOMER_ID,
+				status = "Being Prepared",
+				preparedBy = staff.UserId,
+				statusColor = COLOR_PREPARING,
+			})
+			service._orders = { direct, counter }
+			-- One tool matches the shared spec: the direct order keeps it, the
+			-- counter order is what gets deposited.
+			local tool = makeTool(regularMedium(), staff.Backpack)
+
+			service:_handlePickUp(staff, area)
+
+			expect(counter.status).to.equal("Ready for Pick Up")
+			expect(direct.status).to.equal("Being Prepared")
+			expect(tool.Parent).to.equal(ServerStorage.OrderPickUp:FindFirstChild("Order_" .. CUSTOMER_ID))
+
+			cleanPickUpFolder(CUSTOMER_ID)
+			area:Destroy()
+		end)
+	end)
+
+	-- ══════════════════════════════════════════════════════════════════════
+	-- _handleHandoff guards (no live players here, so only refusals apply)
+	-- ══════════════════════════════════════════════════════════════════════
+
+	describe("_handleHandoff", function()
+		it("should refuse when the triggerer is not preparing the order", function()
+			local staff = makePlayer(640)
+			staff.Character = Instance.new("Model")
+			local order = makeOrder({ customer = 10001, status = "Being Prepared", preparedBy = 999 })
+			service._orders = { order }
+			local tool = makeTool(regularMedium(), staff.Backpack)
+
+			service:_handleHandoff(staff, order)
+
+			expect(#service._orders).to.equal(1)
+			expect(tool.Parent).to.equal(staff.Backpack)
+			expect(#service.Client.Announcement._calls).to.equal(0)
+		end)
+
+		it("should refuse when the customer is gone", function()
+			local staff = makePlayer(641)
+			staff.Character = Instance.new("Model")
+			local order = makeOrder({ customer = 10001, status = "Being Prepared", preparedBy = staff.UserId })
+			service._orders = { order }
+			local tool = makeTool(regularMedium(), staff.Backpack)
+
+			service:_handleHandoff(staff, order)
+
+			expect(#service._orders).to.equal(1)
+			expect(tool.Parent).to.equal(staff.Backpack)
 		end)
 	end)
 end

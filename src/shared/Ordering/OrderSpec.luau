@@ -482,7 +482,10 @@ end
 --   Every spec filled -> ({ candidate index per spec }, Close if any pick was
 --                         Close else Perfect, {})
 --   Any spec unfilled -> (nil, "Wrong", reasons). One spec: Match against the first
---                         candidate. Otherwise (or with no candidates): { "Missing" }.
+--                         candidate. Several specs: Match of the first unfilled
+--                         spec against the first unused candidate, so a wrong
+--                         drink is named; { "Missing" } only when no unused
+--                         candidate is left (or there are no candidates).
 function OrderSpec.PickTools(specs: { OrderSpec }, candidates: { Table }): ({ number }?, Grade, { string })
 	local picked: { [number]: number } = {}
 	local used: { [number]: boolean } = {}
@@ -515,6 +518,17 @@ function OrderSpec.PickTools(specs: { OrderSpec }, candidates: { Table }): ({ nu
 			if #specs == 1 and candidates[1] ~= nil then
 				local _, reasons = OrderSpec.Match(specs[1], candidates[1])
 				return nil, "Wrong", reasons
+			end
+			-- Multi-item orders: report why the first unfilled spec cannot be
+			-- filled from the tools left over, so a wrong drink is named
+			-- instead of only hearing that something is missing. "Missing"
+			-- is kept for when there is genuinely nothing left to try.
+			local spec = specs[specIndex]
+			for unusedIndex, attrs in candidates do
+				if not used[unusedIndex] then
+					local _, reasons = OrderSpec.Match(spec, attrs)
+					return nil, "Wrong", reasons
+				end
 			end
 			return nil, "Wrong", { "Missing" }
 		end

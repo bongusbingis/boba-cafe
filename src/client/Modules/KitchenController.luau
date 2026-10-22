@@ -25,7 +25,7 @@ local KitchenGuidance = require(script.Parent.KitchenGuidance)
 ---> Constants
 
 local INSTANT_BREW_HOLD_DURATION = 0.5
-local INSTANT_BREW_PASS_NAME = "Instant Brew"
+local INSTANT_BREW_PASS_ID = 12385760
 local KITCHEN_TIMEOUT_SECONDS = 30
 
 local STATION_HINTS_SETTING = "SyrupHighlighting" -- key kept so no profile migration; label is "Station hints"
@@ -103,6 +103,55 @@ local function toast(text: string)
 	if not ok then
 		warn("[KitchenController] Toast failed: " .. tostring(err))
 	end
+end
+
+-- Clock-in upsell: the server rejected a station use while clocked out. Ask to
+-- clock in (ButtonPrompt, DEC-013) instead of only toasting; confirming clocks
+-- in through the same ShiftService path as the HUD clock button, declining just
+-- dismisses. One dialog at a time; the player presses the station again after.
+local clockInPromptOpen = false
+
+local function offerClockIn()
+	if clockInPromptOpen then
+		return
+	end
+	if Players.LocalPlayer:GetAttribute(CLOCKED_IN_ATTRIBUTE) == true then
+		return -- clocked in since the server rejected (stale signal)
+	end
+	clockInPromptOpen = true
+	local ok, dialog = pcall(function()
+		return Knit.GetController("DialogController").new("ButtonPrompt", {
+			Title = "Clock In Required",
+			Text = "You need to be clocked in for this. Do you want to clock in?",
+			Buttons = {
+				{ Text = "Clock In", Color = Styles.GREEN },
+				{ Text = "Cancel", Color = Styles.RED },
+			},
+		})
+	end)
+	if not ok or dialog == nil then
+		clockInPromptOpen = false
+		warn("[KitchenController] Clock-in prompt failed: " .. tostring(dialog))
+		return
+	end
+	dialog
+		:Fire()
+		:andThen(function(choice)
+			clockInPromptOpen = false
+			if choice == "Clock In" then
+				task.spawn(function()
+					local clockOk, err = pcall(function()
+						Knit.GetService("ShiftService"):SetClockedIn(true)
+					end)
+					if not clockOk then
+						warn("[KitchenController] Clock in request failed: " .. tostring(err))
+					end
+				end)
+			end
+		end)
+		:catch(function()
+			clockInPromptOpen = false
+		end)
 end
 
 local function heldToolAttributes(): { [string]: any }?
@@ -317,7 +366,10 @@ local function guidanceStep(serveTarget: Model?)
 		guidance = {
 			Station = nil,
 			Choice = nil,
-			Label = "Serve your customer",
+			-- A real player's ticket is deposited at a Pick Up spot, not served to an NPC (DEC-059).
+			Label = if typeof(order) == "table" and (order :: any).Real == true
+				then "Put the order on a Pick Up spot"
+				else "Serve your customer",
 			IsServe = true,
 			Current = 1,
 			Total = 1,
@@ -622,7 +674,7 @@ local function startGuidance()
 
 	Knit.GetService("KitchenService").InteractionFailed:Connect(function(reason: string)
 		if reason == "ClockedOut" then
-			toast("Clock In to use the kitchen. Tap the clock button.")
+			offerClockIn()
 		end
 	end)
 end
@@ -682,9 +734,9 @@ local pour: PourState = {
 }
 
 -- TAKEOVER-REVIEW-FIX P2-2: keyboard and gamepad can tap the meter too. Bound only while a window is open, at a
--- priority above the default character controls, so Space/ButtonA don't jump and E doesn't hit a prompt mid-pour.
+-- priority above the default character controls, so Space/ButtonA don't jump and F doesn't hit a prompt mid-pour.
 local POUR_TAP_ACTION = "PourMeterTap"
-local POUR_TAP_INPUTS = { Enum.KeyCode.E, Enum.KeyCode.Space, Enum.KeyCode.ButtonA, Enum.KeyCode.ButtonR2 }
+local POUR_TAP_INPUTS = { Enum.KeyCode.F, Enum.KeyCode.Space, Enum.KeyCode.ButtonA, Enum.KeyCode.ButtonR2 }
 local POUR_TAP_PRIORITY = Enum.ContextActionPriority.High.Value + 50
 
 local function unbindPourTap()
@@ -725,7 +777,7 @@ local function pourHintText(): string
 	elseif string.find(last.Name, "Gamepad") ~= nil then
 		return "Press A in the green!"
 	end
-	return "Press E or Space in the green!"
+	return "Press F or Space in the green!"
 end
 
 local function addPourCorner(parent: GuiObject, radius: UDim)
@@ -1174,7 +1226,7 @@ function KitchenController:KnitStart()
 
 	local player = Players.LocalPlayer
 
-	local owns = GamepassUtil:PlayerOwnsPassAsync(player, INSTANT_BREW_PASS_NAME)
+	local owns = GamepassUtil:PlayerOwnsPassAsync(player, INSTANT_BREW_PASS_ID)
 	if not owns then
 		return
 	end

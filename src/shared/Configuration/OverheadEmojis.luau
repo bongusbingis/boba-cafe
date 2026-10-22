@@ -17,6 +17,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Titles = require(Shared.Configuration.Titles)
+local PassCosmetics = require(Shared.Configuration.PassCosmetics)
 
 export type EmojiDef = {
 	Id: string,
@@ -48,7 +49,16 @@ OverheadEmojis.EMOJIS = {
 		},
 		Priority = 2,
 	},
-} ::{ EmojiDef }
+	{
+		Id = "Rainbow",
+		Emoji = PassCosmetics.RAINBOW_EMOJI,
+		Description = "Rainbow Pack owner",
+		Criteria = {
+			Attribute = { Name = PassCosmetics.RAINBOW_ATTRIBUTE, Value = true },
+		},
+		Priority = 3,
+	},
+} :: { EmojiDef }
 
 local byId: { [string]: EmojiDef } = {}
 local ordered: { EmojiDef } = {}

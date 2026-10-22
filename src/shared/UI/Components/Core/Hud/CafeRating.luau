@@ -55,7 +55,7 @@ end
 
 ---> Component
 
-return function()
+return function(props: { CurrentPage: ModuleScript? })
 	local rating, setRating = React.useState(50)
 	local rush, setRush = React.useState(false)
 	local clockedIn, setClockedIn = React.useState(true)
@@ -155,19 +155,32 @@ return function()
 			local prices = EventProducts.fetchPrices()
 			local buttons = {}
 			local byText = {}
+			local lines = {}
 			for _, product in EventProducts.Products do
 				if EventProducts.available(product) then
 					local price = prices[product.Key]
 					local text = if price then `{product.Name} \u{e002} {price}` else product.Name
 					table.insert(buttons, { Text = text, Color = Styles.GREEN })
 					byText[text] = product
+					table.insert(lines, `{product.Name}: {product.Blurb}.`)
 				end
 			end
+			if EventProducts.partyOnCooldown() then
+				local left = math.max(
+					0,
+					math.ceil(workspace:GetAttribute("BobaPartyCooldownEndsAt") - workspace:GetServerTimeNow())
+				)
+				table.insert(
+					lines,
+					string.format("Boba Party is available again in %d:%02d.", math.floor(left / 60), left % 60)
+				)
+			end
+			table.insert(lines, "Buying during an event adds time!")
 			table.insert(buttons, { Text = "Cancel", Color = Styles.RED })
 			local ok, dialog = pcall(function()
 				return Knit.GetController("DialogController").new("ButtonPrompt", {
 					Title = "Cafe Event",
-					Text = "Boba Party: 10 min Rush for everyone. Rush Hour: 2 min Rush for everyone. Buying during an event adds time!",
+					Text = table.concat(lines, " "),
 					Buttons = buttons,
 				})
 			end)
@@ -263,6 +276,7 @@ return function()
 
 		-- Visible buy entry point under the meter (the meter itself stays non-interactive).
 		BuyEvent = c("Frame", {
+			Visible = props.CurrentPage == nil,
 			AnchorPoint = Vector2.new(0.5, 0),
 			BackgroundTransparency = 1,
 			Position = UDim2.fromScale(0.5, 1.08),
@@ -278,7 +292,9 @@ return function()
 		}),
 
 		Pulse = c("Frame", {
+			AnchorPoint = Vector2.new(0.5, 0),
 			BackgroundTransparency = 1,
+			Position = UDim2.fromScale(0.5, 0),
 			Size = UDim2.fromScale(1, 1),
 			ZIndex = 10,
 		}, {
@@ -287,7 +303,7 @@ return function()
 				Text = bannerText,
 				Color = color,
 				Position = UDim2.fromScale(0.5, 0.3),
-				Size = UDim2.fromScale(0.7, 0.55),
+				Size = UDim2.fromScale(0.85, 0.65),
 			}),
 		}),
 	})

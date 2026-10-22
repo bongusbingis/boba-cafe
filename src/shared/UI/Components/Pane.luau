@@ -55,7 +55,7 @@ return React.forwardRef(function(
 		AspectRatio: any,
 
 		AutomaticSize: Enum.AutomaticSize?,
-		OnChange: {string} & {() -> ()},
+		OnChange: { string } & { () -> () },
 
 		ListLayout: {
 			FillDirection: Enum.FillDirection?,
@@ -75,10 +75,10 @@ return React.forwardRef(function(
 			Color: ColorSequence,
 		},
 
-		OnChange: {string} & {() -> ()},
+		OnChange: { string } & { () -> () },
 
 		Native: { [any]: any }?,
-        children: {},
+		children: {},
 	},
 	ref
 )
@@ -90,8 +90,7 @@ return React.forwardRef(function(
 	if isButton then
 		--events[React.Event.MouseEnter] = props.OnHover
 		--events[React.Event.MouseLeave] = props.OnLeave
-		events[React.Event.MouseButton1Down] = props["OnPress"]
-			or props["OnRelease"] --- OnRelease will fire on MouseButton1Down if OnPress is not provided
+		events[React.Event.MouseButton1Down] = props["OnPress"] or props["OnRelease"] --- OnRelease will fire on MouseButton1Down if OnPress is not provided
 		events[React.Event.MouseButton1Up] = props["OnRelease"]
 		events[React.Event.Activated] = props["OnClick"]
 	end
@@ -102,7 +101,7 @@ return React.forwardRef(function(
 
 	local aspectRatioProps
 	if typeof(props["AspectRatio"]) == "number" then
-		aspectRatioProps = { AspectRatio = props["AspectRatio"]}
+		aspectRatioProps = { AspectRatio = props["AspectRatio"] }
 	else
 		aspectRatioProps = props["AspectRatio"]
 	end
@@ -113,6 +112,7 @@ return React.forwardRef(function(
 			BackgroundTransparency = props.Native and props.Native.BackgroundTransparency or 1,
 			AutomaticSize = props.AutomaticSize,
 			BorderSizePixel = 0,
+			LayoutOrder = props.LayoutOrder or (props.Native and props.Native.LayoutOrder),
 			ref = ref,
 		}, props.Native, events),
 		{

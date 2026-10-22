@@ -49,6 +49,41 @@ return function()
 			expect(table.find(PassCatalog[KITCHEN_LEADER].Perks, "TipBoost50")).to.be.ok()
 			expect(table.find(PassCatalog[KITCHEN_LEADER].Perks, "XpBoost50")).to.be.ok()
 		end)
+
+		it("should carry display data, perks, and sale flags in one entry", function()
+			local rainbow = PassCatalog[12385796]
+			expect(rainbow.Name).to.equal("Rainbow Pack")
+			expect(table.find(rainbow.Perks, "RainbowPack")).to.be.ok()
+			expect(rainbow.Description).to.equal("Stand out with a rainbow nametag, emoji, and trail!")
+			expect(rainbow.Listed).to.equal(true)
+			expect(rainbow.Legacy).to.equal(false)
+
+			local barista = PassCatalog[BARISTA]
+			expect(barista.Description).to.be.ok()
+			expect(barista.Icon).to.be.ok()
+			expect(barista.Rank).to.equal(8)
+		end)
+
+		it("should keep display-only passes delisted with empty perks", function()
+			for _, passId in { 29083693, 219651161 } do
+				local entry = PassCatalog[passId]
+				expect(entry).to.be.ok()
+				expect(#entry.Perks).to.equal(0)
+				expect(entry.Listed).to.equal(false)
+			end
+		end)
+
+		it("should shape every entry with Name, Perks, Listed, and Legacy", function()
+			local count = 0
+			for _, entry in PassCatalog do
+				count += 1
+				expect(typeof(entry.Name)).to.equal("string")
+				expect(typeof(entry.Perks)).to.equal("table")
+				expect(typeof(entry.Listed)).to.equal("boolean")
+				expect(typeof(entry.Legacy)).to.equal("boolean")
+			end
+			expect(count > 0).to.equal(true)
+		end)
 	end)
 
 	describe("PerkService", function()

@@ -14,6 +14,8 @@ return function()
 	local ServerScriptService = game:GetService("ServerScriptService")
 
 	local Rules = require(ServerScriptService.Server.Modules.CustomerService.Rules)
+	local CounterLock = require(ServerScriptService.Server.Modules.CustomerService.CounterLock)
+	local CustomerService = require(ServerScriptService.Server.Modules.CustomerService)
 	local CustomerConfig = require(ReplicatedStorage.Shared.Configuration.CustomerConfig)
 	local OrderSpec = require(ReplicatedStorage.Shared.Ordering.OrderSpec)
 	local Menu = require(ReplicatedStorage.Shared.Ordering.Menu)
@@ -397,11 +399,14 @@ return function()
 
 		it("should list the new drinks by level", function()
 			expect(#Rules.NewDrinksAt(1)).to.equal(0)
-			expect(#Rules.NewDrinksAt(3)).to.equal(0)
 			local two = Rules.NewDrinksAt(2)
 			expect(#two).to.equal(2)
 			expect(two[1]).to.equal("Taro Boba")
 			expect(two[2]).to.equal("Strawberry Boba")
+			local three = Rules.NewDrinksAt(3)
+			expect(#three).to.equal(2)
+			expect(three[1]).to.equal("Coconut Boba")
+			expect(three[2]).to.equal("Green Tea Boba")
 		end)
 
 		it("should list Espresso at 7 and Mango Boba at 8", function()
@@ -409,8 +414,9 @@ return function()
 			expect(#seven).to.equal(1)
 			expect(seven[1]).to.equal("Espresso")
 			local eight = Rules.NewDrinksAt(8)
-			expect(#eight).to.equal(1)
+			expect(#eight).to.equal(2)
 			expect(eight[1]).to.equal("Mango Boba")
+			expect(eight[2]).to.equal("Matcha Boba")
 			expect(#Rules.NewDrinksAt(6)).to.equal(0)
 		end)
 	end)
@@ -555,7 +561,7 @@ return function()
 				},
 			}
 			local text = Rules.FormatOrderItemForNotepad(bobaOrder)
-			expect(text).to.equal("Large Strawberry Boba, Tapioca, Ice")
+			expect(text).to.equal("Large Strawberry Boba, Normal Tapioca, Ice")
 		end)
 
 		it("should format multi-item orders joined by newline", function()
@@ -575,7 +581,7 @@ return function()
 				CustomInfo = {},
 			}
 			local text = Rules.FormatOrderForNotepad({ bobaOrder, pastryOrder })
-			expect(text).to.equal("Large Strawberry Boba, Tapioca, Ice\nFudge Brownie")
+			expect(text).to.equal("Large Strawberry Boba, Normal Tapioca, Ice\nFudge Brownie")
 		end)
 	end)
 
@@ -669,6 +675,186 @@ return function()
 			local name, tag = Rules.DisplayNames("VIP", "Theo")
 			expect(name).to.equal("Theo")
 			expect(tag).to.equal("Regular")
+		end)
+	end)
+
+	-- Counter orders and real-order tickets (DEC-059). The service methods run on a
+	-- plain table standing in for `self`; players are plain tables too (no Character,
+	-- so nothing here touches the world).
+
+	local function fakeService()
+		local fired = {}
+		local svc = {
+			_tickets = {},
+			_idleSince = {},
+			_counterCustomers = {},
+			_counterAreas = {},
+			_counterSubmitAt = {},
+			_counterLockSeq = 0,
+			fired = fired,
+			unwatched = 0,
+		}
+		function svc:_fireTicket(player, ticket, slot)
+			table.insert(fired, { player, ticket, slot })
+		end
+		function svc:_unwatchBaristaInventory()
+			svc.unwatched += 1
+		end
+		return svc
+	end
+
+	local function fakePrompt()
+		local attributes = {}
+		return {
+			attributes = attributes,
+			SetAttribute = function(_, name, value)
+				attributes[name] = value
+			end,
+		}
+	end
+
+	describe("CounterLock (counter customers)", function()
+		local baristaA = { UserId = 1 }
+		local baristaB = { UserId = 2 }
+
+		it("should let the first barista take a free customer", function()
+			expect(CounterLock.CanTake(nil, baristaA, 0)).to.equal(true)
+			local lock = CounterLock.Take(baristaA, 1, 0)
+			expect(CounterLock.IsHeld(lock, 1)).to.equal(true)
+			expect(CounterLock.Holds(lock, baristaA, 1, 1)).to.equal(true)
+		end)
+
+		it("should refuse a second barista while the lock holds", function()
+			local lock = CounterLock.Take(baristaA, 1, 0)
+			expect(CounterLock.CanTake(lock, baristaB, 10)).to.equal(false)
+			expect(CounterLock.CanTake(lock, baristaA, 10)).to.equal(true)
+			expect(CounterLock.Holds(lock, baristaB, 1, 10)).to.equal(false)
+		end)
+
+		it("should release on timeout", function()
+			local lock = CounterLock.Take(baristaA, 1, 0)
+			expect(CounterLock.IsHeld(lock, CounterLock.LOCK_SECONDS - 1)).to.equal(true)
+			expect(CounterLock.IsHeld(lock, CounterLock.LOCK_SECONDS + 1)).to.equal(false)
+			expect(CounterLock.CanTake(lock, baristaB, CounterLock.LOCK_SECONDS + 1)).to.equal(true)
+			expect(CounterLock.Holds(lock, baristaA, 1, CounterLock.LOCK_SECONDS + 1)).to.equal(false)
+		end)
+
+		it("should not honour a stale lock Id", function()
+			local lock = CounterLock.Take(baristaA, 2, 0)
+			expect(CounterLock.Holds(lock, baristaA, 1, 1)).to.equal(false)
+		end)
+
+		it("should only treat a lone customer with no NPC and no open order as eligible", function()
+			local function noOrder()
+				return false
+			end
+			local function hasOrder()
+				return true
+			end
+			local p1, p2 = { UserId = 3 }, { UserId = 4 }
+			expect(CounterLock.EligibleCustomer({ p1 }, false, noOrder)).to.equal(p1)
+			expect(CounterLock.EligibleCustomer({ p1, p2 }, false, noOrder)).to.equal(nil)
+			expect(CounterLock.EligibleCustomer({ p1 }, true, noOrder)).to.equal(nil)
+			expect(CounterLock.EligibleCustomer({}, false, noOrder)).to.equal(nil)
+			expect(CounterLock.EligibleCustomer({ p1 }, false, hasOrder)).to.equal(nil)
+		end)
+
+		it("should find the area box with depth slack", function()
+			local cf, size = CFrame.new(0, 0, 0), Vector3.new(6, 6, 2)
+			expect(CounterLock.InArea(cf, size, Vector3.new(0, 0, 2), 1.5)).to.equal(true)
+			expect(CounterLock.InArea(cf, size, Vector3.new(0, 0, 3), 1.5)).to.equal(false)
+			expect(CounterLock.InArea(cf, size, Vector3.new(4, 0, 0), 1.5)).to.equal(false)
+		end)
+
+		it("should match the nearest counter spot within range only", function()
+			local spots = { Vector3.new(0, 0, 0), Vector3.new(20, 0, 0) }
+			expect(CounterLock.MatchSpot(Vector3.new(19, 5, 1), spots, 3)).to.equal(2)
+			expect(CounterLock.MatchSpot(Vector3.new(10, 0, 0), spots, 3)).to.equal(nil)
+		end)
+	end)
+
+	describe("CustomerService counter lock handling", function()
+		it("should clear the lock and the prompt TakerUserId on release", function()
+			local svc = fakeService()
+			local customer, taker = { UserId = 5 }, { UserId = 6 }
+			local prompt = fakePrompt()
+			svc._counterCustomers[customer] =
+				{ Area = 1, Prompt = prompt, Lock = CounterLock.Take(taker, 1, os.clock()) }
+			CustomerService._releaseCounterLock(svc, customer)
+			expect(svc._counterCustomers[customer].Lock).to.equal(nil)
+			expect(prompt.attributes.TakerUserId).to.equal(0)
+		end)
+
+		it("should ignore release for a customer who is not at a counter", function()
+			local svc = fakeService()
+			CustomerService._releaseCounterLock(svc, { UserId = 7 })
+		end)
+
+		it("should refuse a submit from a barista who does not hold the lock", function()
+			local svc = fakeService()
+			local customer, holder, other = { UserId = 8 }, { UserId = 9 }, { UserId = 10 }
+			svc._counterCustomers[customer] = {
+				Area = 1,
+				Prompt = fakePrompt(),
+				Lock = CounterLock.Take(holder, 1, os.clock()),
+			}
+			-- No real Player has that UserId, so the customer reads as gone.
+			local result = CustomerService._submitCounterOrder(svc, other, 8, 1, {})
+			expect(result.Success).to.equal(false)
+		end)
+
+		it("should refuse a submit with malformed arguments", function()
+			local svc = fakeService()
+			local result = CustomerService._submitCounterOrder(svc, { UserId = 11 }, "x", 1, {})
+			expect(result.Success).to.equal(false)
+		end)
+	end)
+
+	describe("Real-order tickets", function()
+		local order = {
+			Id = "R-1",
+			CustomerName = "Sam",
+			Items = { { Category = "Drink", Item = "Coffee", CustomInfo = { Size = "Medium" } } },
+		}
+
+		it("should put a real order in the first free slot, tagged Real", function()
+			local svc = fakeService()
+			local barista = { UserId = 20 }
+			CustomerService.IssueRealTicket(svc, barista, order)
+			local ticket = svc._tickets[barista][1]
+			expect(ticket.Real).to.equal(true)
+			expect(ticket.Id).to.equal("R-1")
+			expect(ticket.CustomerName).to.equal("Sam")
+			expect(ticket.Slot).to.equal(1)
+			expect(ticket.Spec.Item).to.equal("Coffee")
+			expect(#svc.fired).to.equal(1)
+		end)
+
+		it("should not duplicate a ticket issued twice", function()
+			local svc = fakeService()
+			local barista = { UserId = 21 }
+			CustomerService.IssueRealTicket(svc, barista, order)
+			CustomerService.IssueRealTicket(svc, barista, order)
+			expect(svc._tickets[barista][2]).to.equal(nil)
+		end)
+
+		it("should use the next slot when one is taken", function()
+			local svc = fakeService()
+			local barista = { UserId = 22 }
+			CustomerService.IssueRealTicket(svc, barista, order)
+			CustomerService.IssueRealTicket(svc, barista, { Id = "R-2", CustomerName = "Al", Items = order.Items })
+			expect(svc._tickets[barista][2].Id).to.equal("R-2")
+		end)
+
+		it("should free the slot on clear and be idempotent", function()
+			local svc = fakeService()
+			local barista = { UserId = 23 }
+			CustomerService.IssueRealTicket(svc, barista, order)
+			CustomerService.ClearRealTicket(svc, barista, "R-1")
+			expect(svc._tickets[barista]).to.equal(nil)
+			expect(svc.unwatched).to.equal(1)
+			CustomerService.ClearRealTicket(svc, barista, "R-1")
+			expect(svc._idleSince[barista]).to.be.ok()
 		end)
 	end)
 end

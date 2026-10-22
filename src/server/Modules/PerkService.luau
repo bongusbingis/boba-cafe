@@ -17,15 +17,6 @@ local GamepassUtil = require(Shared.Utility.GamepassUtil)
 local PassCatalog = require(Shared.Configuration.PassCatalog)
 local PerkConfig = require(Shared.Configuration.Perks)
 
--- GamepassUtil only resolves ids in Gamepasses; register catalog-only passes
--- (Senior Barista, Staff Assistant, Premium Lounge, ...) the way QuestService does.
-for passId, entry in PassCatalog do
-	local registry = (GamepassUtil :: any).Gamepasses
-	if registry and not registry[passId] then
-		registry[passId] = { Name = entry.Name, Description = "", Icon = "" }
-	end
-end
-
 ---> service declaration
 local PerkService = Knit.CreateService({
 	Name = "PerkService",

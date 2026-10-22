@@ -91,6 +91,26 @@ return function()
 		end)
 	end)
 
+	describe("Rainbow Pack emoji", function()
+		it("catalogs the rainbow emoji gated on the RainbowPack attribute", function()
+			local rainbow = OverheadEmojis.Get("Rainbow")
+			expect(rainbow).to.be.ok()
+			expect(rainbow.Emoji).to.equal("🌈")
+			expect(rainbow.Criteria.Attribute.Name).to.equal("RainbowPack")
+			expect(rainbow.Criteria.Attribute.Value).to.equal(true)
+		end)
+
+		it("shows the rainbow for Rainbow Pack owners, after the VIP star", function()
+			local player = createMockPlayer(4001, { RainbowPack = true, VipTag = true })
+			expect(OverheadEmojis.GetEmojiString(player)).to.equal("⭐ 🌈")
+		end)
+
+		it("shows no rainbow without the pass", function()
+			local player = createMockPlayer(4002)
+			expect(OverheadEmojis.GetEmojiString(player)).to.equal("")
+		end)
+	end)
+
 	describe("Titles.MeetsCriteria with MinRank", function()
 		it("evaluates MinRank criteria", function()
 			local def = {

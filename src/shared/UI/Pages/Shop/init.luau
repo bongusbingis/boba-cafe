@@ -1,6 +1,4 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local PolicyService = game:GetService("PolicyService")
-local Players = game:GetService("Players")
 local Packages = ReplicatedStorage:WaitForChild("Packages")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local UI = Shared:WaitForChild("UI")
@@ -16,11 +14,6 @@ local OpenableMenu = require(UI.Components.Core.OpenableMenu)
 
 local c = React.createElement
 
--- local success, playerPolicyInfo: { ArePaidRandomItemsRestricted: boolean } =
--- 	pcall(PolicyService.GetPolicyInfoForPlayerAsync, PolicyService, Players.LocalPlayer)
-
-local paidRandomItemsRestricted = false --success and playerPolicyInfo.ArePaidRandomItemsRestricted or false
-
 local PAGES: { OpenableMenu.Page } = {
 	{
 		Key = "Featured",
@@ -31,31 +24,55 @@ local PAGES: { OpenableMenu.Page } = {
 		ButtonTextColor = Styles.ROSE_DEEP,
 	},
 	{
-		Key = "Celebrity",
-		Label = "Celebrity",
-		Content = c(require(script.Celebrity)),
-		ButtonColor = Styles.GOLD,
-		ButtonTextColor = Styles.GOLD_DEEP,
+		Key = "Products",
+		Label = "Products",
+		LayoutOrder = 1,
+		Content = c(require(script.Products)),
 	},
-	{ Key = "Currency", Label = "Currency", Content = c(require(script.Currency)) },
-	{ Key = "Pets", Label = "Pets", Content = c(require(script.Pets)) },
-	{ Key = "Group Benefit", Label = "Group Benefit", Content = c(require(script.GroupBenefit)) },
-	{ Key = "Passes", Label = "Passes", Content = c(require(script.Passes)) },
+	{
+		Key = "Passes",
+		Label = "Passes",
+		LayoutOrder = 2,
+		Content = c(require(script.Passes)),
+	},
+	{
+		Key = "Pets",
+		Label = "Pets",
+		LayoutOrder = 3,
+		Content = c(require(script.Pets)),
+	},
 	{
 		Key = "Nametags",
 		Label = "Nametags",
-		Content = c(
-			require((paidRandomItemsRestricted and script.DirectCosmeticsPurchase or script.RandomCosmeticsPurchase))
-		),
+		LayoutOrder = 4,
+		Content = c(require(script.RandomCosmeticsPurchase)),
 	},
-	{ Key = "Particles", Label = "Particles", Content = c(require(script.Particles)) },
+	{
+		Key = "Particles",
+		Label = "Particles",
+		LayoutOrder = 5,
+		Content = c(require(script.Particles)),
+	},
+	{
+		Key = "Group Benefit",
+		Label = "Group Benefit",
+		LayoutOrder = 6,
+		Content = c(require(script.GroupBenefit)),
+	},
 }
 
 return function(props)
 	local landingPage = PAGES[1]
-	if props.Args and props.Args[1] then
+	local landingKey = if props.Args and props.Args[1] then props.Args[1] else nil
+	if landingKey == "Currency" then
+		landingKey = "Products"
+	elseif landingKey == "Capsules" then
+		landingKey = "Pets"
+	end
+
+	if landingKey then
 		for _, page in PAGES do
-			if page.Key == props.Args[1] then
+			if page.Key == landingKey then
 				landingPage = page
 				break
 			end

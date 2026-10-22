@@ -316,6 +316,35 @@ return function()
 			expect(grade).to.equal("Wrong")
 			expectList(reasons, { "Missing" })
 		end)
+
+		it("extra: with several specs, a wrong leftover names its mismatch instead of Missing", function()
+			local picks, grade, reasons = OrderSpec.PickTools({ specB(), specA() }, {
+				attrsA(),
+				with(attrsA(), { Syrup = "Taro" }),
+			})
+			expect(picks).to.equal(nil)
+			expect(grade).to.equal("Wrong")
+			expectList(reasons, { "Item" })
+		end)
+
+		it("extra: with several specs, a wrong option on the leftover is named", function()
+			local picks, grade, reasons = OrderSpec.PickTools({ specA(), specC() }, {
+				{ Item = "Fudge Brownie" },
+				with(attrsA(), { Syrup = "Taro" }),
+			})
+			expect(picks).to.equal(nil)
+			expect(grade).to.equal("Wrong")
+			expectList(reasons, { "Syrup" })
+		end)
+
+		it("extra: with several specs and nothing left over, the reason stays Missing", function()
+			local picks, grade, reasons = OrderSpec.PickTools({ specA(), specC() }, {
+				{ Item = "Fudge Brownie" },
+			})
+			expect(picks).to.equal(nil)
+			expect(grade).to.equal("Wrong")
+			expectList(reasons, { "Missing" })
+		end)
 	end)
 
 	-- ══════════════════════════════════════════════════════════════════════

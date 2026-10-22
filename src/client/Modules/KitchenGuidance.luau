@@ -226,7 +226,12 @@ function KitchenGuidance.FindActiveSpec(
 			end
 		end
 		if activeIndex == nil then
+			-- A finished drink still in hand must not pin the card to its
+			-- (completed) spec: only specs with no matching tool yet qualify.
 			for specIndex, spec in specs do
+				if filled[specIndex] then
+					continue
+				end
 				local grade = OrderSpec.Match(spec, heldAttrs)
 				if grade == "Perfect" or grade == "Close" then
 					activeIndex = specIndex

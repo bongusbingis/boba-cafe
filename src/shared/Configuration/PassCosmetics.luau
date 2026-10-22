@@ -22,6 +22,9 @@ PassCosmetics.RAINBOW_ATTRIBUTE = "RainbowPack"
 PassCosmetics.VIP_STAR = "⭐"
 PassCosmetics.VIP_CHAT_COLOR = Styles.GREEN
 
+---> Rainbow overhead emoji (the emoji row above the nametag)
+PassCosmetics.RAINBOW_EMOJI = "🌈"
+
 ---> Rainbow (same stops as the live game's Rainbow nametag and trail)
 local RAINBOW_STOPS: { { Position: number, Color: Color3 } } = {
 	{ Position = 0, Color = Color3.fromRGB(255, 0, 0) },

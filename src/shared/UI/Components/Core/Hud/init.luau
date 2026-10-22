@@ -12,7 +12,6 @@ local usePx = require(UI.Hooks.usePx)
 local TopBar = require(script.TopBar)
 local BottomLeft = require(script.BottomLeft)
 local OrderTicket = require(script.OrderTicket)
-local OrderQueue = require(script.OrderQueue)
 local ShiftCard = require(script.ShiftCard)
 local CafeRating = require(script.CafeRating)
 local QuestCard = require(script.QuestCard)
@@ -111,8 +110,7 @@ return function(props: {
 			}),
 		}),
 		ShiftCard = c(ShiftCard, {}),
-		OrderQueue = c(OrderQueue, {}),
-		CafeRating = c(CafeRating, {}),
+		CafeRating = c(CafeRating, { CurrentPage = props.CurrentPage }),
 
 		-- Always mounted; renders only while a Rush Hour / Boba Party intro plays (EVENT-FX).
 		EventIntro = c(EventIntro, {}),

@@ -1,3 +1,5 @@
+local MarketplaceService = game:GetService("MarketplaceService")
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Packages = ReplicatedStorage:WaitForChild("Packages")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -5,6 +7,10 @@ local UI = Shared:WaitForChild("UI")
 
 ---> dependencies
 local React = require(Packages.React)
+
+---> configuration
+local PassCatalog = require(Shared.Configuration.PassCatalog)
+local GamepassUtil = require(Shared.Utility.GamepassUtil)
 
 ---> styles
 local Styles = require(UI.Styles)
@@ -15,33 +21,126 @@ local ShopCard = require(UI.Components.Buttons.ShopCard)
 ---> private
 local c = React.createElement
 
----> mock data (replace with server-provided data)
-export type Pass = {
+type PassCardData = {
+	PassId: number,
 	Name: string,
-	Price: string,
 	Image: string,
+	Price: string?,
 	OffSale: boolean?,
-}
-
-local PASSES: { Pass } = {
-	{ Name = "Barista",       Price = " 199", Image = "rbxassetid://5893760810" },
-	{ Name = "Shift Lead",    Price = " 499", Image = "rbxassetid://5893760810" },
-	{ Name = "Manager",       Price = " 999", Image = "rbxassetid://5893760810" },
-	{ Name = "VIP",           Price = " 299", Image = "rbxassetid://5893760810" },
-	{ Name = "2x Boba Bucks", Price = " 399", Image = "rbxassetid://5893760810" },
-	{ Name = "Premium",       Price = " 799", Image = "rbxassetid://5893760810", OffSale = true },
+	IsOwned: boolean?,
 }
 
 ---> public
 return function()
-	local onSaleCount = 0
-	for _, pass in ipairs(PASSES) do
-		if not pass.OffSale then
-			onSaleCount += 1
+	local passStates, setPassStates =
+		React.useState({} :: { [number]: { Price: string?, OffSale: boolean?, Owned: boolean? } })
+
+	React.useEffect(function()
+		local mounted = true
+		local localPlayer = Players.LocalPlayer
+
+		task.spawn(function()
+			local updates: { [number]: { Price: string?, OffSale: boolean?, Owned: boolean? } } = {}
+
+			for passId, catalogEntry in PassCatalog do
+				if not catalogEntry.Listed then
+					continue
+				end
+
+				local isOwned = false
+				if localPlayer then
+					local ok, owns = pcall(function()
+						return GamepassUtil:PlayerOwnsPassAsync(localPlayer, passId)
+					end)
+					if ok and owns then
+						isOwned = true
+					end
+				end
+
+				local priceText: string? = nil
+				local offSale = false
+				local ok, info = pcall(function()
+					return MarketplaceService:GetProductInfo(passId, Enum.InfoType.GamePass)
+				end)
+
+				if ok and typeof(info) == "table" then
+					if info.IsForSale == false then
+						offSale = true
+					elseif info.PriceInRobux ~= nil then
+						priceText = `\u{e002} {info.PriceInRobux}`
+					end
+				else
+					offSale = true
+				end
+
+				updates[passId] = {
+					Price = priceText,
+					OffSale = offSale,
+					Owned = isOwned,
+				}
+			end
+
+			if mounted then
+				setPassStates(updates)
+			end
+		end)
+
+		local conn = MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(player, passId, wasPurchased)
+			if wasPurchased and player == localPlayer and mounted then
+				setPassStates(function(prev)
+					local copy = table.clone(prev)
+					local entry = copy[passId] or {}
+					copy[passId] = {
+						Price = entry.Price,
+						OffSale = entry.OffSale,
+						Owned = true,
+					}
+					return copy
+				end)
+			end
+		end)
+
+		return function()
+			mounted = false
+			conn:Disconnect()
 		end
+	end, {})
+
+	-- Build sorted card list
+	local passList: { PassCardData } = {}
+	for passId, catalogEntry in PassCatalog do
+		if not catalogEntry.Listed then
+			continue
+		end
+		local def = PassCatalog[passId]
+		local state = passStates[passId]
+		local image = if def and def.Icon and def.Icon ~= "" then def.Icon else "rbxassetid://16728123607"
+		local name = if def and def.Name then def.Name else catalogEntry.Name
+
+		table.insert(passList, {
+			PassId = passId,
+			Name = name,
+			Image = image,
+			Price = if state then state.Price else nil,
+			OffSale = if state then state.OffSale else false,
+			IsOwned = if state then state.Owned else false,
+		})
 	end
 
-	local onSaleIndex, offSaleIndex = 0, onSaleCount
+	-- Sorting rules:
+	-- 1. Unowned and on-sale passes appear first
+	-- 2. Off-sale unowned passes
+	-- 3. Owned passes appear at the end of the list (high layout order)
+	table.sort(passList, function(a, b)
+		if a.IsOwned ~= b.IsOwned then
+			return not a.IsOwned
+		end
+		if a.OffSale ~= b.OffSale then
+			return not a.OffSale
+		end
+		return a.Name < b.Name
+	end)
+
 	local gridChildren = {
 		UIGridLayout = c("UIGridLayout", {
 			CellPadding = UDim2.fromScale(0.043, 0.03),
@@ -56,23 +155,43 @@ return function()
 		}),
 	}
 
-	for _, pass in ipairs(PASSES) do
-		local layoutOrder
-		if pass.OffSale then
-			offSaleIndex += 1
-			layoutOrder = offSaleIndex
-		else
-			onSaleIndex += 1
-			layoutOrder = onSaleIndex
+	for index, pass in ipairs(passList) do
+		-- Display pricing and ownership in the ribbon banner so it never overlaps the pass name
+		local topBanner = nil
+		if pass.IsOwned then
+			topBanner = {
+				Color = Styles.GREEN_BADGE,
+				Text = "Owned",
+				Size = UDim2.fromScale(1.05, 0.28),
+			}
+		elseif pass.OffSale then
+			topBanner = {
+				Color = Styles.GRAY,
+				Text = "Off Sale",
+				Size = UDim2.fromScale(1.05, 0.28),
+			}
+		elseif pass.Price then
+			topBanner = {
+				Color = Styles.GREEN,
+				Text = pass.Price,
+				Size = UDim2.fromScale(1.05, 0.28),
+			}
 		end
 
-		gridChildren[pass.Name] = c(ShopCard, {
+		gridChildren[`pass_{pass.PassId}`] = c(ShopCard, {
 			Name = pass.Name,
-			Price = pass.Price,
 			Image = pass.Image,
 			ImageSize = UDim2.fromScale(1, 1),
 			OffSale = pass.OffSale,
-			LayoutOrder = layoutOrder,
+			Owned = pass.IsOwned,
+			TopBanner = topBanner,
+			LayoutOrder = index,
+			OnClick = function()
+				local localPlayer = Players.LocalPlayer
+				if localPlayer then
+					MarketplaceService:PromptGamePassPurchase(localPlayer, pass.PassId)
+				end
+			end,
 		})
 	end
 

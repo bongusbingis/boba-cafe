@@ -110,6 +110,7 @@ export type Props = {
 	StackCount: number?, -- shows a ×N badge in the top-right corner when > 1
 	Equipped: boolean?,
 	OffSale: boolean?,
+	Owned: boolean?,
 
 	-- layout
 	ZIndex: number?,
@@ -187,9 +188,26 @@ end
 
 local function buildBanner(bannerProps: Banner.Props)
 	return c(Banner, {
-		Size = UDim2.fromScale(1.05, 0.225),
+		Size = bannerProps.Size or UDim2.fromScale(1.05, 0.28),
+		Position = bannerProps.Position,
 		Text = bannerProps.Text,
 		Color = bannerProps.Color,
+	})
+end
+
+local function buildOwnedOverlay()
+	return c(Pane, {
+		ClassName = "Frame",
+		CornerRadius = 1,
+		Native = {
+			Active = false,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundColor3 = Color3.fromRGB(0, 0, 0),
+			BackgroundTransparency = 0.78,
+			Position = UDim2.fromScale(0.5, 0.5),
+			Size = UDim2.fromScale(1, 1),
+			ZIndex = 2,
+		},
 	})
 end
 
@@ -211,13 +229,20 @@ local function buildPriceLabel(price: string, position: UDim2, springs: any, str
 	})
 end
 
-local function buildShopImage(image: string?, imageSize: UDim2?, tierColor: Color3?, imageTransparency: any)
+local function buildShopImage(
+	image: string?,
+	imageSize: UDim2?,
+	tierColor: Color3?,
+	imageTransparency: any,
+	isOwned: boolean?
+)
 	return c(Pane, {
 		ClassName = "ImageLabel",
 		Native = {
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			BackgroundTransparency = 1,
 			Image = image,
+			ImageColor3 = if isOwned then Color3.fromRGB(195, 195, 195) else Color3.new(1, 1, 1),
 			BackgroundColor3 = tierColor,
 			ImageTransparency = imageTransparency,
 			Position = UDim2.fromScale(0.5, 0.5),
@@ -342,7 +367,8 @@ return function(props: Props)
 
 	-- Children
 	local children = {
-		ShopImage = isShop and buildShopImage(props.Image, props.ImageSize, tierColor, springs.imageTransparency)
+		ShopImage = isShop
+				and buildShopImage(props.Image, props.ImageSize, tierColor, springs.imageTransparency, props.Owned)
 			or nil,
 		Viewport = isPet and buildViewport(props.Model) or nil,
 
@@ -350,6 +376,7 @@ return function(props: Props)
 
 		TierLabel = (not props.OffSale and props.Tier) and buildTierLabel(props.Tier, tierColor) or nil,
 
+		OwnedOverlay = props.Owned and buildOwnedOverlay() or nil,
 		Banner = props.TopBanner and buildBanner(props.TopBanner) or nil,
 		CountBadge = (props.StackCount and props.StackCount > 1) and buildCountBadge(props.StackCount) or nil,
 		ProductPrice = props.Price
@@ -360,7 +387,10 @@ return function(props: Props)
 
 	-- Background color: pet/shop use tier tint; nametag uses animated color
 	local backgroundColor = (isPet or isShop)
-			and (tierColor and tierColor:Lerp(Color3.new(1, 1, 1), 0.2) or Color3.new(1, 1, 1))
+			and (props.Owned and Color3.fromRGB(220, 220, 220) or (tierColor and tierColor:Lerp(
+				Color3.new(1, 1, 1),
+				0.2
+			) or Color3.new(1, 1, 1)))
 		or displayColor
 
 	local backgroundTransparency = isPet and 0 or isShop and 0 or displayTransparency

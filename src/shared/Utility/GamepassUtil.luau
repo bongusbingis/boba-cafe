@@ -9,14 +9,18 @@ local Packages = ReplicatedStorage:WaitForChild("Packages")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Promise = require(Packages:WaitForChild("Promise"))
 
----> gamepass defs
-local Gamepasses: { [number]: GamepassDefinition } = require(Shared.Configuration.Gamepasses)
+---> pass defs (the unified PassCatalog: perks, display data, sale bookkeeping)
+local PassCatalog = require(Shared.Configuration.PassCatalog)
 
 ---> types
 export type GamepassDefinition = {
 	Name: string,
-	Description: string,
-	Icon: string,
+	Description: string?,
+	Icon: string?,
+	Rank: number?,
+	Perks: { string },
+	Listed: boolean,
+	Legacy: boolean,
 }
 
 ---> per-player cache: maps passId -> ownership boolean or a pending promise
@@ -28,7 +32,7 @@ local GamepassUtil = {}
 
 ---> constants
 local MAX_RETRIES = 3
-local STUDIO_PASSES_ENABLED = true
+local STUDIO_PASSES_ENABLED = false
 local _studioWarningPrinted = false
 
 ---> cache
@@ -110,9 +114,9 @@ end
 
 local function resolvePassId(passIdOrName: number | string): number?
 	if type(passIdOrName) == "number" then
-		return Gamepasses[passIdOrName] and passIdOrName or nil
+		return PassCatalog[passIdOrName] and passIdOrName or nil
 	end
-	for passId, data in Gamepasses do
+	for passId, data in PassCatalog do
 		if data.Name == passIdOrName then
 			return passId
 		end
@@ -138,7 +142,7 @@ end
 
 function GamepassUtil:PrefetchAllPassesAsync(player: Player)
 	local fetches = {}
-	for passId in Gamepasses do
+	for passId in PassCatalog do
 		table.insert(fetches, ensureCached(player, passId))
 	end
 	return Promise.allSettled(fetches)
@@ -149,7 +153,7 @@ function GamepassUtil:GetPassData(passIdOrName: number | string): (GamepassDefin
 	if not passId then
 		return nil, nil
 	end
-	return Gamepasses[passId], passId
+	return PassCatalog[passId], passId
 end
 
 if RunService:IsServer() then
@@ -159,6 +163,7 @@ if RunService:IsServer() then
 	end
 end
 
-GamepassUtil.Gamepasses = Gamepasses
+-- Alias kept for PassUpsell's known-id check: the unified catalog.
+GamepassUtil.Gamepasses = PassCatalog
 
 return GamepassUtil

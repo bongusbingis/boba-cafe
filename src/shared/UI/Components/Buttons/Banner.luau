@@ -15,8 +15,8 @@ local c = React.createElement
 export type Props = {
 	Color: Color3,
 	Text: string,
-	Size: UDim2,
-	Position: UDim2,
+	Size: UDim2?,
+	Position: UDim2?,
 }
 
 return function(props: Props)
@@ -24,7 +24,7 @@ return function(props: Props)
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		BackgroundTransparency = 1,
 		Position = props.Position or UDim2.fromScale(0.5, 0.21),
-		Size = props.Size,
+		Size = props.Size or UDim2.fromScale(1.05, 0.28),
 		ZIndex = 10,
 	}, {
 		Back = c("ImageLabel", {

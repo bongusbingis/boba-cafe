@@ -129,13 +129,81 @@ end
 function Spill:_LockPlayerMovement(Player)
 	Player.DevComputerMovementMode = Enum.DevComputerMovementMode.Scriptable
 	Player.DevTouchMovementMode = Enum.DevTouchMovementMode.Scriptable
-	Player.Character.Humanoid.AutoRotate = false
+	if Player.Character and Player.Character:FindFirstChildOfClass("Humanoid") then
+		Player.Character:FindFirstChildOfClass("Humanoid").AutoRotate = false
+	end
 end
 
 function Spill:_UnlockPlayerMovement(Player)
 	Player.DevComputerMovementMode = Enum.DevComputerMovementMode.UserChoice
 	Player.DevTouchMovementMode = Enum.DevTouchMovementMode.UserChoice
-	Player.Character.Humanoid.AutoRotate = true
+	if Player.Character and Player.Character:FindFirstChildOfClass("Humanoid") then
+		Player.Character:FindFirstChildOfClass("Humanoid").AutoRotate = true
+	end
+end
+
+function Spill:_UnseatPlayer(Player: Player)
+	local Character = Player.Character
+	if not Character then
+		return
+	end
+
+	local Humanoid = Character:FindFirstChildOfClass("Humanoid")
+	if not Humanoid then
+		return
+	end
+
+	if Humanoid.Sit or Humanoid.SeatPart ~= nil then
+		local SeatPart = Humanoid.SeatPart
+		Humanoid.Sit = false
+
+		if SeatPart then
+			for _, desc in SeatPart:GetDescendants() do
+				if desc:IsA("JointInstance") then
+					if
+						desc.Name == "SeatWeld"
+						or (desc.Part0 and desc.Part0:IsDescendantOf(Character))
+						or (desc.Part1 and desc.Part1:IsDescendantOf(Character))
+					then
+						desc:Destroy()
+					end
+				end
+			end
+
+			if SeatPart:IsA("BasePart") then
+				for _, joint in SeatPart:GetJoints() do
+					if
+						joint.Name == "SeatWeld"
+						or (joint.Part0 and joint.Part0:IsDescendantOf(Character))
+						or (joint.Part1 and joint.Part1:IsDescendantOf(Character))
+					then
+						joint:Destroy()
+					end
+				end
+			end
+		end
+
+		for _, desc in Character:GetDescendants() do
+			if desc:IsA("JointInstance") then
+				if desc.Name == "SeatWeld" or (SeatPart and (desc.Part0 == SeatPart or desc.Part1 == SeatPart)) then
+					desc:Destroy()
+				end
+			elseif desc:IsA("BasePart") then
+				for _, joint in desc:GetJoints() do
+					if
+						joint.Name == "SeatWeld"
+						or (SeatPart and (joint.Part0 == SeatPart or joint.Part1 == SeatPart))
+						or (joint.Part0 and (joint.Part0:IsA("Seat") or joint.Part0:IsA("VehicleSeat")))
+						or (joint.Part1 and (joint.Part1:IsA("Seat") or joint.Part1:IsA("VehicleSeat")))
+					then
+						joint:Destroy()
+					end
+				end
+			end
+		end
+
+		task.wait()
+	end
 end
 
 function Spill:_FinishCleaning(Player: Player, AnimationTrack: AnimationTrack, RightTool: Instance, LeftTool: Instance)
@@ -168,6 +236,16 @@ function Spill:_RunCleaning(Player: Player)
 	Player:SetAttribute("CleaningSpill", true)
 	self.Prompt.Enabled = false
 	self.Janitor:LinkToInstance(Player.Character)
+
+	self:_UnseatPlayer(Player)
+
+	if not Player.Character or not Player.Character.Parent then
+		error("player character unavailable", 0)
+	end
+
+	if self.Destroyed then
+		error("spill destroyed during unseating", 0)
+	end
 
 	local LookVector = (self.Object.PrimaryPart.CFrame + (self.Object.PrimaryPart.CFrame.LookVector * 2.5))
 		* CFrame.Angles(0, math.rad(180), 0)
@@ -232,7 +310,9 @@ end
 --- Releases the player and re-arms the prompt after a cleaning attempt errored part way through.
 function Spill:_RecoverFromFailedCleaning(Player: Player)
 	pcall(self._UnlockPlayerMovement, self, Player)
-	Player:SetAttribute("CleaningSpill", nil)
+	pcall(function()
+		Player:SetAttribute("CleaningSpill", nil)
+	end)
 	self.Cleaning = false
 	if not self.Destroyed and self.Prompt then
 		self.Prompt.Enabled = true

@@ -12,25 +12,6 @@ local TEMPERATURE_COLD_HOT = { "Cold", "Hot" }
 local TOP_MENU_COLOR = Color3.fromRGB(139, 199, 104)
 local TOP_MENU_ITEM_COLOR = Color3.fromRGB(156, 255, 141)
 
-local SMOOTHIE_NAMES = {
-	"Apricot Smoothie",
-	"Banana Smoothie",
-	"Blueberry Smoothie",
-	"Cherry Smoothie",
-	"Grapefruit Smoothie",
-	"Grapes Smoothie",
-	"Kiwi Smoothie",
-	"Orange Smoothie",
-	"Peach Smoothie",
-	"Pear Smoothie",
-	"Pineapple Smoothie",
-	"Strawberry Banana Smoothie",
-	"Strawberry Kiwi Smoothie",
-	"Strawberry Smoothie",
-	"Watermelon Smoothie",
-	"Wild Berries Smoothie",
-}
-
 local COFFEE_NAMES = {
 	"Regular",
 	"Espresso",
@@ -105,19 +86,6 @@ local function buildCupItem(itemName: string, modelName: string, sizeOptions: { 
 	end
 
 	return assignFields(item, extra)
-end
-
-local function buildSmoothieItems(withColor: boolean)
-	local items = {}
-
-	for _, smoothieName in ipairs(SMOOTHIE_NAMES) do
-		items[smoothieName] = buildCupItem(smoothieName, DEFAULT_CUP_MODEL, SIZE_SMALL_MEDIUM_LARGE)
-		if withColor then
-			items[smoothieName].Color = TOP_MENU_ITEM_COLOR
-		end
-	end
-
-	return items
 end
 
 local function buildCoffeeItems()
@@ -263,9 +231,15 @@ local SyrupFlavor = {
 	["Peach"] = {
 		Color = Color3.fromRGB(255, 203, 164),
 	},
+	["Watermelon"] = {
+		Color = Color3.fromRGB(238, 75, 95),
+	},
+	["Dragon Fruit"] = {
+		Color = Color3.fromRGB(203, 51, 154),
+	},
 }
 
--- local topMenuItems = {}--buildSmoothieItems(true)
+-- local topMenuItems = {}
 -- topMenuItems["Pumpkin Spice Boba"] = {
 -- 	Color = TOP_MENU_ITEM_COLOR,
 -- 	ItemName = "Boba",
@@ -342,13 +316,6 @@ FoodService["FoodTable"] = {
 			-- 	--},
 			-- },
 		},
-	},
-
-	["Smoothies"] = {
-		Icon = "rbxassetid://10866283725",
-		Color = Color3.fromRGB(164, 140, 242),
-		LayoutOrder = 2,
-		Items = buildSmoothieItems(false),
 	},
 
 	["Coffees"] = {
@@ -698,8 +665,9 @@ FoodService["FoodTable"] = {
 -- and a claimed order that can never be deposited locks the barista and the customer.
 -- Items are keyed [category] = { item keys of FoodTable }; Choices limit the
 -- RequiredSelection groups (syrups and tapioca) to the flavours that have a station.
--- Smoothies, Teas, Water, Latte, Salted Hot Chocolate, the other pastries and the Cup are
--- off until their recipes exist (Q19, Q22). The player UI can filter on IsLaunchItem.
+-- Smoothies are postponed to a later release (no Menu category). Teas, Water,
+-- Latte, Salted Hot Chocolate, the other pastries and the Cup are off until
+-- their recipes exist (Q19, Q22). The player UI can filter on IsLaunchItem.
 local LAUNCH_ITEMS = {
 	["Boba Teas"] = { "Custom Boba", "Matcha Tea Boba" },
 	["Coffees"] = { "Regular", "Espresso", "Decaf", "Cappuccino", "Americano", "Cortado", "Koa Coffee" },
@@ -743,8 +711,30 @@ local LAUNCH_CHOICES = {
 		"Brown Sugar",
 		"Chocolate",
 		"Passion Fruit",
+		"Strawberry Banana",
+		"Coconut",
+		"Chocolate Banana",
+		"Thai Milk Tea",
+		"Watermelon",
+		"Lychee",
+		"Green Tea",
+		"Raspberry",
+		"Cherry",
+		"Guava",
+		"Dragon Fruit",
 	},
-	["Tapioca Flavor"] = { "Normal", "Strawberry", "Mystic Burst", "Banana Blast" },
+	["Tapioca Flavor"] = {
+		"Normal",
+		"Strawberry",
+		"Mystic Burst",
+		"Banana Blast",
+		"Fruity Twist",
+		"Passion Madness",
+		"Tropical Heaven",
+		"Marshmallow Delight",
+		"Tutti Frutti",
+		"Pumpkin Paradise",
+	},
 }
 
 local function toSet(list: { string }): { [string]: boolean }

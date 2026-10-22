@@ -20,6 +20,9 @@ export type Setting = {
 	--- Like GamepassId, for catalog-only passes the client cannot resolve: the row shows when
 	--- the server set the player attribute with this name (PassSettingsService).
 	PerkAttribute: string?,
+	--- Game pass id offered on the locked row (needed for PerkAttribute rows; a GamepassId
+	--- row uses GamepassId). Non-owners see the row locked with a "Get pass" button.
+	PassId: number?,
 }
 
 export type Category = {
@@ -45,13 +48,26 @@ local config: { Category } = {
 	{
 		Category = "Game Passes",
 		Settings = {
-			--{ Key = "HeadlessHead",    Label = "Headless Head",      Default = false, GamepassId = 6202153 },
-			{ Key = "FasterWalkSpeed", Label = "Faster Walk Speed", Default = false, PerkAttribute = "PerkWalkSpeed" },
+			{
+				Key = "HeadlessHead",
+				Label = "Headless Head",
+				Default = false,
+				PerkAttribute = "PerkHeadlessHead",
+				PassId = 14067340,
+			},
+			{
+				Key = "FasterWalkSpeed",
+				Label = "Faster Walk Speed",
+				Default = false,
+				PerkAttribute = "PerkWalkSpeed",
+				PassId = 12385742,
+			},
 			{
 				Key = "UniformRemoverEnabled",
 				Label = "Keep My Outfit",
 				Default = true,
 				PerkAttribute = "PerkUniformRemover",
+				PassId = 219651224,
 			},
 		},
 	},

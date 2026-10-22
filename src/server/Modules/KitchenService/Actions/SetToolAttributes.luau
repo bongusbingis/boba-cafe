@@ -52,6 +52,32 @@ local function SetToolAttributes(player: Player, _actionModel: Model, attributes
 	for name, value in attributes do
 		tool:SetAttribute(name, value)
 	end
+
+	if attributes.Tapioca ~= nil and typeof(attributes.Tapioca) == "string" then
+		local ReplicatedStorage = game:GetService("ReplicatedStorage")
+		local Recipes = require(ReplicatedStorage.Shared.Kitchen.Recipes)
+		local color = Recipes.Tapioca[attributes.Tapioca]
+		for _, desc in tool:GetDescendants() do
+			if desc.Name == "BobaBalls" or desc.Name == "Tapioca" then
+				local target: Instance = desc
+				if
+					(desc:IsA("SpecialMesh") or desc:IsA("FileMesh"))
+					and desc.Parent
+					and desc.Parent:IsA("BasePart")
+				then
+					target = desc.Parent
+				end
+				pcall(function()
+					if target:IsA("BasePart") then
+						target.Transparency = 0
+						if color then
+							target.Color = color
+						end
+					end
+				end)
+			end
+		end
+	end
 	return true
 end
 

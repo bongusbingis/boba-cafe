@@ -9,7 +9,7 @@ local Packages = ReplicatedStorage:WaitForChild("Packages")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 
 local Knit = require(Packages.Knit)
-local Gamepasses = require(Shared.Configuration.Gamepasses)
+local PassCatalog = require(Shared.Configuration.PassCatalog)
 local ProductIds = require(Shared.Configuration.ProductIds)
 local EventProducts = require(Shared.Utility.EventProducts)
 
@@ -57,10 +57,16 @@ local function setupHeader(headerPart: BasePart, templatesFolder: Instance, titl
 end
 
 local function setupGamepassBoard(board: Model, passId: number, templatesFolder: Instance)
-	local def = Gamepasses[passId]
-	if not def then
+	local def = PassCatalog[passId]
+	local description = if def then def.Description else nil
+	local icon = if def then def.Icon else nil
+	if not def or description == nil or icon == nil then
 		warn(
-			string.format("[GamepassBoardController] No definition found for PassId %d on board %s", passId, board.Name)
+			string.format(
+				"[GamepassBoardController] No display data found for PassId %d on board %s",
+				passId,
+				board.Name
+			)
 		)
 		return
 	end
@@ -96,14 +102,14 @@ local function setupGamepassBoard(board: Model, passId: number, templatesFolder:
 	local priceLabel = bodyGui:FindFirstChild("PriceInRobux", true) :: TextLabel?
 
 	if descLabel then
-		descLabel.Text = def.Description
+		descLabel.Text = description
 		if not descLabel.TextFits then
 			descLabel.TextScaled = true
 		end
 	end
 
 	if iconLabel then
-		iconLabel.Image = def.Icon
+		iconLabel.Image = icon
 	end
 
 	task.spawn(function()

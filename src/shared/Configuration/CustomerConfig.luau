@@ -154,6 +154,222 @@ local CustomerConfig = {
 				CustomInfo = { ["Syrup Flavor"] = "Mango", ["Tapioca Flavor"] = "Normal" },
 			},
 		},
+		{
+			Key = "Matcha Syrup",
+			Label = "Matcha Boba",
+			Weight = 1, -- PROPOSED (Jack): newcomer headroom for CLASSIC_MIN_SHARE
+			MinLevel = Progression.MIN_LEVEL_BY_ITEM["Matcha Syrup"], -- PROPOSED (Jack) via Progression
+			Sized = true,
+			OrderItem = {
+				Category = "Boba Teas",
+				Item = "Custom Boba",
+				CustomInfo = { ["Syrup Flavor"] = "Matcha", ["Tapioca Flavor"] = "Normal" },
+			},
+		},
+		{
+			Key = "Coconut Syrup",
+			Label = "Coconut Boba",
+			Weight = 1, -- PROPOSED (Jack): newcomer headroom for CLASSIC_MIN_SHARE
+			MinLevel = Progression.MIN_LEVEL_BY_ITEM["Coconut Syrup"], -- PROPOSED (Jack) via Progression
+			Sized = true,
+			OrderItem = {
+				Category = "Boba Teas",
+				Item = "Custom Boba",
+				CustomInfo = { ["Syrup Flavor"] = "Coconut", ["Tapioca Flavor"] = "Normal" },
+			},
+		},
+		{
+			Key = "Green Tea Syrup",
+			Label = "Green Tea Boba",
+			Weight = 1, -- PROPOSED (Jack): newcomer headroom for CLASSIC_MIN_SHARE
+			MinLevel = Progression.MIN_LEVEL_BY_ITEM["Green Tea Syrup"], -- PROPOSED (Jack) via Progression
+			Sized = true,
+			OrderItem = {
+				Category = "Boba Teas",
+				Item = "Custom Boba",
+				CustomInfo = { ["Syrup Flavor"] = "Green Tea", ["Tapioca Flavor"] = "Normal" },
+			},
+		},
+		{
+			Key = "Strawberry Banana Syrup",
+			Label = "Strawberry Banana Boba",
+			Weight = 1, -- PROPOSED (Jack): newcomer headroom for CLASSIC_MIN_SHARE
+			MinLevel = Progression.MIN_LEVEL_BY_ITEM["Strawberry Banana Syrup"], -- PROPOSED (Jack) via Progression
+			Sized = true,
+			OrderItem = {
+				Category = "Boba Teas",
+				Item = "Custom Boba",
+				CustomInfo = { ["Syrup Flavor"] = "Strawberry Banana", ["Tapioca Flavor"] = "Normal" },
+			},
+		},
+		{
+			Key = "Lychee Syrup",
+			Label = "Lychee Boba",
+			Weight = 1, -- PROPOSED (Jack): newcomer headroom for CLASSIC_MIN_SHARE
+			MinLevel = Progression.MIN_LEVEL_BY_ITEM["Lychee Syrup"], -- PROPOSED (Jack) via Progression
+			Sized = true,
+			OrderItem = {
+				Category = "Boba Teas",
+				Item = "Custom Boba",
+				CustomInfo = { ["Syrup Flavor"] = "Lychee", ["Tapioca Flavor"] = "Normal" },
+			},
+		},
+		{
+			Key = "Strawberry Tapioca",
+			Label = "Strawberry Tapioca Boba",
+			Weight = 1, -- PROPOSED (Jack): newcomer headroom for CLASSIC_MIN_SHARE
+			MinLevel = Progression.MIN_LEVEL_BY_ITEM["Strawberry Tapioca"], -- via Progression
+			Sized = true,
+			OrderItem = {
+				Category = "Boba Teas",
+				Item = "Custom Boba",
+				CustomInfo = { ["Syrup Flavor"] = "Classic Milk Tea", ["Tapioca Flavor"] = "Strawberry" },
+			},
+		},
+		{
+			Key = "Chocolate Banana Syrup",
+			Label = "Chocolate Banana Boba",
+			Weight = 1, -- PROPOSED (Jack): newcomer headroom for CLASSIC_MIN_SHARE
+			MinLevel = Progression.MIN_LEVEL_BY_ITEM["Chocolate Banana Syrup"], -- PROPOSED (Jack) via Progression
+			Sized = true,
+			OrderItem = {
+				Category = "Boba Teas",
+				Item = "Custom Boba",
+				CustomInfo = { ["Syrup Flavor"] = "Chocolate Banana", ["Tapioca Flavor"] = "Normal" },
+			},
+		},
+		{
+			Key = "Thai Milk Tea Syrup",
+			Label = "Thai Milk Tea Boba",
+			Weight = 1, -- PROPOSED (Jack): newcomer headroom for CLASSIC_MIN_SHARE
+			MinLevel = Progression.MIN_LEVEL_BY_ITEM["Thai Milk Tea Syrup"], -- PROPOSED (Jack) via Progression
+			Sized = true,
+			OrderItem = {
+				Category = "Boba Teas",
+				Item = "Custom Boba",
+				CustomInfo = { ["Syrup Flavor"] = "Thai Milk Tea", ["Tapioca Flavor"] = "Normal" },
+			},
+		},
+		{
+			Key = "Watermelon Syrup",
+			Label = "Watermelon Boba",
+			Weight = 1, -- PROPOSED (Jack): newcomer headroom for CLASSIC_MIN_SHARE
+			MinLevel = Progression.MIN_LEVEL_BY_ITEM["Watermelon Syrup"], -- PROPOSED (Jack) via Progression
+			Sized = true,
+			OrderItem = {
+				Category = "Boba Teas",
+				Item = "Custom Boba",
+				CustomInfo = { ["Syrup Flavor"] = "Watermelon", ["Tapioca Flavor"] = "Normal" },
+			},
+		},
+		{
+			Key = "Raspberry Syrup",
+			Label = "Raspberry Boba",
+			Weight = 1, -- PROPOSED (Jack): newcomer headroom for CLASSIC_MIN_SHARE
+			MinLevel = Progression.MIN_LEVEL_BY_ITEM["Raspberry Syrup"], -- PROPOSED (Jack) via Progression
+			Sized = true,
+			OrderItem = {
+				Category = "Boba Teas",
+				Item = "Custom Boba",
+				CustomInfo = { ["Syrup Flavor"] = "Raspberry", ["Tapioca Flavor"] = "Normal" },
+			},
+		},
+		{
+			Key = "Mystic Burst Tapioca",
+			Label = "Mystic Burst Tapioca Boba",
+			Weight = 1, -- PROPOSED (Jack): newcomer headroom for CLASSIC_MIN_SHARE
+			MinLevel = Progression.MIN_LEVEL_BY_ITEM["Mystic Burst Tapioca"], -- via Progression
+			Sized = true,
+			OrderItem = {
+				Category = "Boba Teas",
+				Item = "Custom Boba",
+				CustomInfo = { ["Syrup Flavor"] = "Classic Milk Tea", ["Tapioca Flavor"] = "Mystic Burst" },
+			},
+		},
+		{
+			Key = "Banana Blast Tapioca",
+			Label = "Banana Blast Tapioca Boba",
+			Weight = 1, -- PROPOSED (Jack): newcomer headroom for CLASSIC_MIN_SHARE
+			MinLevel = Progression.MIN_LEVEL_BY_ITEM["Banana Blast Tapioca"], -- via Progression
+			Sized = true,
+			OrderItem = {
+				Category = "Boba Teas",
+				Item = "Custom Boba",
+				CustomInfo = { ["Syrup Flavor"] = "Classic Milk Tea", ["Tapioca Flavor"] = "Banana Blast" },
+			},
+		},
+		{
+			Key = "Cherry Syrup",
+			Label = "Cherry Boba",
+			Weight = 1, -- PROPOSED (Jack): newcomer headroom for CLASSIC_MIN_SHARE
+			MinLevel = Progression.MIN_LEVEL_BY_ITEM["Cherry Syrup"], -- PROPOSED (Jack) via Progression
+			Sized = true,
+			OrderItem = {
+				Category = "Boba Teas",
+				Item = "Custom Boba",
+				CustomInfo = { ["Syrup Flavor"] = "Cherry", ["Tapioca Flavor"] = "Normal" },
+			},
+		},
+		{
+			Key = "Guava Syrup",
+			Label = "Guava Boba",
+			Weight = 1, -- PROPOSED (Jack): newcomer headroom for CLASSIC_MIN_SHARE
+			MinLevel = Progression.MIN_LEVEL_BY_ITEM["Guava Syrup"], -- PROPOSED (Jack) via Progression
+			Sized = true,
+			OrderItem = {
+				Category = "Boba Teas",
+				Item = "Custom Boba",
+				CustomInfo = { ["Syrup Flavor"] = "Guava", ["Tapioca Flavor"] = "Normal" },
+			},
+		},
+		{
+			Key = "Dragon Fruit Syrup",
+			Label = "Dragon Fruit Boba",
+			Weight = 1, -- PROPOSED (Jack): newcomer headroom for CLASSIC_MIN_SHARE
+			MinLevel = Progression.MIN_LEVEL_BY_ITEM["Dragon Fruit Syrup"], -- PROPOSED (Jack) via Progression
+			Sized = true,
+			OrderItem = {
+				Category = "Boba Teas",
+				Item = "Custom Boba",
+				CustomInfo = { ["Syrup Flavor"] = "Dragon Fruit", ["Tapioca Flavor"] = "Normal" },
+			},
+		},
+		{
+			Key = "Brown Sugar Syrup",
+			Label = "Brown Sugar Boba",
+			Weight = 1, -- PROPOSED (Jack): newcomer headroom for CLASSIC_MIN_SHARE
+			MinLevel = Progression.MIN_LEVEL_BY_ITEM["Brown Sugar Syrup"], -- via Progression
+			Sized = true,
+			OrderItem = {
+				Category = "Boba Teas",
+				Item = "Custom Boba",
+				CustomInfo = { ["Syrup Flavor"] = "Brown Sugar", ["Tapioca Flavor"] = "Normal" },
+			},
+		},
+		{
+			Key = "Chocolate Syrup",
+			Label = "Chocolate Boba",
+			Weight = 1, -- PROPOSED (Jack): newcomer headroom for CLASSIC_MIN_SHARE
+			MinLevel = Progression.MIN_LEVEL_BY_ITEM["Chocolate Syrup"], -- via Progression
+			Sized = true,
+			OrderItem = {
+				Category = "Boba Teas",
+				Item = "Custom Boba",
+				CustomInfo = { ["Syrup Flavor"] = "Chocolate", ["Tapioca Flavor"] = "Normal" },
+			},
+		},
+		{
+			Key = "Passion Fruit Syrup",
+			Label = "Passion Fruit Boba",
+			Weight = 1, -- PROPOSED (Jack): newcomer headroom for CLASSIC_MIN_SHARE
+			MinLevel = Progression.MIN_LEVEL_BY_ITEM["Passion Fruit Syrup"], -- via Progression
+			Sized = true,
+			OrderItem = {
+				Category = "Boba Teas",
+				Item = "Custom Boba",
+				CustomInfo = { ["Syrup Flavor"] = "Passion Fruit", ["Tapioca Flavor"] = "Normal" },
+			},
+		},
 	} :: { PoolEntry },
 	CLASSIC_MIN_SHARE = 0.6, -- TUNING: classics keep at least this share of the eligible weight at every level
 	NEW_ENTRY_MAX_WEIGHT = 10, -- TUNING: no level-2+ entry may weigh more than this

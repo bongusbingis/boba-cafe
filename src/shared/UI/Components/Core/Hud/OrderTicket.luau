@@ -772,8 +772,10 @@ return function(props: {
 				BackgroundTransparency = 1,
 				FontFace = Styles.FONT_FREDOKA,
 				Size = UDim2.fromScale(1, 1),
+				-- DEC-059: a real player's order is tagged in the header.
 				Text = if collapsed and typeof(order.Label) == "string"
 					then order.Label
+					elseif order.Real == true then (if isSecond then "Real Customer 2" else "Real Customer")
 					elseif isSecond then "Order Ticket 2"
 					else "Order Ticket",
 				TextColor3 = Styles.OFFWHITE,

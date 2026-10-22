@@ -308,6 +308,20 @@ return function()
 			expect(done5).to.equal(true)
 		end)
 
+		it("does not pin the card to a completed spec while its drink is held", function()
+			local spec1 = boba()
+			local spec2 = coffee()
+			local specs = { spec1, spec2 }
+			local finishedDrink1 = { Item = "Boba", Size = "Medium", Syrup = "Classic Milk Tea", Tapioca = "Normal" }
+
+			-- Drink 1 is done (backpack or hand) but drink 2 is untouched: the
+			-- card must advance to spec2 even while drink 1 is equipped.
+			local active, allDone, idx = KitchenGuidance.FindActiveSpec(specs, { finishedDrink1 }, finishedDrink1)
+			expect(allDone).to.equal(false)
+			expect(active).to.equal(spec2)
+			expect(idx).to.equal(2)
+		end)
+
 		it("maintains completed state and activeSpec when all items are done or unequipped", function()
 			local spec1 = boba()
 			local spec2 = coffee()

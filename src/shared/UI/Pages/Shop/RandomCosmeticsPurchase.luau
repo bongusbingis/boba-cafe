@@ -10,8 +10,9 @@ local React = require(Packages.React)
 local CapsuleTierGroup = require(UI.Components.CapsuleTierGroup)
 local InventoryItemDefinitions = require(Shared.Configuration.InventoryItemDefinitions)
 local NametagCard = require(UI.Components.Buttons.NametagCard)
-local Pane = require(UI.Components.Pane)
+local ShopCard = require(UI.Components.Buttons.ShopCard)
 local usePx = require(UI.Hooks.usePx)
+local BobaBucksShortfall = require(UI.Utility.BobaBucksShortfall)
 
 ---> styles
 local Styles = require(UI.Styles)
@@ -63,7 +64,14 @@ return function()
 		end
 	end
 
-	local heroCards = {}
+	local heroCards = {
+		UIListLayout = c("UIListLayout", {
+			FillDirection = Enum.FillDirection.Vertical,
+			HorizontalAlignment = Enum.HorizontalAlignment.Center,
+			Padding = UDim.new(0, 16),
+			SortOrder = Enum.SortOrder.LayoutOrder,
+		}),
+	}
 	for i, tierName in ipairs(TIER_ORDER) do
 		local items = {}
 		local onSaleIndex = 0
@@ -108,118 +116,134 @@ return function()
 		end
 	end
 
-	table.insert(
-		heroCards,
-		c("Frame", {
-			BackgroundTransparency = 1,
-			Size = UDim2.fromScale(1, 0.25),
-			LayoutOrder = math.huge,
-		})
-	)
+	heroCards["BottomSpacer"] = c("Frame", {
+		BackgroundTransparency = 1,
+		Size = UDim2.new(1, 0, 0, 30),
+		LayoutOrder = 9999,
+	})
 
-	local capsules = {}
+	local capsuleChildren = {
+		UIListLayout = c("UIListLayout", {
+			FillDirection = Enum.FillDirection.Horizontal,
+			HorizontalAlignment = Enum.HorizontalAlignment.Center,
+			VerticalAlignment = Enum.VerticalAlignment.Center,
+			HorizontalFlex = Enum.UIFlexAlignment.SpaceBetween,
+			Padding = UDim.new(0, 20),
+			SortOrder = Enum.SortOrder.LayoutOrder,
+		}),
+	}
 
 	for k, capsule in ipairs(nametagColors.Capsules) do
 		local isBestValue = k == 3
-		table.insert(
-			capsules,
-			c(require(UI.Components.Buttons.ShopCard), {
-				Name = capsule.Name,
-				Price = capsule.Price,
-				Image = capsule.Image,
-				ImageSize = UDim2.fromScale(1, 1),
-				Size = isBestValue and UDim2.fromScale(1, 1) or UDim2.fromScale(0.875, 0.875),
-				TopBanner = isBestValue and {
-					Color = Styles.GREEN_BADGE,
-					Text = "Best Value",
-					Size = UDim2.fromScale(1, 0.2),
-				} or nil,
-				OnClick = policyState == "allowed"
-						and function()
-							local Controller = require(Packages.Knit).GetController("DialogController")
-							local prompt = Controller.new("ButtonPrompt", {
-								Title = "Buy Nametag Capsules",
-								Text = `Buy {capsule.Name} for {capsule.Price} Boba Bucks?`,
-								Buttons = {
-									{ Text = "Buy", Color = Styles.GREEN },
-									{ Text = "Cancel", Color = Styles.RED },
-								},
-							})
-							prompt:Fire():andThen(function(choice)
-								if choice ~= "Buy" then
+		capsuleChildren[`capsule_{k}`] = c(ShopCard, {
+			Name = capsule.Name,
+			Price = capsule.Price,
+			Image = capsule.Image,
+			ImageSize = UDim2.fromScale(1, 1),
+			Size = isBestValue and UDim2.fromScale(1, 1) or UDim2.fromScale(0.875, 0.875),
+			TopBanner = isBestValue and {
+				Color = Styles.GREEN_BADGE,
+				Text = "Best Value",
+				Size = UDim2.fromScale(1.05, 0.28),
+			} or nil,
+			LayoutOrder = k,
+			OnClick = policyState == "allowed"
+					and function()
+						local Controller = require(Packages.Knit).GetController("DialogController")
+						local prompt = Controller.new("ButtonPrompt", {
+							Title = "Buy Nametag Capsules",
+							Text = `Buy {capsule.Name} for {capsule.Price} Boba Bucks?`,
+							Buttons = {
+								{ Text = "Buy", Color = Styles.GREEN },
+								{ Text = "Cancel", Color = Styles.RED },
+							},
+						})
+						prompt:Fire():andThen(function(choice)
+							if choice ~= "Buy" then
+								return
+							end
+							local amount = if k == 1 then 1 elseif k == 2 then 10 else 50
+							CapsuleService:PurchaseNametagCapsules(amount):andThen(function(ok, reason)
+								if not ok and reason == "InsufficientFunds" then
+									BobaBucksShortfall.Prompt({ Price = capsule.Price, What = "that capsule" })
 									return
 								end
-								local amount = if k == 1 then 1 elseif k == 2 then 10 else 50
-								CapsuleService:PurchaseNametagCapsules(amount):andThen(function(ok, reason)
-									local result = Controller.new("ButtonPrompt", {
-										Title = if ok then "Purchase Complete" else "Purchase Unavailable",
-										Text = if ok
-											then "Your capsules were added to your inventory."
-											elseif
-												reason == "RefundPending"
-											then "Your purchase failed and the refund could not be issued automatically. Please contact support."
-											else "The purchase could not be completed. Please try again.",
-										Buttons = { { Text = "Close", Color = Styles.GREEN } },
-									})
-									result:Fire()
-								end)
+								local result = Controller.new("ButtonPrompt", {
+									Title = if ok then "Purchase Complete" else "Purchase Unavailable",
+									Text = if ok
+										then "Your capsules were added to your inventory."
+										elseif
+											reason == "RefundPending"
+										then "Your purchase failed and the refund could not be issued automatically. Please contact support."
+										elseif
+											reason == "InventoryFull"
+										then "Your inventory is full. Make some room and try again."
+										else "The purchase could not be completed. Please try again.",
+									Buttons = { { Text = "Close", Color = Styles.GREEN } },
+								})
+								result:Fire()
 							end)
-						end
-					or nil,
-			})
-		)
+						end)
+					end
+				or nil,
+		})
 	end
 
 	return c("ScrollingFrame", {
-		BackgroundTransparency = 1,
-		Size = UDim2.fromScale(1, 1),
+		Active = true,
 		AutomaticCanvasSize = Enum.AutomaticSize.Y,
-		CanvasSize = UDim2.fromScale(0.9, 3),
+		BackgroundTransparency = 1,
+		CanvasSize = UDim2.new(),
+		ScrollBarImageColor3 = Color3.new(),
+		ScrollBarThickness = 5,
+		ScrollingDirection = Enum.ScrollingDirection.Y,
+		Size = UDim2.fromScale(1, 1),
 	}, {
+		ListLayout = c("UIListLayout", {
+			FillDirection = Enum.FillDirection.Vertical,
+			HorizontalAlignment = Enum.HorizontalAlignment.Center,
+			Padding = UDim.new(0, 14),
+			SortOrder = Enum.SortOrder.LayoutOrder,
+		}),
+
+		Padding = c("UIPadding", {
+			PaddingTop = UDim.new(0, 8),
+			PaddingBottom = UDim.new(0, 24),
+			PaddingLeft = UDim.new(0.02, 0),
+			PaddingRight = UDim.new(0.02, 0),
+		}),
+
 		Title = c("TextLabel", {
-			AnchorPoint = Vector2.new(0.5, 0),
 			BackgroundTransparency = 1,
 			FontFace = Styles.FONT_FREDOKA,
-			Position = UDim2.fromScale(0.470149, 0),
-			Size = UDim2.fromScale(0.94, 0.09),
+			LayoutOrder = 1,
+			Size = UDim2.new(0.94, 0, 0, 38),
 			Text = "Nametag Cosmetics",
 			TextColor3 = Styles.GREEN,
 			TextScaled = true,
 		}),
 
 		Hint = c("TextLabel", {
-			AnchorPoint = Vector2.new(0.5, 0),
 			BackgroundTransparency = 1,
 			FontFace = Styles.FONT_FREDOKA,
-			Position = UDim2.fromScale(0.5, 0.095),
-			Size = UDim2.fromScale(0.94, 0.085),
+			LayoutOrder = 2,
+			Size = UDim2.new(0.94, 0, 0, 24),
 			Text = "Open capsules to purchase cosmetics. Each capsule contains a random item!",
 			TextColor3 = Styles.GRAY,
 			TextScaled = true,
 		}),
 
-		CapsulePurchaseRow = policyState == "allowed" and c(Pane, {
-			ClassName = "Frame",
-			Native = {
-				BackgroundTransparency = 1,
-				Size = UDim2.fromScale(0.8, 0.25),
-				Position = UDim2.fromScale(0.475, 0.2),
-				AnchorPoint = Vector2.new(0.5, 0),
-			},
-			ListLayout = {
-				FillDirection = Enum.FillDirection.Horizontal,
-				HorizontalAlignment = Enum.HorizontalAlignment.Center,
-				VerticalAlignment = Enum.VerticalAlignment.Center,
-				HorizontalFlex = Enum.UIFlexAlignment.SpaceBetween,
-				Padding = UDim.new(0, 20),
-			},
-		}, capsules) or nil,
+		CapsulePurchaseRow = policyState == "allowed" and c("Frame", {
+			BackgroundTransparency = 1,
+			LayoutOrder = 3,
+			Size = UDim2.new(0.85, 0, 0, 140),
+		}, capsuleChildren) or nil,
 
 		PolicyNotice = policyState ~= "allowed" and c("TextLabel", {
 			BackgroundTransparency = 1,
 			FontFace = Styles.FONT_FREDOKA,
-			Position = UDim2.fromScale(0.04, 0.2),
-			Size = UDim2.fromScale(0.92, 0.12),
+			LayoutOrder = 3,
+			Size = UDim2.new(0.92, 0, 0, 36),
 			Text = if policyState == "restricted"
 				then "Random capsule purchases are unavailable for this account."
 				elseif
@@ -230,19 +254,11 @@ return function()
 			TextScaled = true,
 		}) or nil,
 
-		Grid = c(Pane, {
-			ClassName = "Frame",
-			ListLayout = {
-				FillDirection = Enum.FillDirection.Vertical,
-				HorizontalAlignment = Enum.HorizontalAlignment.Center,
-				Padding = UDim.new(0, 20),
-			},
-			Native = {
-				BackgroundTransparency = 1,
-				Position = UDim2.fromScale(0, 0.475),
-				Size = UDim2.fromScale(1, 0),
-				AutomaticSize = Enum.AutomaticSize.Y,
-			},
+		Grid = c("Frame", {
+			BackgroundTransparency = 1,
+			LayoutOrder = 4,
+			Size = UDim2.fromScale(1, 0),
+			AutomaticSize = Enum.AutomaticSize.Y,
 		}, heroCards),
 	})
 end

@@ -213,9 +213,16 @@ function InteractionRunner:_runSequence(
 		if not isCheck and not isEmpty and recipeData and recipeData.SkillMoment == true and not seqState.PourDone then
 			seqState.PourDone = true
 			if self._pourMoments and self._pourMoments.AwaitPour then
+				-- The meter yields while the player can still swap tools, after
+				-- the gate above already validated what was held: fail instead
+				-- of stamping the finish onto whatever is held now.
+				local pourGatedTool = getHeldTool(player)
 				local tier = self._pourMoments:AwaitPour(player, recipeData, model)
 				if tier == nil then
 					return { Success = false, Error = "Pour cancelled" }
+				end
+				if pourGatedTool ~= nil and getHeldTool(player) ~= pourGatedTool then
+					return { Success = false, Error = "Pour: held tool changed" }
 				end
 				seqState.PourTier = tier
 			end

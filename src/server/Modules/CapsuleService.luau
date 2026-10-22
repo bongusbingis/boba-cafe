@@ -33,8 +33,14 @@ local CapsuleService = Knit.CreateService({
 		PurchaseNametagCapsules = function(self, player: Player, packSize: number)
 			return self.Server:PurchaseNametagCapsules(player, packSize)
 		end,
+		PurchasePetCapsule = function(self, player: Player, capsuleName: string)
+			return self.Server:PurchasePetCapsule(player, capsuleName)
+		end,
 		PurchaseDeterministicNametag = function(self, player: Player, nametagName: string)
 			return self.Server:PurchaseDeterministicNametag(player, nametagName)
+		end,
+		PurchaseParticle = function(self, player: Player, particleName: string)
+			return self.Server:PurchaseParticle(player, particleName)
 		end,
 		TryCompleteReadyHatch = function(self, player: Player)
 			return self.Server:TryCompleteReadyHatch(player)
@@ -58,6 +64,14 @@ local function storageLimit(player: Player, itemType: string): number
 		multiplier = Knit.GetService("PerkService"):GetStorageMultiplier(player)
 	end)
 	return require(Shared.Inventory.Utility).GetInventoryLimit("Storage", itemType :: any, multiplier)
+end
+
+local function countCapsules(capsulesInventory: any): number
+	local count = 0
+	for _ in capsulesInventory.Inventory do
+		count += 1
+	end
+	return count
 end
 
 local function getDialogService()
@@ -295,6 +309,64 @@ function CapsuleService:PurchaseNametagCapsules(player: Player, packSize: number
 	end)
 end
 
+function CapsuleService:PurchasePetCapsule(player: Player, capsuleName: string): (boolean, string?)
+	if typeof(capsuleName) ~= "string" then
+		return false, "InvalidItem"
+	end
+	return withPlayerTransaction(player, function()
+		if not retryPendingBobaBucksRefund(player) then
+			return false, "RefundPending"
+		end
+
+		local policyOk, restricted = self:GetPaidRandomPolicy(player)
+		if not policyOk then
+			return false, "PolicyUnavailable"
+		end
+		if restricted then
+			return false, "Restricted"
+		end
+
+		local definition = InventoryItemDefinitions.Capsules[capsuleName]
+		if not definition or definition.ItemType ~= "Pets" or definition.CanBeSold == false then
+			return false, "InvalidItem"
+		end
+		local price = tonumber((definition.Price:gsub("%s", "")))
+		if not price or price <= 0 or price ~= math.floor(price) then
+			return false, "InvalidPrice"
+		end
+
+		local Inventory = require(ReplicatedStorage.Shared.Inventory)
+		local inventoryOk, inventory = Inventory:GetPlayerInventoryAsync(player, "Capsules"):await()
+		if not inventoryOk or not inventory then
+			return false, "InventoryUnavailable"
+		end
+		if countCapsules(inventory) >= storageLimit(player, "Capsules") then
+			return false, "InventoryFull"
+		end
+
+		local spent = Knit.GetService("CurrencyService"):TrySpendAsync(player, "BobaBucks", price)
+		if not spent then
+			return false, "InsufficientFunds"
+		end
+
+		local insertOk, insertedId = pcall(function()
+			return inventory:Insert({
+				Name = capsuleName,
+				Properties = { RandomSource = "Paid" },
+			})
+		end)
+		if not insertOk then
+			warn("[CapsuleService]: Pet Capsule fallback grant threw after charging", player.Name, insertedId)
+		end
+		local granted = insertOk and insertedId ~= nil
+		if not granted then
+			local refunded = refundBobaBucks(player, price)
+			return false, if refunded then "GrantFailed" else "RefundPending"
+		end
+		return true
+	end)
+end
+
 function CapsuleService:PurchaseDeterministicNametag(player: Player, nametagName: string): (boolean, string?)
 	if typeof(nametagName) ~= "string" then
 		return false, "InvalidItem"
@@ -373,6 +445,58 @@ function CapsuleService:PurchaseDeterministicNametag(player: Player, nametagName
 		end
 		local refunded = refundBobaBucks(player, price)
 		return false, if refunded then "GrantFailed" else "RefundPending"
+	end)
+end
+
+function CapsuleService:PurchaseParticle(player: Player, particleName: string): (boolean, string?)
+	if typeof(particleName) ~= "string" then
+		return false, "InvalidItem"
+	end
+	return withPlayerTransaction(player, function()
+		if not retryPendingBobaBucksRefund(player) then
+			return false, "RefundPending"
+		end
+
+		local definition = InventoryItemDefinitions.Particles[particleName]
+		if not definition or definition.OffSale or definition.CanBeSold == false then
+			return false, "InvalidItem"
+		end
+		local price = tonumber((definition.Price:gsub("%s", "")))
+		if not price or price <= 0 or price ~= math.floor(price) then
+			return false, "InvalidPrice"
+		end
+
+		local Inventory = require(ReplicatedStorage.Shared.Inventory)
+		local inventoryOk, inventory = Inventory:GetPlayerInventoryAsync(player, "Particles"):await()
+		if not inventoryOk or not inventory then
+			return false, "InventoryUnavailable"
+		end
+
+		local slots = 0
+		for _ in inventory.Inventory do
+			slots += 1
+		end
+		if slots >= storageLimit(player, "Particles") then
+			return false, "InventoryFull"
+		end
+
+		local spent = Knit.GetService("CurrencyService"):TrySpendAsync(player, "BobaBucks", price)
+		if not spent then
+			return false, "InsufficientFunds"
+		end
+
+		local insertOk, insertedId = pcall(function()
+			return inventory:Insert({ Name = particleName })
+		end)
+		if not insertOk then
+			warn("[CapsuleService]: Particle fallback grant threw after charging", player.Name, insertedId)
+		end
+		local granted = insertOk and insertedId ~= nil
+		if not granted then
+			local refunded = refundBobaBucks(player, price)
+			return false, if refunded then "GrantFailed" else "RefundPending"
+		end
+		return true
 	end)
 end
 
@@ -566,14 +690,6 @@ end
 --------------------------------------------------------------------------------
 -- Public API
 --------------------------------------------------------------------------------
-
-local function countCapsules(capsulesInventory: any): number
-	local count = 0
-	for _ in capsulesInventory.Inventory do
-		count += 1
-	end
-	return count
-end
 
 local function getCapsulesInventory(player: Player): any?
 	local ok, fetched, inv = pcall(function()

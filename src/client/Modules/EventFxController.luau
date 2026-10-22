@@ -89,6 +89,7 @@ local confetti: { ParticleEmitter } = {}
 local sparkles: ParticleEmitter? = nil
 local followConn: RBXScriptConnection? = nil
 local tintThread: thread? = nil
+local tintTween: Tween? = nil
 local fovBusy = false
 
 -- Paper flutter: squash swings between flat and stretched over the particle's life.
@@ -217,6 +218,13 @@ local function stopTintCycle()
 		task.cancel(tintThread)
 		tintThread = nil
 	end
+	-- The cycle's in-flight tween outlives the thread: it finishes after the
+	-- end-of-event neutral tween and repaints the grade with a party tint that
+	-- then sticks (and poisons the next event), so cancel it too.
+	if tintTween then
+		tintTween:Cancel()
+		tintTween = nil
+	end
 end
 
 local function startTintCycle(effect: ColorCorrectionEffect, tints: { Color3 })
@@ -229,7 +237,8 @@ local function startTintCycle(effect: ColorCorrectionEffect, tints: { Color3 })
 		local index = 1
 		while true do
 			index = index % #tints + 1
-			TweenService:Create(effect, info, { TintColor = tints[index] }):Play()
+			tintTween = TweenService:Create(effect, info, { TintColor = tints[index] })
+			tintTween:Play()
 			task.wait(TINT_CYCLE_SECONDS)
 		end
 	end)
@@ -303,7 +312,13 @@ local function apply(state: CafeEvent.State, intro: CafeEvent.Intro?)
 
 	if intro ~= nil then
 		-- The rig moves onto the character next Heartbeat; burst after it gets there.
-		task.delay(0.05, burst)
+		-- Guarded: an event that ends (or is superseded) within that window must not
+		-- fire confetti after teardown.
+		task.delay(0.05, function()
+			if CafeEvent.read().Mode ~= nil then
+				burst()
+			end
+		end)
 		task.spawn(punchFov)
 	end
 end

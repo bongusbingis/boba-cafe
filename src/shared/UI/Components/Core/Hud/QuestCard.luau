@@ -15,6 +15,7 @@
 
 ---> Services
 
+local MarketplaceService = game:GetService("MarketplaceService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -35,6 +36,7 @@ local Page = require(UI.Components.Core.Page)
 local CloseButton = require(UI.Components.Buttons.CloseButton)
 local QuestConfig = require(Shared.Configuration.QuestConfig)
 local GamepassUtil = require(Shared.Utility.GamepassUtil)
+local BobaBucksShortfall = require(UI.Utility.BobaBucksShortfall)
 local usePx = require(UI.Hooks.usePx)
 local useCamera = require(UI.Hooks.useCamera)
 
@@ -52,6 +54,10 @@ local CLOSE_DELAY = 0.025
 local ACTION_HEIGHT = 56
 local ACTION_WIDTH = 104
 local HEADER_HEIGHT = 60
+local CHIP_HEIGHT = 26
+-- STYLE 1.11: Bucks icon and capsule icon (BottomLeft.luau).
+local BUCKS_ICON = "rbxassetid://13382286492"
+local CAPSULE_ICON = "rbxassetid://6073658218"
 local CARD_WIDTH = 330
 -- Page pane is 0.8 of the screen; the scrolling body may use 0.65 of it.
 local PAGE_SCREEN_FRACTION = 0.8
@@ -224,6 +230,60 @@ local function QuestActionButton(props: {
 	})
 end
 
+local function RewardChip(props: {
+	Text: string,
+	Icon: string?,
+	Color: Color3,
+	LayoutOrder: number,
+})
+	local px = usePx()
+	return c("Frame", {
+		AutomaticSize = Enum.AutomaticSize.X,
+		BackgroundColor3 = props.Color,
+		BorderSizePixel = 0,
+		LayoutOrder = props.LayoutOrder,
+		Size = UDim2.fromOffset(0, px(CHIP_HEIGHT)),
+	}, {
+		Corner = c("UICorner", { CornerRadius = Styles.CORNER_FULL }),
+		Stroke = c("UIStroke", {
+			Color = props.Color:Lerp(Color3.new(0, 0, 0), 0.15),
+			Thickness = 1,
+		}),
+		Padding = c("UIPadding", {
+			PaddingLeft = UDim.new(0, px(8)),
+			PaddingRight = UDim.new(0, px(10)),
+		}),
+		Layout = c("UIListLayout", {
+			FillDirection = Enum.FillDirection.Horizontal,
+			HorizontalAlignment = Enum.HorizontalAlignment.Left,
+			Padding = UDim.new(0, px(4)),
+			SortOrder = Enum.SortOrder.LayoutOrder,
+			VerticalAlignment = Enum.VerticalAlignment.Center,
+		}),
+		Icon = if props.Icon
+			then c("ImageLabel", {
+				BackgroundTransparency = 1,
+				Image = props.Icon,
+				LayoutOrder = 1,
+				ScaleType = Enum.ScaleType.Fit,
+				Size = UDim2.fromOffset(px(CHIP_HEIGHT - 8), px(CHIP_HEIGHT - 8)),
+			})
+			else nil,
+		Label = c("TextLabel", {
+			AutomaticSize = Enum.AutomaticSize.X,
+			BackgroundTransparency = 1,
+			FontFace = Styles.FONT_FREDOKA,
+			LayoutOrder = 2,
+			Size = UDim2.fromOffset(0, px(CHIP_HEIGHT)),
+			Text = props.Text,
+			TextColor3 = Color3.new(1, 1, 1),
+			TextSize = px(15),
+			TextStrokeColor3 = props.Color:Lerp(Color3.new(0, 0, 0), 0.3),
+			TextStrokeTransparency = 0.5,
+		}),
+	})
+end
+
 local function QuestRow(props: {
 	index: number,
 	quest: QuestEntry,
@@ -238,78 +298,52 @@ local function QuestRow(props: {
 	local quest = props.quest
 	local actionWidth = px(ACTION_WIDTH)
 	local actionHeight = px(ACTION_HEIGHT)
-	local sideWidth = actionWidth + px(8)
+	local sideWidth = actionWidth + px(12)
 	local title = QuestConfig.GetQuestTitle(quest)
-	local progress = math.clamp(quest.Progress or 0, 0, quest.Target or 1)
 	local target = math.max(1, quest.Target or 1)
+	local progress = math.clamp(quest.Progress or 0, 0, target)
 	local progressFraction = math.clamp(progress / target, 0, 1)
-	local rewardText = if quest.RewardCapsule ~= nil
-		then "+1 Pet Capsule"
-		else string.format("+%d BB · +%d XP", quest.RewardBobaBucks or 0, quest.RewardXP or 0)
+	local isClaimable = quest.Completed and not quest.Claimed
 
-	local topRow = c("Frame", {
-		LayoutOrder = 1,
-		AutomaticSize = Enum.AutomaticSize.Y,
-		BackgroundTransparency = 1,
-		Size = UDim2.fromScale(1, 0),
-	}, {
-		Title = c("TextLabel", {
-			AnchorPoint = Vector2.new(0, 0),
-			AutomaticSize = Enum.AutomaticSize.Y,
-			BackgroundTransparency = 1,
-			FontFace = Styles.FONT_FREDOKA,
-			Position = UDim2.fromScale(0, 0),
-			Size = UDim2.new(1, -(px(110) + px(8)), 0, 0),
-			Text = title,
-			TextColor3 = Styles.GREEN_DEEP,
-			TextSize = px(18),
-			TextWrapped = true,
-			TextXAlignment = Enum.TextXAlignment.Left,
-		}),
+	local rewardChips = {}
+	if quest.RewardCapsule ~= nil then
+		rewardChips.Capsule = c(RewardChip, {
+			Text = "+1 Pet Capsule",
+			Icon = CAPSULE_ICON,
+			Color = Styles.GOLD_MID,
+			LayoutOrder = 1,
+		})
+	else
+		rewardChips.Bucks = c(RewardChip, {
+			Text = `+{quest.RewardBobaBucks or 0}`,
+			Icon = BUCKS_ICON,
+			Color = Styles.GOLD_MID,
+			LayoutOrder = 1,
+		})
+		rewardChips.XP = c(RewardChip, {
+			Text = `+{quest.RewardXP or 0} XP`,
+			Color = Styles.GREEN_LIGHT,
+			LayoutOrder = 2,
+		})
+	end
 
-		RewardPill = c("Frame", {
-			AnchorPoint = Vector2.new(1, 0),
-			BackgroundColor3 = Styles.GOLD_MID,
-			BackgroundTransparency = 0.2,
-			BorderSizePixel = 0,
-			Position = UDim2.fromScale(1, 0),
-			Size = UDim2.fromOffset(px(110), px(24)),
-		}, {
-			Corner = c("UICorner", { CornerRadius = UDim.new(0.5, 0) }),
-			Stroke = c("UIStroke", {
-				Color = Styles.GOLD_DEEP,
-				Thickness = 1,
-				Transparency = 0.4,
-			}),
-			Label = c("TextLabel", {
-				AnchorPoint = Vector2.new(0.5, 0.5),
-				BackgroundTransparency = 1,
-				FontFace = Styles.FONT_FREDOKA,
-				Position = UDim2.fromScale(0.5, 0.5),
-				Size = UDim2.fromScale(0.9, 0.8),
-				Text = rewardText,
-				TextColor3 = Styles.GOLD_DEEP,
-				TextScaled = true,
-				TextXAlignment = Enum.TextXAlignment.Center,
-			}, {
-				TextSizeConstraint = c("UITextSizeConstraint", { MaxTextSize = px(14) }),
-			}),
-		}),
-	})
-
-	local actionElement
-	if quest.Claimed then
-		actionElement = c("TextLabel", {
+	local function statusLabel(text: string, color: Color3)
+		return c("TextLabel", {
 			AnchorPoint = Vector2.new(1, 0.5),
 			BackgroundTransparency = 1,
 			FontFace = Styles.FONT_FREDOKA,
 			Position = UDim2.fromScale(1, 0.5),
 			Size = UDim2.fromOffset(actionWidth, actionHeight),
-			Text = "Claimed",
-			TextColor3 = Styles.GRAY,
+			Text = text,
+			TextColor3 = color,
 			TextSize = px(18),
 			TextXAlignment = Enum.TextXAlignment.Center,
 		})
+	end
+
+	local actionElement
+	if quest.Claimed then
+		actionElement = statusLabel("Claimed", Styles.GREEN)
 	elseif quest.Completed then
 		actionElement = c(QuestActionButton, {
 			Text = "Claim",
@@ -321,17 +355,7 @@ local function QuestRow(props: {
 			end,
 		})
 	elseif props.showReroll == false then
-		actionElement = c("TextLabel", {
-			AnchorPoint = Vector2.new(1, 0.5),
-			BackgroundTransparency = 1,
-			FontFace = Styles.FONT_FREDOKA,
-			Position = UDim2.fromScale(1, 0.5),
-			Size = UDim2.fromOffset(actionWidth, actionHeight),
-			Text = "Weekly",
-			TextColor3 = Styles.GRAY,
-			TextSize = px(18),
-			TextXAlignment = Enum.TextXAlignment.Center,
-		})
+		actionElement = statusLabel("In Progress", Styles.GRAY)
 	else
 		-- UI-REVISION: the button names its action ("20 BB" alone read like a second
 		-- reward pill) and is not GOLD (FEEDBACK-VOICE 5: gold is money/rank, not buttons).
@@ -347,61 +371,112 @@ local function QuestRow(props: {
 		})
 	end
 
-	local bottomRow = c("Frame", {
-		LayoutOrder = 2,
-		BackgroundTransparency = 1,
-		Size = UDim2.new(1, 0, 0, actionHeight),
-	}, {
-		ProgressBar = c("Frame", {
-			AnchorPoint = Vector2.new(0, 0.5),
-			BackgroundColor3 = Styles.GRAY,
-			BorderSizePixel = 0,
-			Position = UDim2.fromScale(0, 0.5),
-			Size = UDim2.new(1, -sideWidth, 0, px(24)),
-		}, {
-			Corner = c("UICorner", { CornerRadius = UDim.new(0.5, 0) }),
-			Fill = c("Frame", {
-				BackgroundColor3 = if quest.Completed then Styles.GREEN else Styles.GREEN_LIGHT,
-				BorderSizePixel = 0,
-				Size = UDim2.fromScale(progressFraction, 1),
-			}, {
-				Corner = c("UICorner", { CornerRadius = UDim.new(0.5, 0) }),
-			}),
-			Label = c("TextLabel", {
-				AnchorPoint = Vector2.new(0.5, 0.5),
-				BackgroundTransparency = 1,
-				FontFace = Styles.FONT_FREDOKA,
-				Position = UDim2.fromScale(0.5, 0.5),
-				Size = UDim2.fromScale(1, 1),
-				Text = string.format("%d / %d", progress, target),
-				TextColor3 = Styles.OFFWHITE,
-				TextSize = px(15),
-				TextStrokeColor3 = Color3.new(0, 0, 0),
-				TextStrokeTransparency = 0.5,
-				ZIndex = 2,
-			}),
-		}),
-
-		Action = actionElement,
-	})
-
 	return c("Frame", {
 		LayoutOrder = props.order or props.index * 2,
 		AutomaticSize = Enum.AutomaticSize.Y,
-		BackgroundTransparency = 1,
+		BackgroundColor3 = Styles.OFFWHITE,
+		BackgroundTransparency = if quest.Claimed then 0.4 else 0,
+		BorderSizePixel = 0,
 		Size = UDim2.fromScale(1, 0),
 	}, {
+		Corner = c("UICorner", { CornerRadius = Styles.CORNER_CARD }),
+		Stroke = c("UIStroke", {
+			Color = if isClaimable then Styles.GREEN else Styles.GREEN_LIGHT,
+			Thickness = if isClaimable then 3 else 2,
+			Transparency = if quest.Claimed then 0.5 else 0,
+		}),
 		Padding = c("UIPadding", {
-			PaddingTop = UDim.new(0, px(8)),
-			PaddingBottom = UDim.new(0, px(8)),
+			PaddingTop = UDim.new(0, px(10)),
+			PaddingBottom = UDim.new(0, px(10)),
+			PaddingLeft = UDim.new(0, px(12)),
+			PaddingRight = UDim.new(0, px(12)),
 		}),
-		Layout = c("UIListLayout", {
-			FillDirection = Enum.FillDirection.Vertical,
-			Padding = UDim.new(0, px(4)),
-			SortOrder = Enum.SortOrder.LayoutOrder,
+		Info = c("Frame", {
+			AutomaticSize = Enum.AutomaticSize.Y,
+			BackgroundTransparency = 1,
+			Size = UDim2.new(1, -sideWidth, 0, 0),
+		}, {
+			Layout = c("UIListLayout", {
+				FillDirection = Enum.FillDirection.Vertical,
+				Padding = UDim.new(0, px(6)),
+				SortOrder = Enum.SortOrder.LayoutOrder,
+			}),
+			Title = c("TextLabel", {
+				AutomaticSize = Enum.AutomaticSize.Y,
+				BackgroundTransparency = 1,
+				FontFace = Styles.FONT_FREDOKA,
+				LayoutOrder = 1,
+				Size = UDim2.fromScale(1, 0),
+				Text = title,
+				TextColor3 = Styles.GREEN_DEEP,
+				TextSize = px(20),
+				TextWrapped = true,
+				TextXAlignment = Enum.TextXAlignment.Left,
+			}),
+			ProgressBar = c("Frame", {
+				BackgroundColor3 = Styles.GRAY,
+				BorderSizePixel = 0,
+				LayoutOrder = 2,
+				Size = UDim2.new(1, 0, 0, px(22)),
+			}, {
+				Corner = c("UICorner", { CornerRadius = Styles.CORNER_FULL }),
+				Fill = c("Frame", {
+					BackgroundColor3 = if quest.Completed then Styles.GREEN else Styles.GREEN_LIGHT,
+					BorderSizePixel = 0,
+					Size = UDim2.fromScale(progressFraction, 1),
+				}, {
+					Corner = c("UICorner", { CornerRadius = Styles.CORNER_FULL }),
+				}),
+				Label = c("TextLabel", {
+					BackgroundTransparency = 1,
+					FontFace = Styles.FONT_FREDOKA,
+					Size = UDim2.fromScale(1, 1),
+					Text = string.format("%d / %d", progress, target),
+					TextColor3 = Styles.OFFWHITE,
+					TextSize = px(15),
+					TextStrokeColor3 = Color3.new(0, 0, 0),
+					TextStrokeTransparency = 0.5,
+					ZIndex = 2,
+				}),
+			}),
+			Rewards = c("Frame", {
+				BackgroundTransparency = 1,
+				LayoutOrder = 3,
+				Size = UDim2.new(1, 0, 0, px(CHIP_HEIGHT)),
+			}, {
+				Layout = c("UIListLayout", {
+					FillDirection = Enum.FillDirection.Horizontal,
+					Padding = UDim.new(0, px(6)),
+					SortOrder = Enum.SortOrder.LayoutOrder,
+				}),
+				Chips = c(React.Fragment, nil, rewardChips),
+			}),
 		}),
-		Top = topRow,
-		Bottom = bottomRow,
+		Action = c("Frame", {
+			AnchorPoint = Vector2.new(1, 0.5),
+			BackgroundTransparency = 1,
+			Position = UDim2.fromScale(1, 0.5),
+			Size = UDim2.fromOffset(actionWidth, actionHeight),
+		}, {
+			Action = actionElement,
+		}),
+	})
+end
+
+local function SectionHeader(props: { Text: string, LayoutOrder: number })
+	local px = usePx()
+	return c("TextLabel", {
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundTransparency = 1,
+		FontFace = Styles.FONT_FREDOKA,
+		LayoutOrder = props.LayoutOrder,
+		Size = UDim2.fromScale(1, 0),
+		Text = props.Text,
+		TextColor3 = Styles.GREEN,
+		TextSize = px(24),
+		TextXAlignment = Enum.TextXAlignment.Left,
+	}, {
+		Padding = c("UIPadding", { PaddingLeft = UDim.new(0, px(4)) }),
 	})
 end
 
@@ -531,10 +606,29 @@ local function QuestCardBody(props: {
 			setIsActing(false)
 			if ok and success == false and err == "InsufficientFunds" then
 				pcall(function()
-					local dialogController = Knit.GetController("DialogController")
-					if dialogController and dialogController.Toast then
-						dialogController:Toast("Not enough Boba Bucks to reroll!")
+					-- Offer the free daily reroll only to players who do not already own Star Employee.
+					local ownsOk, owns = pcall(function()
+						return GamepassUtil:PlayerOwnsPassAsync(Players.LocalPlayer, QuestConfig.FREE_REROLL_PASS)
+					end)
+					local extraButton = nil
+					if ownsOk and owns ~= true then
+						extraButton = {
+							Text = "Free daily reroll with Star Employee",
+							OnClick = function()
+								pcall(function()
+									MarketplaceService:PromptGamePassPurchase(
+										Players.LocalPlayer,
+										QuestConfig.FREE_REROLL_PASS
+									)
+								end)
+							end,
+						}
 					end
+					BobaBucksShortfall.Prompt({
+						Price = QuestConfig.REROLL_COST_BOBABUCKS,
+						What = "a reroll",
+						ExtraButton = extraButton,
+					})
 				end)
 			end
 			setFreeRerolls(checkFreeRerolls())
@@ -587,16 +681,10 @@ local function QuestCardBody(props: {
 	local isEmpty = RunService:IsRunning() and #quests == 0
 
 	local questItems = {}
+	if props.Embedded and #quests > 0 then
+		questItems.DailyHeader = c(SectionHeader, { Text = "Daily Quests", LayoutOrder = 0 })
+	end
 	for index, quest in quests do
-		if index > 1 then
-			questItems["Divider_" .. index] = c("Frame", {
-				LayoutOrder = index * 2 - 1,
-				BackgroundColor3 = Styles.GRAY,
-				BackgroundTransparency = 0.5,
-				BorderSizePixel = 0,
-				Size = UDim2.new(1, 0, 0, 1),
-			})
-		end
 		questItems["Quest_" .. index] = c(QuestRow, {
 			index = index,
 			quest = quest,
@@ -611,25 +699,8 @@ local function QuestCardBody(props: {
 	-- cannot be rerolled, so the reroll button is replaced with a label.
 	local WEEKLY_ORDER_BASE = 1000
 	if #weeklyQuests > 0 then
-		questItems["WeeklyHeader"] = c("TextLabel", {
-			LayoutOrder = WEEKLY_ORDER_BASE,
-			AutomaticSize = Enum.AutomaticSize.Y,
-			BackgroundTransparency = 1,
-			FontFace = Styles.FONT_FREDOKA,
-			Size = UDim2.fromScale(1, 0),
-			Text = "Weekly Quests",
-			TextColor3 = Styles.GREEN_DEEP,
-			TextSize = px(20),
-			TextXAlignment = Enum.TextXAlignment.Left,
-		})
+		questItems["WeeklyHeader"] = c(SectionHeader, { Text = "Weekly Quests", LayoutOrder = WEEKLY_ORDER_BASE })
 		for index, quest in weeklyQuests do
-			questItems["WDivider_" .. index] = c("Frame", {
-				LayoutOrder = WEEKLY_ORDER_BASE + index * 2 - 1,
-				BackgroundColor3 = Styles.GRAY,
-				BackgroundTransparency = 0.5,
-				BorderSizePixel = 0,
-				Size = UDim2.new(1, 0, 0, 1),
-			})
 			questItems["WQuest_" .. index] = c(QuestRow, {
 				index = index,
 				order = WEEKLY_ORDER_BASE + index * 2,
@@ -644,14 +715,14 @@ local function QuestCardBody(props: {
 	end
 
 	questItems.Padding = c("UIPadding", {
-		PaddingTop = UDim.new(0, px(6)),
-		PaddingBottom = UDim.new(0, px(8)),
-		PaddingLeft = UDim.new(0, px(8)),
-		PaddingRight = UDim.new(0, px(8)),
+		PaddingTop = UDim.new(0, px(4)),
+		PaddingBottom = UDim.new(0, px(12)),
+		PaddingLeft = UDim.new(0, px(6)),
+		PaddingRight = UDim.new(0, px(12)),
 	})
 	questItems.Layout = c("UIListLayout", {
 		FillDirection = Enum.FillDirection.Vertical,
-		Padding = UDim.new(0, px(6)),
+		Padding = UDim.new(0, px(10)),
 		SortOrder = Enum.SortOrder.LayoutOrder,
 	})
 

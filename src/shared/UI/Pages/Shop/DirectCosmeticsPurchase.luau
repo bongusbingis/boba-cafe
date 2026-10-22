@@ -13,6 +13,7 @@ local Styles = require(UI.Styles)
 ---> components
 local InventoryItemDefinitions = require(Shared.Configuration.InventoryItemDefinitions)
 local NametagCard = require(UI.Components.Buttons.NametagCard)
+local BobaBucksShortfall = require(UI.Utility.BobaBucksShortfall)
 
 ---> private
 local c = React.createElement
@@ -102,6 +103,10 @@ return function()
 							Knit.GetService("CapsuleService")
 								:PurchaseDeterministicNametag(name)
 								:andThen(function(ok, reason)
+									if not ok and reason == "InsufficientFunds" then
+										BobaBucksShortfall.Prompt({ Price = entry.Price, What = "that nametag" })
+										return
+									end
 									local result = Controller.new("ButtonPrompt", {
 										Title = if ok then "Purchase Complete" else "Purchase Unavailable",
 										Text = if ok
@@ -109,6 +114,9 @@ return function()
 											elseif
 												reason == "RefundPending"
 											then "Your purchase failed and the refund could not be issued automatically. Please contact support."
+											elseif
+												reason == "InventoryFull"
+											then "Your inventory is full. Make some room and try again."
 											else "The purchase could not be completed. Please try again.",
 										Buttons = { { Text = "Close", Color = Styles.GREEN } },
 									})

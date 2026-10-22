@@ -377,6 +377,18 @@ for name: string, color: Color3 in Recipes.Tapioca do
 				0,
 			},
 			{
+				"SetToolHoldingProperty",
+				"BobaBalls",
+				"Color",
+				color,
+			},
+			{
+				"SetToolHoldingProperty",
+				"BobaBalls",
+				"Transparency",
+				0,
+			},
+			{
 				"RenameToolHolding",
 				function(old: string)
 					-- "Milk + [Flavor] Syrup" or "[Flavor] Milk" ---> "[Flavor] Boba"

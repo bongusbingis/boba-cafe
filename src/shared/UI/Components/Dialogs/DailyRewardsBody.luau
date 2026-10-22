@@ -17,6 +17,7 @@ local DailyRewardConfig = require(Shared.Configuration.DailyRewardConfig)
 local PromptButton = require(UI.Components.Buttons.PromptButton)
 local ShopItem = require(UI.Components.Buttons.ShopItem)
 local usePx = require(UI.Hooks.usePx)
+local PassUpsell = require(UI.Utility.PassUpsell)
 
 local c = React.createElement
 
@@ -49,6 +50,10 @@ local function DailyRewardsBody(props: { Status: { [string]: any }? })
 	local px = usePx()
 	local status, setStatus = React.useState(props.Status)
 	local isClaiming, setIsClaiming = React.useState(false)
+	-- UPSELL lane 2: the VIP line shows only after a claim made in this dialog.
+	local justClaimed, setJustClaimed = React.useState(false)
+	local vipClicked, setVipClicked = React.useState(false)
+	local vipPrice = PassUpsell.usePrice(PassUpsell.VIP)
 
 	-- Sync status if props.Status changes
 	React.useEffect(function()
@@ -185,6 +190,7 @@ local function DailyRewardsBody(props: { Status: { [string]: any }? })
 
 			if promiseOk and claimOk then
 				playUiSound("Success")
+				setJustClaimed(true)
 
 				setStatus(function(prev)
 					local prevStatus = prev or currentStatus
@@ -293,6 +299,16 @@ local function DailyRewardsBody(props: { Status: { [string]: any }? })
 		SortOrder = Enum.SortOrder.LayoutOrder,
 	})
 
+	-- The claimed day is the streak position (1-7); its reward is the value the row shows.
+	local claimedDay = if streak > 0 then ((streak - 1) % 7) + 1 else nil
+	local claimedReward = if claimedDay then DailyRewardConfig.REWARDS[claimedDay] else nil
+	local showVipUpsell = justClaimed
+		and not canClaim
+		and not isVIP
+		and not vipClicked
+		and vipPrice ~= nil
+		and claimedReward ~= nil
+
 	local hintText = if isVIP then `{subtitleText} • 2x VIP` else subtitleText
 
 	local rewardsTab = c("Frame", {
@@ -330,8 +346,22 @@ local function DailyRewardsBody(props: { Status: { [string]: any }? })
 			ScrollBarImageColor3 = Color3.new(),
 			ScrollBarThickness = 5,
 			ScrollingDirection = Enum.ScrollingDirection.Y,
-			Size = UDim2.fromScale(1, 0.64),
+			Size = if showVipUpsell then UDim2.new(1, 0, 0.64, -px(BUTTON_HEIGHT - 4)) else UDim2.fromScale(1, 0.64),
 		}, rows),
+
+		VipUpsell = if showVipUpsell
+			then c(PassUpsell.Row, {
+				Text = `VIP would have given you {DailyRewardConfig.VIP_MULTIPLIER}x ({claimedReward.BobaBucks} BB)`,
+				ButtonText = `Get VIP {PassUpsell.PriceText(vipPrice)}`,
+				AnchorPoint = Vector2.new(0.5, 1),
+				Position = UDim2.new(0.5, 0, 0.98, -(px(BUTTON_HEIGHT) + px(6))),
+				Size = UDim2.new(0.94, 0, 0, px(BUTTON_HEIGHT - 6)),
+				OnClick = function()
+					setVipClicked(true)
+					PassUpsell.Prompt(PassUpsell.VIP)
+				end,
+			})
+			else nil,
 
 		BottomBar = c("Frame", {
 			AnchorPoint = Vector2.new(0.5, 1),

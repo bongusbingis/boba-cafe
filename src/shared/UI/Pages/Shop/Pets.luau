@@ -5,13 +5,14 @@ local UI = Shared:WaitForChild("UI")
 
 ---> dependencies
 local React = require(Packages.React)
+local Knit = require(Packages.Knit)
 
 ---> components
 local CapsuleTierGroup = require(UI.Components.CapsuleTierGroup)
 local InventoryItemDefinitions = require(Shared.Configuration.InventoryItemDefinitions)
-local Pane = require(UI.Components.Pane)
 local PetCard = require(UI.Components.Buttons.PetCard)
 local ShopCard = require(UI.Components.Buttons.ShopCard)
+local BobaBucksShortfall = require(UI.Utility.BobaBucksShortfall)
 local usePx = require(UI.Hooks.usePx)
 
 ---> styles
@@ -22,14 +23,73 @@ local c = React.createElement
 local pets = InventoryItemDefinitions.Pets
 
 ---> constants
-local TIER_ORDER = { "Basic", "Uncommon", "Rare", "Epic", "Legendary", "Special" }
+local TIER_ORDER = { "Basic", "Uncommon", "Rare", "Epic", "Legendary" }
 local PET_CELL_SIZE = 90
 
 ---> public
 return function()
 	local px = usePx()
+	local policyState, setPolicyState = React.useState("loading" :: "loading" | "allowed" | "restricted")
 
-	local tierGroups = {}
+	React.useEffect(function()
+		local alive = true
+		Knit.GetService("CapsuleService")
+			:GetPaidRandomPolicy()
+			:andThen(function(ok, restricted)
+				if alive then
+					setPolicyState(if ok and restricted == false then "allowed" else "restricted")
+				end
+			end)
+			:catch(function()
+				if alive then
+					setPolicyState("allowed")
+				end
+			end)
+		return function()
+			alive = false
+		end
+	end, {})
+
+	local function promptPetPurchase(capsuleName: string, priceStr: string)
+		local DialogController = Knit.GetController("DialogController")
+		local prompt = DialogController.new("ButtonPrompt", {
+			Title = `Buy {capsuleName}`,
+			Text = `Buy {capsuleName} for {priceStr}?`,
+			Buttons = {
+				{ Text = "Buy", Color = Styles.GREEN },
+				{ Text = "Cancel", Color = Styles.RED },
+			},
+		})
+		prompt:Fire():andThen(function(choice)
+			if choice ~= "Buy" then
+				return
+			end
+			Knit.GetService("CapsuleService"):PurchasePetCapsule(capsuleName):andThen(function(ok, reason)
+				if not ok and reason == "InsufficientFunds" then
+					BobaBucksShortfall.Prompt({ Price = priceStr, What = capsuleName })
+					return
+				end
+				local result = DialogController.new("ButtonPrompt", {
+					Title = if ok then "Purchase Complete" else "Purchase Unavailable",
+					Text = if ok
+						then `{capsuleName} was added to your inventory! Go to Inventory > Capsules to hatch it.`
+						elseif reason == "InventoryFull" then "Your inventory is full. Make some room and try again."
+						else "The purchase could not be completed. Please try again.",
+					Buttons = { { Text = "Close", Color = Styles.GREEN } },
+				})
+				result:Fire()
+			end)
+		end)
+	end
+
+	local tierGroups = {
+		UIListLayout = c("UIListLayout", {
+			FillDirection = Enum.FillDirection.Vertical,
+			HorizontalAlignment = Enum.HorizontalAlignment.Center,
+			Padding = UDim.new(0, 16),
+			SortOrder = Enum.SortOrder.LayoutOrder,
+		}),
+	}
 	for i, tierName in ipairs(TIER_ORDER) do
 		local items = {}
 		local onSaleIndex = 0
@@ -68,88 +128,98 @@ return function()
 		end
 	end
 
-	table.insert(
-		tierGroups,
-		c("Frame", {
-			BackgroundTransparency = 1,
-			Size = UDim2.fromScale(1, 0.25),
-			LayoutOrder = math.huge,
-		})
-	)
+	tierGroups["BottomSpacer"] = c("Frame", {
+		BackgroundTransparency = 1,
+		Size = UDim2.new(1, 0, 0, 30),
+		LayoutOrder = 9999,
+	})
 
-	local capsules = {}
+	local capsuleChildren = {
+		UIListLayout = c("UIListLayout", {
+			FillDirection = Enum.FillDirection.Horizontal,
+			HorizontalAlignment = Enum.HorizontalAlignment.Center,
+			VerticalAlignment = Enum.VerticalAlignment.Center,
+			HorizontalFlex = Enum.UIFlexAlignment.SpaceBetween,
+			Padding = UDim.new(0, 20),
+			SortOrder = Enum.SortOrder.LayoutOrder,
+		}),
+	}
 	for k, capsule in ipairs(pets.Capsules) do
 		local isMiddle = k == 2
-		table.insert(
-			capsules,
-			c(ShopCard, {
-				Name = capsule.Name,
-				Price = capsule.Price,
-				Image = capsule.Image,
-				ImageSize = UDim2.fromScale(1, 1),
-				Size = isMiddle and UDim2.fromScale(1, 1) or UDim2.fromScale(0.875, 0.875),
-			})
-		)
+		capsuleChildren[`capsule_{k}`] = c(ShopCard, {
+			Name = capsule.Name,
+			Price = capsule.Price,
+			Image = capsule.Image,
+			ImageSize = UDim2.fromScale(1, 1),
+			Size = isMiddle and UDim2.fromScale(1, 1) or UDim2.fromScale(0.875, 0.875),
+			LayoutOrder = k,
+			OnClick = if policyState == "allowed"
+				then function()
+					promptPetPurchase(capsule.Name, `{capsule.Price} Boba Bucks`)
+				end
+				else nil,
+		})
 	end
 
 	return c("ScrollingFrame", {
-		BackgroundTransparency = 1,
-		Size = UDim2.fromScale(1, 1),
+		Active = true,
 		AutomaticCanvasSize = Enum.AutomaticSize.Y,
-		CanvasSize = UDim2.fromScale(0.9, 3),
+		BackgroundTransparency = 1,
+		CanvasSize = UDim2.new(),
+		ScrollBarImageColor3 = Color3.new(),
+		ScrollBarThickness = 5,
+		ScrollingDirection = Enum.ScrollingDirection.Y,
+		Size = UDim2.fromScale(1, 1),
 	}, {
+		ListLayout = c("UIListLayout", {
+			FillDirection = Enum.FillDirection.Vertical,
+			HorizontalAlignment = Enum.HorizontalAlignment.Center,
+			Padding = UDim.new(0, 14),
+			SortOrder = Enum.SortOrder.LayoutOrder,
+		}),
+
+		Padding = c("UIPadding", {
+			PaddingTop = UDim.new(0, 8),
+			PaddingBottom = UDim.new(0, 24),
+			PaddingLeft = UDim.new(0.02, 0),
+			PaddingRight = UDim.new(0.02, 0),
+		}),
+
 		Title = c("TextLabel", {
-			AnchorPoint = Vector2.new(0.5, 0),
 			BackgroundTransparency = 1,
 			FontFace = Styles.FONT_FREDOKA,
-			Position = UDim2.fromScale(0.470149, 0),
-			Size = UDim2.fromScale(0.94, 0.09),
+			LayoutOrder = 1,
+			Size = UDim2.new(0.94, 0, 0, 38),
 			Text = "Pets",
 			TextColor3 = Styles.GREEN,
 			TextScaled = true,
 		}),
 
 		Hint = c("TextLabel", {
-			AnchorPoint = Vector2.new(0.5, 0),
 			BackgroundTransparency = 1,
 			FontFace = Styles.FONT_FREDOKA,
-			Position = UDim2.fromScale(0.5, 0.095),
-			Size = UDim2.fromScale(0.94, 0.085),
-			Text = "Open capsules to hatch your own pets. Each capsule contains a random pet!",
-			TextColor3 = Styles.GRAY,
+			LayoutOrder = 2,
+			Size = UDim2.new(0.94, 0, 0, 24),
+			Text = if policyState == "restricted"
+				then "Random capsule purchases are unavailable for this account."
+				else "Open capsules to hatch your own pets. Each capsule contains a random pet!",
+			TextColor3 = if policyState == "restricted" then Styles.RED else Styles.GRAY,
 			TextScaled = true,
 		}),
 
-		CapsulePurchaseRow = c(Pane, {
-			ClassName = "Frame",
-			Native = {
+		CapsulePurchaseRow = if policyState == "allowed"
+			then c("Frame", {
 				BackgroundTransparency = 1,
-				Size = UDim2.fromScale(0.8, 0.25),
-				Position = UDim2.fromScale(0.475, 0.2),
-				AnchorPoint = Vector2.new(0.5, 0),
-			},
-			ListLayout = {
-				FillDirection = Enum.FillDirection.Horizontal,
-				HorizontalAlignment = Enum.HorizontalAlignment.Center,
-				VerticalAlignment = Enum.VerticalAlignment.Center,
-				HorizontalFlex = Enum.UIFlexAlignment.SpaceBetween,
-				Padding = UDim.new(0, 20),
-			},
-		}, capsules),
+				LayoutOrder = 3,
+				Size = UDim2.new(0.85, 0, 0, 140),
+			}, capsuleChildren)
+			else nil,
 
-		Grid = c(Pane, {
-			ClassName = "Frame",
-			ListLayout = {
-				FillDirection = Enum.FillDirection.Vertical,
-				HorizontalAlignment = Enum.HorizontalAlignment.Center,
-				Padding = UDim.new(0, 20),
-			},
-			Native = {
-				BackgroundTransparency = 1,
-				Position = UDim2.fromScale(0, 0.475),
-				Size = UDim2.fromScale(1, 0),
-				AutomaticSize = Enum.AutomaticSize.Y,
-			},
+		Grid = c("Frame", {
+			BackgroundTransparency = 1,
+			LayoutOrder = 4,
+			Size = UDim2.fromScale(1, 0),
+			AutomaticSize = Enum.AutomaticSize.Y,
 		}, tierGroups),
 	})
 end

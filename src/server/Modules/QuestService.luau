@@ -16,15 +16,6 @@ local DATA_TIMEOUT_SECONDS = 10
 local HALFWAY_MIN_TARGET = 4
 local questLocks: { [number]: boolean } = {}
 
--- Ensure legacy / off-sale More Quests pass is registered on GamepassUtil
-if (GamepassUtil :: any).Gamepasses and not (GamepassUtil :: any).Gamepasses[12385834] then
-	(GamepassUtil :: any).Gamepasses[12385834] = {
-		Name = "More Quests",
-		Description = "Get +1 daily quest slot!",
-		Icon = "",
-	}
-end
-
 local QuestService = Knit.CreateService({
 	Name = "QuestService",
 	Client = {

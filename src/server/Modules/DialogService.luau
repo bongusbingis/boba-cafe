@@ -140,6 +140,14 @@ function DialogService:Notify(player: Player, notification: any, description: st
 	self.Client.NotificationSignal:Fire(player, payload)
 end
 
+--[=[
+	Asks one client to open Shop on a tab (e.g. "Currency"). Only call this after the
+	player's own click on a dialog button; never as an unprompted pop-up.
+]=]
+function DialogService:OpenShop(player: Player, pageKey: string?)
+	self.Client.DialogSignal:Fire(player, "OpenShop", pageKey or "Currency")
+end
+
 DialogService.FormatBrackets = formatBrackets
 
 return DialogService

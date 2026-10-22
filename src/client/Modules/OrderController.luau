@@ -7,6 +7,7 @@
 
 ---> Services
 
+local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -17,6 +18,7 @@ local Packages = ReplicatedStorage:WaitForChild("Packages")
 local Knit = require(Packages.Knit)
 local GoodSignal = require(Packages.GoodSignal)
 local UiSfx = require(ReplicatedStorage:WaitForChild("Shared").UI.Utility.UiSfx)
+local Styles = require(ReplicatedStorage:WaitForChild("Shared").UI.Styles)
 local WorldPath = require(ReplicatedStorage:WaitForChild("Shared").Utility.WorldPath)
 
 ---> Controller
@@ -28,23 +30,105 @@ local OrderController = Knit.CreateController({
 local LocalPlayer = Players.LocalPlayer
 
 local PlayerBeams = {}
-local Highlights = {}
 local DepositWatchers: { [Instance]: RBXScriptConnection } = {} -- node -> owner watcher while its deposit prompt is on
 
-OrderController.CurrentOrder = nil :: { any }?
-OrderController.Ticket = nil :: { [string]: any }? -- the NPC ticket from CustomerService
-OrderController.Tickets = {} :: { { [string]: any } } -- up to 2 NPC tickets, ordered by Slot
+-- Direct-handoff beam: points the preparing barista at their ordering customer
+-- while the server reports them in direct range. It never reads the
+-- station-hints setting, so it shows even with hints disabled.
+local HANDOFF_BEAM_NAME = "RealOrderHandoffBeam"
+local HANDOFF_BEAM_WIDTH = 0.35
+local HANDOFF_BEAM_TRANSPARENCY = 0.35
+local HANDOFF_BEAM_POLL_SECONDS = 0.25
+
+local HandoffTargetUserId: number? = nil
+local HandoffBeam: Beam? = nil
+local HandoffAttachments: { Attachment } = {}
+
+local function characterRoot(character: Model?): BasePart?
+	if character == nil then
+		return nil
+	end
+	local root = character:FindFirstChild("HumanoidRootPart")
+	if root and root:IsA("BasePart") then
+		return root
+	end
+	return nil
+end
+
+local function clearHandoffBeam()
+	local beam = HandoffBeam
+	if beam then
+		beam.Enabled = false
+		beam.Attachment0 = nil
+		beam.Attachment1 = nil
+	end
+	for _, attachment in HandoffAttachments do
+		attachment:Destroy()
+	end
+	table.clear(HandoffAttachments)
+end
+
+-- Re-resolves both ends every poll so respawns and deaths re-hook
+-- automatically; a missing end only hides the beam until it is back.
+local function updateHandoffBeam()
+	local customer = if HandoffTargetUserId ~= nil then Players:GetPlayerByUserId(HandoffTargetUserId) else nil
+	local myRoot = characterRoot(LocalPlayer.Character)
+	local theirRoot = if customer ~= nil then characterRoot(customer.Character) else nil
+	if myRoot == nil or theirRoot == nil then
+		clearHandoffBeam()
+		return
+	end
+	local beam = HandoffBeam
+	if beam == nil or beam.Parent == nil then
+		clearHandoffBeam()
+		beam = Instance.new("Beam")
+		beam.Name = HANDOFF_BEAM_NAME
+		beam.Color = ColorSequence.new(Styles.GOLD)
+		beam.Width0 = HANDOFF_BEAM_WIDTH
+		beam.Width1 = HANDOFF_BEAM_WIDTH
+		beam.Transparency = NumberSequence.new(HANDOFF_BEAM_TRANSPARENCY)
+		beam.FaceCamera = true
+		beam.LightEmission = 0.5
+		beam.Segments = 20
+		beam.Parent = workspace
+		HandoffBeam = beam
+	end
+	local from = HandoffAttachments[1]
+	if from == nil or from.Parent ~= myRoot then
+		if from ~= nil then
+			from:Destroy()
+		end
+		from = Instance.new("Attachment")
+		from.Parent = myRoot
+		HandoffAttachments[1] = from
+	end
+	local to = HandoffAttachments[2]
+	if to == nil or to.Parent ~= theirRoot then
+		if to ~= nil then
+			to:Destroy()
+		end
+		to = Instance.new("Attachment")
+		to.Parent = theirRoot
+		HandoffAttachments[2] = to
+	end
+	beam.Attachment0 = from
+	beam.Attachment1 = to
+	beam.Enabled = true
+end
+
+-- The active ticket (slot 1). NPC and real-player orders are both tickets from
+-- CustomerService (a real one has Real = true); kitchen guidance reads this.
+OrderController.CurrentOrder = nil :: { [string]: any }?
+OrderController.Ticket = nil :: { [string]: any }? -- same as CurrentOrder
+OrderController.Tickets = {} :: { { [string]: any } } -- up to 2 tickets, ordered by Slot
 OrderController._ticketsById = {} :: { [string]: { [string]: any } }
-OrderController._notepadOrder = nil :: { any }? -- a real-player order wins over the ticket
 OrderController.ReadyNode = nil :: Instance?
-OrderController.QueuePosition = nil :: number? -- nil = not queued, 1 = next up
 OrderController.ActiveNpcOrder = nil :: { [string]: any }?
 
 OrderController.OrderChanged = GoodSignal.new()
 OrderController.TicketsChanged = GoodSignal.new() -- fires(tickets: { ticket })
 OrderController.ReadyNodeChanged = GoodSignal.new()
 OrderController.AnnouncementReceived = GoodSignal.new()
-OrderController.QueueChanged = GoodSignal.new() -- fires(position: number?)
 OrderController.OpenOrderingRequested = GoodSignal.new() -- fires(npcOrderData: any)
 OrderController.CloseOrderingRequested = GoodSignal.new() -- fires()
 
@@ -65,23 +149,45 @@ local function getPickupBeam(): Beam?
 	return nil
 end
 
+-- DEC-059: the counter Take Order prompt on a real customer. The server keeps it
+-- Enabled; this client shows it only to clocked-in baristas other than the customer,
+-- and only to the lock holder while a barista is taking the order. Presentation only.
+local COUNTER_PROMPT_TAG = "CounterOrderPrompt"
+
+local function refreshCounterPrompt(prompt: Instance)
+	if not prompt:IsA("ProximityPrompt") then
+		return
+	end
+	local customerId = prompt:GetAttribute("CustomerUserId")
+	local takerId = prompt:GetAttribute("TakerUserId")
+	prompt.Enabled = customerId ~= LocalPlayer.UserId
+		and LocalPlayer:GetAttribute("ClockedIn") == true
+		and (takerId == nil or takerId == 0 or takerId == LocalPlayer.UserId)
+end
+
+local function watchCounterPrompts()
+	local function onAdded(prompt: Instance)
+		refreshCounterPrompt(prompt)
+		prompt.AttributeChanged:Connect(function()
+			refreshCounterPrompt(prompt)
+		end)
+	end
+	CollectionService:GetInstanceAddedSignal(COUNTER_PROMPT_TAG):Connect(onAdded)
+	for _, prompt in CollectionService:GetTagged(COUNTER_PROMPT_TAG) do
+		onAdded(prompt)
+	end
+	LocalPlayer:GetAttributeChangedSignal("ClockedIn"):Connect(function()
+		for _, prompt in CollectionService:GetTagged(COUNTER_PROMPT_TAG) do
+			refreshCounterPrompt(prompt)
+		end
+	end)
+end
+
 ---> Lifecycle
 function OrderController:KnitStart()
 	local OrderService = Knit.GetService("OrderService")
 
-	OrderService.NotepadUpdated:Connect(function(action: string, order: { any }?)
-		if action == "SetNewOrder" then
-			self._notepadOrder = order
-			self.CurrentOrder = order
-			self.OrderChanged:Fire(order)
-		elseif action == "ResetOrder" then
-			self._notepadOrder = nil
-			self.CurrentOrder = self.Ticket
-			self.ReadyNode = nil
-			self.OrderChanged:Fire(self.CurrentOrder)
-			self.ReadyNodeChanged:Fire(nil)
-		end
-	end)
+	watchCounterPrompts()
 
 	Knit.GetService("CustomerService").TicketChanged:Connect(function(ticket, slot)
 		local byId = self._ticketsById
@@ -115,10 +221,8 @@ function OrderController:KnitStart()
 		self.TicketsChanged:Fire(list)
 
 		self.Ticket = list[1]
-		if self._notepadOrder == nil then
-			self.CurrentOrder = self.Ticket
-			self.OrderChanged:Fire(self.Ticket)
-		end
+		self.CurrentOrder = self.Ticket
+		self.OrderChanged:Fire(self.Ticket)
 	end)
 
 	OrderService.PickUpNodeVisibilityChanged:Connect(function(node, isVisible: boolean, isReady: boolean?)
@@ -175,9 +279,20 @@ function OrderController:KnitStart()
 		self.AnnouncementReceived:Fire(title, body, color)
 	end)
 
-	OrderService.QueueUpdated:Connect(function(position: number?)
-		self.QueuePosition = position
-		self.QueueChanged:Fire(position)
+	-- Direct-handoff target from the server (nil clears). Re-checked on a poll
+	-- so character respawns re-hook without extra wiring.
+	OrderService.HandoffTargetChanged:Connect(function(customerId: number?)
+		HandoffTargetUserId = customerId
+		updateHandoffBeam()
+	end)
+	task.spawn(function()
+		while true do
+			task.wait(HANDOFF_BEAM_POLL_SECONDS)
+			local ok, err = pcall(updateHandoffBeam)
+			if not ok then
+				warn("[OrderController] Handoff beam update failed:", err)
+			end
+		end
 	end)
 
 	-- Serve chime (SOUNDS D5): the serve toast is the client signal; pitch rises with combo.
@@ -211,14 +326,6 @@ end
 function OrderController:CloseOrdering()
 	self.ActiveNpcOrder = nil
 	self.CloseOrderingRequested:Fire()
-end
-
--- Called by the OrderQueue UI button. Tells the server to remove this player
--- from the barista queue and clears local state immediately for responsiveness.
-function OrderController:LeaveQueue()
-	self.QueuePosition = nil
-	self.QueueChanged:Fire(nil)
-	Knit.GetService("OrderService"):LeaveQueue()
 end
 
 return OrderController

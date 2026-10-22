@@ -24,6 +24,8 @@ local DialogController = Knit.CreateController({
     Name = "DialogController",
 })
 DialogController.Prototype = {}
+-- fires(pageKey: string?). App opens Shop on that tab (BobaBucksShortfall "Get Boba Bucks").
+DialogController.OpenShopRequested = GoodSignal.new()
 
 ---> private
 local c = React.createElement
@@ -259,6 +261,8 @@ function DialogController:KnitInit()
 		if action == "CreateDialog" then
 			local dialog: Dialog = ...
 			dialogEvent:Fire(dialog)
+		elseif action == "OpenShop" then
+			DialogController.OpenShopRequested:Fire(...)
 		end
 	end)
 	DialogService.NotificationSignal:Connect(function(notification)

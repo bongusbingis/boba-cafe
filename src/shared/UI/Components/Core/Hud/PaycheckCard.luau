@@ -16,6 +16,7 @@
 
 ---> Services
 
+local MarketplaceService = game:GetService("MarketplaceService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -32,6 +33,7 @@ local React = require(Packages.React)
 local Page = require(UI.Components.Core.Page)
 local CloseButton = require(UI.Components.Buttons.CloseButton)
 local usePx = require(UI.Hooks.usePx)
+local PassUpsell = require(UI.Utility.PassUpsell)
 
 ---> Private
 
@@ -40,6 +42,10 @@ local c = React.createElement
 -- Mirrors App.luau PAGE_SWAP_DELAY: lets the close spring start before unmounting.
 local CLOSE_DELAY = 0.025
 local AUTO_DISMISS_SECONDS = 8
+-- While the upsell purchase prompt is up the card must not close under it.
+-- Hold the dismiss until PromptGamePassPurchaseFinished, or this long at most.
+local PURCHASE_HOLD_SECONDS = 90
+local PURCHASE_AFTER_SECONDS = 3
 
 local CLOSE_BUTTON_W = 0.0919732
 local CLOSE_BUTTON_H = 0.123874
@@ -159,9 +165,18 @@ end
 local function PaycheckBody(props: {
 	Payload: PaycheckPayload,
 	OnCloseRequested: () -> (),
+	OnPurchasePrompted: ((holdSeconds: number) -> ())?,
 })
 	local px = usePx()
 	local closeSize = px(56)
+
+	-- Upsell row (UPSELL lane 2): hooks run on every render, the row decides below.
+	local owned = PassUpsell.useOwned(PassUpsell.XP_PASS_IDS)
+	local clicked, setClicked = React.useState(false)
+	local capOk = PassUpsell.ShouldShowOnPaycheck(props.Payload.Shift)
+	local offerPassId = if capOk and not clicked then PassUpsell.PickPaycheckOffer(owned) else nil
+	local offerPrice = PassUpsell.usePrice(offerPassId)
+	local showOffer = offerPassId ~= nil and offerPrice ~= nil
 
 	return c("ImageLabel", {
 		AnchorPoint = Vector2.new(0.5, 0.5),
@@ -184,6 +199,22 @@ local function PaycheckBody(props: {
 		}, {
 			CloseButton = c(CloseButton, { OnClick = props.OnCloseRequested }),
 		}),
+		Upsell = if showOffer
+			then c(PassUpsell.Row, {
+				Text = `Boost your next shift: +{PassUpsell.BOOST_PERCENT[offerPassId] or 25}% tips & XP`,
+				ButtonText = `Get {PassUpsell.PriceText(offerPrice)}`,
+				AnchorPoint = Vector2.new(0.5, 0),
+				Position = UDim2.new(0.5, 0, 1, px(8)),
+				Size = UDim2.new(0.9, 0, 0, px(44)),
+				OnClick = function()
+					setClicked(true)
+					if props.OnPurchasePrompted then
+						props.OnPurchasePrompted(PURCHASE_HOLD_SECONDS)
+					end
+					PassUpsell.Prompt(offerPassId)
+				end,
+			})
+			else nil,
 	})
 end
 
@@ -199,6 +230,30 @@ return function(props: {
 	local closeFnRef = React.useRef(nil)
 	local isClosingRef = React.useRef(false)
 	local generationRef = React.useRef(0)
+	local holdUntilRef = React.useRef(0)
+	local finishedConnRef = React.useRef(nil)
+
+	-- Upsell clicked: hold the auto-dismiss until the purchase prompt finishes.
+	local handlePurchasePrompted = React.useCallback(function(holdSeconds: number)
+		holdUntilRef.current = os.clock() + holdSeconds
+		if finishedConnRef.current ~= nil or not RunService:IsRunning() then
+			return
+		end
+		finishedConnRef.current = MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(player: Player)
+			if player == Players.LocalPlayer then
+				holdUntilRef.current = os.clock() + PURCHASE_AFTER_SECONDS
+			end
+		end)
+	end, {})
+
+	React.useEffect(function()
+		return function()
+			if finishedConnRef.current ~= nil then
+				finishedConnRef.current:Disconnect()
+				finishedConnRef.current = nil
+			end
+		end
+	end, {})
 
 	-- Stable identity: Page restarts its spring whenever PageContent changes.
 	local advance = React.useCallback(function()
@@ -262,11 +317,22 @@ return function(props: {
 		end
 		generationRef.current += 1
 		local mine = generationRef.current
-		local thread = task.delay(AUTO_DISMISS_SECONDS, function()
-			if generationRef.current == mine then
+		holdUntilRef.current = 0
+		local thread
+		local function arm(seconds: number)
+			thread = task.delay(seconds, function()
+				if generationRef.current ~= mine then
+					return
+				end
+				local remaining = holdUntilRef.current - os.clock()
+				if remaining > 0 then
+					arm(remaining)
+					return
+				end
 				handleClose()
-			end
-		end)
+			end)
+		end
+		arm(AUTO_DISMISS_SECONDS)
 		return function()
 			generationRef.current += 1
 			task.cancel(thread)
@@ -282,6 +348,7 @@ return function(props: {
 		return c(PaycheckBody, {
 			Payload = shown,
 			OnCloseRequested = handleClose,
+			OnPurchasePrompted = handlePurchasePrompted,
 		})
 	end, { active })
 

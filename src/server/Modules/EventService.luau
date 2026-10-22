@@ -225,22 +225,7 @@ function EventService:TriggerRandomEvent(): (boolean, string?)
 end
 
 ---> client
-function EventService.Client:StartEvent(player: Player, eventName: string): (boolean, string?)
-	if typeof(eventName) ~= "string" or #eventName > 50 then
-		return false, "Invalid event name"
-	end
-
-	local server = self.Server
-	local now = server:_now()
-	local lastAttempt = server._playerStartDebounce[player.UserId] or 0
-	if now - lastAttempt < 5 then
-		return false, "Please wait before attempting to host again"
-	end
-	server._playerStartDebounce[player.UserId] = now
-
-	return server:StartEvent(eventName, player)
-end
-
+-- StartEvent is server-only (Jack, 2026-10-21): events start from Cmdr or the auto timer.
 function EventService.Client:GetActiveEvent(_player: Player): ActiveEventStatus
 	return self.Server:GetActiveEvent()
 end

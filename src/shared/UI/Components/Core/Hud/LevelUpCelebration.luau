@@ -8,6 +8,9 @@
 	             with a GREEN "LEVEL UP!" header, the new level and title,
 	             one row per unlock, and a GREEN dismiss button. Auto-dismiss
 	             after 8 s. Never blocks input behind it, so play continues.
+	             Pop beats follow the Rush/Boba Party intro (EVENT-FX): a GOLD
+	             spotlight halo, a screen-space confetti burst, a Back-ease
+	             overshoot on the level number, and staggered unlock rows.
 	Props:
 	- Preview: Optional payload { Level: number, Title: string?,
 	  Unlocks: { string }? } for stories. Shown at once, never auto-dismissed.
@@ -19,6 +22,7 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
 
 ---> Dependencies
 
@@ -35,7 +39,9 @@ local Page = require(UI.Components.Core.Page)
 local Banner = require(UI.Components.Buttons.Banner)
 local CloseButton = require(UI.Components.Buttons.CloseButton)
 local PromptButton = require(UI.Components.Buttons.PromptButton)
+local BackgroundSpotlight = require(UI.Components.Decoration.BackgroundSpotlight)
 local usePx = require(UI.Hooks.usePx)
+local PassUpsell = require(UI.Utility.PassUpsell)
 
 ---> Private
 
@@ -50,6 +56,58 @@ local CLOSE_BUTTON_W = 0.0919732
 local CLOSE_BUTTON_H = 0.123874
 local CLOSE_BUTTON_X = 0.980770
 local CLOSE_BUTTON_Y = 0.147523
+
+-- Pop beats, mirrored from the Rush/Boba Party intro (Hud/EventIntro):
+-- Back-ease overshoot on the hit, screen-space confetti in Styles colours,
+-- staggered settle of the unlock rows (PromptSelection REVEAL_STAGGER).
+local POP_IN = TweenInfo.new(0.45, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+local CONFETTI_COUNT = 40
+local CONFETTI_COLORS = { Styles.GOLD, Styles.ROSE, Styles.GREEN_LIGHT, Styles.CORAL, Styles.CREAM, Styles.OFFWHITE }
+local CONFETTI_ORIGIN = Vector2.new(0.5, 0.5)
+local REVEAL_STAGGER = 0.06
+
+-- One confetti piece: Quad-out burst from the card, then a tumbling fall off
+-- screen. Same flight as EventIntro.launchPiece, fewer pieces (HUD card, not
+-- a full event).
+local function launchPiece(layer: Frame)
+	local piece = Instance.new("Frame")
+	piece.AnchorPoint = Vector2.new(0.5, 0.5)
+	piece.BackgroundColor3 = CONFETTI_COLORS[math.random(1, #CONFETTI_COLORS)]
+	piece.BorderSizePixel = 0
+	piece.Position = UDim2.fromScale(CONFETTI_ORIGIN.X, CONFETTI_ORIGIN.Y)
+	piece.Rotation = math.random(0, 360)
+	local long = math.random() < 0.5
+	piece.Size = if long then UDim2.fromOffset(7, 14) else UDim2.fromOffset(10, 10)
+	piece.ZIndex = 1
+	piece.Parent = layer
+
+	local angle = math.rad(math.random(200, 340)) -- mostly upward and out
+	local reach = 0.12 + math.random() * 0.3
+	local peak =
+		UDim2.fromScale(CONFETTI_ORIGIN.X + math.cos(angle) * reach * 1.4, CONFETTI_ORIGIN.Y + math.sin(angle) * reach)
+	local outTime = 0.35 + math.random() * 0.2
+	local fallTime = 1.8 + math.random() * 1.4
+	local spin = math.random(-720, 720)
+
+	local out = TweenService:Create(
+		piece,
+		TweenInfo.new(outTime, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+		{ Position = peak, Rotation = piece.Rotation + spin * 0.3 }
+	)
+	out.Completed:Once(function()
+		local drift = (math.random() - 0.5) * 0.12
+		local fall =
+			TweenService:Create(piece, TweenInfo.new(fallTime, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+				Position = UDim2.fromScale(peak.X.Scale + drift, 1.1),
+				Rotation = piece.Rotation + spin,
+			})
+		fall.Completed:Once(function()
+			piece:Destroy()
+		end)
+		fall:Play()
+	end)
+	out:Play()
+end
 
 export type LevelUpPayload = {
 	Level: number,
@@ -80,6 +138,42 @@ local function CelebrationCard(props: {
 	local unlocks = cleanUnlocks(payload.Unlocks)
 	local closeSize = px(56)
 
+	-- Pop beats: the level number overshoots in with the intro's Back ease,
+	-- then the title, unlock rows and dismiss button settle one by one.
+	local levelScaleRef = React.useRef(nil)
+	local revealed, setRevealed = React.useState(0)
+	local titleOrder = if title ~= "" then 1 else 0
+	local totalBeats = titleOrder + #unlocks + 1
+
+	React.useEffect(function()
+		local scale: UIScale? = levelScaleRef.current
+		if scale then
+			scale.Scale = 0
+			TweenService:Create(scale, POP_IN, { Scale = 1 }):Play()
+		end
+		setRevealed(0)
+		local alive = true
+		task.spawn(function()
+			for i = 1, totalBeats do
+				task.wait(REVEAL_STAGGER)
+				if not alive then
+					return
+				end
+				setRevealed(i)
+			end
+		end)
+		return function()
+			alive = false
+		end
+	end, { payload })
+
+	-- Upsell row (UPSELL lane 2): every 3rd level, no XP pass owned. Hooks run on every render.
+	local owned = PassUpsell.useOwned(PassUpsell.XP_PASS_IDS)
+	local clicked, setClicked = React.useState(false)
+	local capOk = PassUpsell.ShouldShowOnLevelUp(payload.Level)
+	local offerPassId = if capOk and not clicked then PassUpsell.PickLevelUpOffer(owned) else nil
+	local offerPrice = PassUpsell.usePrice(offerPassId)
+
 	local rows: { [string]: any } = {}
 	rows.Padding = c("UIPadding", {
 		PaddingTop = UDim.new(0, px(8)),
@@ -103,9 +197,11 @@ local function CelebrationCard(props: {
 		TextColor3 = Styles.GREEN,
 		TextSize = px(30),
 		TextXAlignment = Enum.TextXAlignment.Center,
+	}, {
+		Pop = c("UIScale", { Scale = 1, ref = levelScaleRef }),
 	})
 
-	if title ~= "" then
+	if title ~= "" and revealed >= 1 then
 		rows.TitleLine = c("TextLabel", {
 			LayoutOrder = 2,
 			BackgroundTransparency = 1,
@@ -120,7 +216,7 @@ local function CelebrationCard(props: {
 	end
 
 	local nextOrder = 3
-	if #unlocks > 0 then
+	if #unlocks > 0 and revealed >= titleOrder + 1 then
 		rows.Divider = c("Frame", {
 			LayoutOrder = nextOrder,
 			BackgroundColor3 = Styles.GRAY,
@@ -130,29 +226,49 @@ local function CelebrationCard(props: {
 		})
 		nextOrder += 1
 		for index, line in unlocks do
-			rows[`Unlock_{index}`] = c("TextLabel", {
-				LayoutOrder = nextOrder,
-				BackgroundTransparency = 1,
-				FontFace = Styles.FONT_FREDOKA,
-				Size = UDim2.fromScale(1, 0),
-				AutomaticSize = Enum.AutomaticSize.Y,
-				Text = `• {line}`,
-				TextColor3 = Styles.GREEN_DEEP,
-				TextSize = px(18),
-				TextWrapped = true,
-				TextXAlignment = Enum.TextXAlignment.Left,
-			})
+			if revealed >= titleOrder + index then
+				rows[`Unlock_{index}`] = c("TextLabel", {
+					LayoutOrder = nextOrder,
+					BackgroundTransparency = 1,
+					FontFace = Styles.FONT_FREDOKA,
+					Size = UDim2.fromScale(1, 0),
+					AutomaticSize = Enum.AutomaticSize.Y,
+					Text = `• {line}`,
+					TextColor3 = Styles.GREEN_DEEP,
+					TextSize = px(18),
+					TextWrapped = true,
+					TextXAlignment = Enum.TextXAlignment.Left,
+				})
+			end
 			nextOrder += 1
 		end
 	end
 
-	rows.Dismiss = c(PromptButton, {
-		Text = "Awesome!",
-		Color = Styles.GREEN,
-		Size = UDim2.new(1, 0, 0, px(50)),
-		LayoutOrder = nextOrder,
-		OnClick = props.OnCloseRequested,
-	})
+	if revealed >= totalBeats then
+		rows.Dismiss = c(PromptButton, {
+			Text = "Awesome!",
+			Color = Styles.GREEN,
+			Size = UDim2.new(1, 0, 0, px(50)),
+			LayoutOrder = nextOrder,
+			OnClick = props.OnCloseRequested,
+		})
+	end
+
+	-- Secondary and visually lesser than the dismiss button. Clicking only opens the
+	-- purchase prompt; the card's dismiss / auto-dismiss / queue flow is untouched.
+	if offerPassId ~= nil and offerPrice ~= nil and revealed >= totalBeats then
+		rows.Upsell = c(PassUpsell.Row, {
+			Text = `Level faster: +{PassUpsell.BOOST_PERCENT[offerPassId] or 25}% XP`,
+			ButtonText = `Get {PassUpsell.PriceText(offerPrice)}`,
+			Lesser = true,
+			Height = 40,
+			LayoutOrder = nextOrder + 1,
+			OnClick = function()
+				setClicked(true)
+				PassUpsell.Prompt(offerPassId)
+			end,
+		})
+	end
 
 	local header = c("Frame", {
 		LayoutOrder = 1,
@@ -321,6 +437,20 @@ return function(props: {
 		})
 	end, { active })
 
+	-- Screen-space hit beat (EVENT-FX): a GOLD spotlight halo and a confetti
+	-- burst behind the card on every fresh payload. The layer outlives the
+	-- card so pieces finish falling after dismiss.
+	local layerRef = React.useRef(nil)
+	React.useEffect(function()
+		local layer: Frame? = layerRef.current
+		if active == nil or layer == nil then
+			return
+		end
+		for _ = 1, CONFETTI_COUNT do
+			launchPiece(layer)
+		end
+	end, { active })
+
 	if active == nil or pageContent == nil then
 		return nil
 	end
@@ -330,6 +460,24 @@ return function(props: {
 		Size = UDim2.fromScale(1, 1),
 		ZIndex = 20,
 	}, {
+		Fx = c("Frame", {
+			Active = false,
+			BackgroundTransparency = 1,
+			ClipsDescendants = true,
+			Size = UDim2.fromScale(1, 1),
+			ZIndex = 0,
+			ref = layerRef,
+		}, {
+			Spotlight = c(BackgroundSpotlight, {
+				Native = {
+					ImageColor3 = Styles.GOLD,
+					ImageTransparency = 0.25,
+					Position = UDim2.fromScale(0.5, 0.5),
+					Size = UDim2.fromScale(0.75, 0.75),
+					ZIndex = 0,
+				},
+			}),
+		}),
 		Page = c(Page, {
 			IsVisible = true,
 			PageContent = pageContent,

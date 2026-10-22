@@ -22,6 +22,8 @@ local Pane = require(UI.Components.Pane)
 local usePx = require(UI.Hooks.usePx)
 local useClock = require(UI.Hooks.useClock)
 local HudTabButton = require(UI.Components.Buttons.HudTabButton)
+local PromptButton = require(UI.Components.Buttons.PromptButton)
+local PassUpsell = require(UI.Utility.PassUpsell)
 local Purchases = require(script.Parent.Purchases)
 local Credits = require(script.Parent.Credits)
 
@@ -189,11 +191,15 @@ local function SettingRow(
 		-- Shared
 		Disabled: boolean?,
 		LayoutOrder: number,
+		-- Pass-gated row the player does not own: shows "Get pass" instead of the toggle.
+		LockedPassId: number?,
 	}
 )
 	local px = usePx()
 	local itemColor = Styles.GREEN -- matches ShopCategory's default item color
-	local textAlpha = if props.Disabled then 0.45 else 0
+	local locked = props.LockedPassId ~= nil
+	local textAlpha = if props.Disabled or locked then 0.45 else 0
+	local lockedPrice = PassUpsell.usePrice(props.LockedPassId)
 
 	return c("Frame", {
 		BackgroundColor3 = itemColor,
@@ -222,10 +228,18 @@ local function SettingRow(
 			AnchorPoint = Vector2.new(1, 0.5),
 			BackgroundTransparency = 1,
 			Position = UDim2.new(1, -px(12), 0.5, 0),
-			Size = UDim2.fromOffset(px(80), px(30)),
+			Size = if locked then UDim2.fromOffset(px(120), px(30)) else UDim2.fromOffset(px(80), px(30)),
 		}, {
-			Control = if props.OnAction
-				then c(ActionButton, {
+			Control = if locked
+				then c(PromptButton, {
+					Text = if lockedPrice then `Get pass {PassUpsell.PriceText(lockedPrice)}` else "Get pass",
+					Color = Styles.GOLD,
+					Size = UDim2.fromScale(1, 1),
+					OnClick = function()
+						PassUpsell.Prompt(props.LockedPassId)
+					end,
+				})
+				elseif props.OnAction then c(ActionButton, {
 					Label = props.ActionLabel,
 					Disabled = props.Disabled,
 					OnAction = props.OnAction,
@@ -248,6 +262,7 @@ local function SettingCategory(props: {
 	Values: { [string]: boolean },
 	PlayerRank: number,
 	LayoutOrder: number,
+	LockedKeys: { [string]: number }?,
 	OnToggle: (key: string, newValue: boolean) -> (),
 })
 	local px = usePx()
@@ -262,8 +277,17 @@ local function SettingCategory(props: {
 
 	for i, setting in ipairs(props.Settings) do
 		local isDisabled = setting.MinRank ~= nil and props.PlayerRank < setting.MinRank
+		local lockedPassId = if props.LockedKeys then props.LockedKeys[setting.Key] else nil
 
-		if setting.Type == "Action" then
+		if lockedPassId then
+			rows[setting.Key] = c(SettingRow, {
+				Label = setting.Label,
+				Value = false,
+				Disabled = true,
+				LayoutOrder = i,
+				LockedPassId = lockedPassId,
+			})
+		elseif setting.Type == "Action" then
 			rows[setting.Key] = c(SettingRow, {
 				Label = setting.Label,
 				ActionLabel = setting.ButtonLabel,
@@ -464,18 +488,64 @@ return function(props: Props?)
 		end)
 	end
 
-	-- Build the visible settings list for a category:
-	-- settings with a GamepassId are only included when the player owns that pass.
+	-- A purchase made while Settings is open: re-render when a perk attribute flips, and mark a
+	-- registered pass owned the moment it is bought (the earlier build only refreshed on reopen).
+	local _, setRefreshTick = React.useState(0)
+	React.useEffect(function()
+		local conns: { RBXScriptConnection } = {}
+		local localPlayer = Players.LocalPlayer
+		local seenAttributes: { [string]: boolean } = {}
+		for _, category in ipairs(SettingsConfig) do
+			for _, setting in ipairs(category.Settings) do
+				local attribute = setting.PerkAttribute
+				if localPlayer and attribute and not seenAttributes[attribute] then
+					seenAttributes[attribute] = true
+					table.insert(
+						conns,
+						localPlayer:GetAttributeChangedSignal(attribute):Connect(function()
+							setRefreshTick(function(n)
+								return n + 1
+							end)
+						end)
+					)
+				end
+			end
+		end
+		local disconnectPurchase = PassUpsell.OnPurchased(function(passId: number)
+			setOwnedPassIds(function(prev)
+				local next = table.clone(prev)
+				next[passId] = true
+				return next
+			end)
+		end)
+		return function()
+			for _, conn in conns do
+				conn:Disconnect()
+			end
+			disconnectPurchase()
+		end
+	end, {})
+
+	-- Build the settings list for a category. A pass-gated row the player does not own stays in
+	-- the list as a locked row (lockedKeys: setting key -> pass id) when its pass is known;
+	-- a gated row with no known pass id is hidden as before.
 	local function getVisibleSettings(category)
 		local visible = {}
+		local lockedKeys: { [string]: number } = {}
 		for _, setting in ipairs(category.Settings) do
 			local passOk = not setting.GamepassId or ownedPassIds[setting.GamepassId]
 			local perkOk = not setting.PerkAttribute or Players.LocalPlayer:GetAttribute(setting.PerkAttribute) == true
 			if passOk and perkOk then
 				table.insert(visible, setting)
+			else
+				local passId = setting.PassId or setting.GamepassId
+				if passId then
+					lockedKeys[setting.Key] = passId
+					table.insert(visible, setting)
+				end
 			end
 		end
-		return visible
+		return visible, lockedKeys
 	end
 
 	-- Hide a category when:
@@ -483,7 +553,7 @@ return function(props: Props?)
 	--   • every remaining setting is rank-gated above the player's rank
 	local visibleCategories = {}
 	for _, category in ipairs(SettingsConfig) do
-		local visibleSettings = getVisibleSettings(category)
+		local visibleSettings, lockedKeys = getVisibleSettings(category)
 		if #visibleSettings == 0 then
 			continue
 		end
@@ -498,7 +568,7 @@ return function(props: Props?)
 			end
 		end
 		if not (allGated and playerRank < categoryMin) then
-			table.insert(visibleCategories, { Data = category, Settings = visibleSettings })
+			table.insert(visibleCategories, { Data = category, Settings = visibleSettings, LockedKeys = lockedKeys })
 		end
 	end
 
@@ -518,6 +588,7 @@ return function(props: Props?)
 		cards[entry.Data.Category] = c(SettingCategory, {
 			Title = entry.Data.Category,
 			Settings = entry.Settings,
+			LockedKeys = entry.LockedKeys,
 			Values = settings or {},
 			PlayerRank = playerRank,
 			LayoutOrder = i,
