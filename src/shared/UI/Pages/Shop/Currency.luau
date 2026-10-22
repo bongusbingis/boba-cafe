@@ -10,6 +10,7 @@ local React = require(Packages.React)
 
 ---> config
 local ProductIds = require(Shared.Configuration.ProductIds)
+local UIFlags = require(Shared.Configuration.UIFlags)
 
 ---> styles
 local Styles = require(UI.Styles)
@@ -126,17 +127,20 @@ return function()
 				OnPurchase = onPurchaseBucks,
 			}),
 
-			Points = c(ShopCategory, {
-				Title = "Points",
-				Items = {
-					{ Label = "100 Points", Price = "500" },
-					{ Label = "500 Points", Price = "2,000" },
-					{ Label = "1,500 Points", Price = "5,000" },
-					{ Label = "5,000 Points", Price = "15,000" },
-					{ Label = "15,000 Points", Price = "40,000" },
-				},
-				LayoutOrder = 1,
-			}),
+			-- Hidden while Points have no use (UIFlags.SHOW_POINTS).
+			Points = if UIFlags.SHOW_POINTS
+				then c(ShopCategory, {
+					Title = "Points",
+					Items = {
+						{ Label = "100 Points", Price = "500" },
+						{ Label = "500 Points", Price = "2,000" },
+						{ Label = "1,500 Points", Price = "5,000" },
+						{ Label = "5,000 Points", Price = "15,000" },
+						{ Label = "15,000 Points", Price = "40,000" },
+					},
+					LayoutOrder = 1,
+				})
+				else nil,
 
 			Spacer = c("Frame", {
 				BackgroundTransparency = 1,
