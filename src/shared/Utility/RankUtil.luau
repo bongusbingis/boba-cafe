@@ -54,7 +54,7 @@ local MAX_RETRIES: number = 3
 local CACHE_TTL_SECONDS: number = 200 --> seconds before a re-fetch
 local PREFETCH_TIMEOUT_SECONDS: number = 10 --> max wait for eager pre-fetch
 
-local STUDIO_SIMULATE_RANK: number = 255
+local STUDIO_SIMULATE_RANK: number = 0
 
 local FALLBACK_RANK_AND_ROLE: RankAndRole = {
 	Rank = 1,
@@ -124,6 +124,9 @@ end
 local function ensureCached(player: Player, config: GroupConfig, requireRole: boolean)
 	-- Studio simulation: bypass all network fetches and return the override rank.
 	if RunService:IsStudio() and STUDIO_SIMULATE_RANK >= 1 and STUDIO_SIMULATE_RANK <= 255 then
+		if player and player.Parent and STUDIO_SIMULATE_RANK >= 11 then
+			player:SetAttribute("IsMR", true)
+		end
 		return Promise.resolve({
 			Rank = STUDIO_SIMULATE_RANK,
 			Role = "Studio Sim (Rank " .. STUDIO_SIMULATE_RANK .. ")",
@@ -152,7 +155,7 @@ local function ensureCached(player: Player, config: GroupConfig, requireRole: bo
 		if requireRole and (entry :: RankAndRole).Role == nil then
 			Cache[player.UserId] = nil
 		else
-		return Promise.resolve(entry)
+			return Promise.resolve(entry)
 		end
 	end
 
@@ -162,6 +165,9 @@ local function ensureCached(player: Player, config: GroupConfig, requireRole: bo
 		:andThen(function(rankAndRole: RankAndRole)
 			if player.Parent then
 				Cache[player.UserId] = rankAndRole
+				if rankAndRole.Rank >= 11 then
+					player:SetAttribute("IsMR", true)
+				end
 				if rankAndRole.Rank > 10 then
 					player:SetAttribute("IsAdmin", true)
 				end
@@ -238,8 +244,11 @@ function RankUtil:InvalidateCache(player: Player)
 end
 
 local function makeRankCheck(minRank: number, config: GroupConfig?)
-	return function(_self, player: Player): boolean
-		local _, result = ensureCached(player or Players.LocalPlayer, config or BOBA_CONFIG, false):await()
+	return function(selfOrPlayer: any, maybePlayer: Player?): boolean
+		local targetPlayer: Player = if typeof(selfOrPlayer) == "Instance" and selfOrPlayer:IsA("Player")
+			then selfOrPlayer
+			else (maybePlayer or Players.LocalPlayer)
+		local _, result = ensureCached(targetPlayer, config or BOBA_CONFIG, false):await()
 		return (result :: RankAndRole).Rank >= minRank
 	end
 end

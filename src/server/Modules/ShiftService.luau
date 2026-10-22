@@ -76,6 +76,11 @@ local ShiftService = Knit.CreateService({
 	Client = {
 		-- Fires (summary) to the barista when a shift ends. Summary shape: see _endShift.
 		ShiftEnded = Knit.CreateSignal(),
+		-- Fires (paycheck) to the barista when a shift ends. Receipt-only
+		-- payload for the HUD paycheck card (PAYCHECK-WIRE); the star bonus
+		-- and streak bonus are paid above, base pay and tips were paid at
+		-- serve time. Shape: see _endShift.
+		Paycheck = Knit.CreateSignal(),
 	},
 
 	-- Server-side signal: fires (player: Player, clockedIn: boolean) after a change.
@@ -312,6 +317,23 @@ function ShiftService:_endShift(player: Player, state: ShiftState)
 		end)
 	end)
 	self.Client.ShiftEnded:Fire(player, summary)
+
+	-- Paycheck receipt (PAYCHECK-WIRE): the HUD paycheck card renders this
+	-- and nothing else reads it. Total is display-only; the money moved
+	-- when each line was paid (serve time for base/tips, above for bonus).
+	local paycheck = {
+		Pay = summary.Pay,
+		Tips = summary.Tips,
+		Bonus = summary.Bonus,
+		Total = (summary.Pay or 0) + (summary.Tips or 0) + (summary.Bonus or 0),
+		StreakBonus = summary.StreakBonus or 0,
+		Stars = summary.Stars,
+		Served = summary.Served,
+		Walkouts = summary.Walkouts,
+		Shift = summary.Shift,
+		First = summary.First,
+	}
+	self.Client.Paycheck:Fire(player, paycheck)
 
 	-- After the card is sent: monotonic best writes, then the capsule nudge.
 	local bestCombo, bestPay = state.BestCombo, state.Pay

@@ -306,33 +306,33 @@ function CafeUpgradeService:PlayerRemoving(player: Player)
 	self._busyPlayers[player] = nil
 end
 
-function CafeUpgradeService:KnitStart()
-	local existing = Workspace:FindFirstChild(CafeUpgradeConfig.FOLDER_NAME)
-	if existing then
-		existing:Destroy()
-	end
-	local folder = Instance.new("Folder")
-	folder.Name = CafeUpgradeConfig.FOLDER_NAME
-	folder:SetAttribute("BuiltBy", CafeUpgradeConfig.BUILT_BY)
-	folder.Parent = Workspace
-	self._folder = folder
+-- function CafeUpgradeService:KnitStart()
+-- 	local existing = Workspace:FindFirstChild(CafeUpgradeConfig.FOLDER_NAME)
+-- 	if existing then
+-- 		existing:Destroy()
+-- 	end
+-- 	local folder = Instance.new("Folder")
+-- 	folder.Name = CafeUpgradeConfig.FOLDER_NAME
+-- 	folder:SetAttribute("BuiltBy", CafeUpgradeConfig.BUILT_BY)
+-- 	folder.Parent = Workspace
+-- 	self._folder = folder
 
-	local board, prompt, label = Builders.Board(CafeUpgradeConfig.ORIGIN * CafeUpgradeConfig.PLACEMENT.Board)
-	board.Parent = folder
-	self._board = board
-	self._plaqueLabel = label
-	self:_refreshPlaque()
+-- 	local board, prompt, label = Builders.Board(CafeUpgradeConfig.ORIGIN * CafeUpgradeConfig.PLACEMENT.Board)
+-- 	board.Parent = folder
+-- 	self._board = board
+-- 	self._plaqueLabel = label
+-- 	self:_refreshPlaque()
 
-	prompt.Triggered:Connect(function(player: Player)
-		task.spawn(function()
-			self:OpenMenu(player)
-		end)
-	end)
+-- 	prompt.Triggered:Connect(function(player: Player)
+-- 		task.spawn(function()
+-- 			self:OpenMenu(player)
+-- 		end)
+-- 	end)
 
-	-- Any level recorded before start (none in a live server) gets its models now.
-	for _, upgrade in CafeUpgradeConfig.UPGRADES do
-		self:_buildVisuals(upgrade.Id)
-	end
-end
+-- 	-- Any level recorded before start (none in a live server) gets its models now.
+-- 	for _, upgrade in CafeUpgradeConfig.UPGRADES do
+-- 		self:_buildVisuals(upgrade.Id)
+-- 	end
+-- end
 
 return CafeUpgradeService

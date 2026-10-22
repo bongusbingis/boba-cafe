@@ -2,6 +2,12 @@
 
 Newest first. Each entry is `## <GOAL> / DEC-###: <title>` with Date, Source, and Decision. Prime is the only writer. Numbering continues; never reuse a number.
 
+## REVIVAL-001 / DEC-059: Order-flow rework (tablet pre-fill, real orders on ticket slots, no claim queue, counter ordering)
+
+- **Date:** 2026-10-21.
+- **Source:** Jack, this session: "1. undo (keep for tutorial) | 2. approved | 3. approved | 4. approved". On 4: "the boba phone is a separate ordering mechanism than ordering from the counter. the 'take order' prompt should appear on a player who is at the counter in the customer area (with no npcs or other players at the same register). said prompt should only appear for the cashier at that register (or some other mechanism you decide, to make sure that workers behind the counter cant fight over order-taking and avoids bugs) - essentially, real players ordering from the counter functions almost the exact same as NPCs, but the order comes in through chat and there's no official 'order' until the cashier puts it in. the mobile order functions the same just minus the counter sequence."
+- **Decision:** (1) The Ordering tablet no longer pre-fills the NPC's order (AUDIT-FIX D3.1a undone) except for the scripted first-session customer, flagged by the server. (2) Real-player orders use the same ticket slots as NPC tickets and show as a ticket tagged "Real customer"; the `CurrentOrder` notepad override is removed. (3) The Staff Screens Claim Order prompt, the barista queue and the HUD OrderQueue are removed; dispatch is automatic to the longest-idle clocked-in barista with a free slot. (4) A clocked-out player alone at a `workspace["Ordering System"].CustomerAreas` register with no NPC and no open order gets a Take Order prompt for baristas; a server-side lock gives the order to the first eligible barista to trigger it. Build status: ORDER-FLOW-REWORK evidence (`tasks/REVIVAL-001/ORDER-FLOW-REWORK/summary.md`). DEC-058 is cited in code but has no entry here; this entry takes 059 to avoid a collision.
+
 ## REVIVAL-001 / DEC-057: Ticket back to middle right; Quests button removed (supersedes DEC-052 placement)
 
 - **Date:** 2026-10-20.

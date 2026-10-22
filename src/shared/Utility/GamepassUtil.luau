@@ -28,7 +28,7 @@ local GamepassUtil = {}
 
 ---> constants
 local MAX_RETRIES = 3
-local STUDIO_PASSES_ENABLED = false
+local STUDIO_PASSES_ENABLED = true
 local _studioWarningPrinted = false
 
 ---> cache

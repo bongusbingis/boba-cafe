@@ -17,6 +17,9 @@ export type Setting = {
 	--- When set, this setting is only shown to players who own the specified game pass.
 	--- The "Game Passes" category is hidden entirely if the player owns none of its passes.
 	GamepassId: number?,
+	--- Like GamepassId, for catalog-only passes the client cannot resolve: the row shows when
+	--- the server set the player attribute with this name (PassSettingsService).
+	PerkAttribute: string?,
 }
 
 export type Category = {
@@ -43,7 +46,13 @@ local config: { Category } = {
 		Category = "Game Passes",
 		Settings = {
 			--{ Key = "HeadlessHead",    Label = "Headless Head",      Default = false, GamepassId = 6202153 },
-			--{ Key = "FasterWalkSpeed", Label = "Faster Walk Speed",  Default = false, GamepassId = 12385742 },
+			{ Key = "FasterWalkSpeed", Label = "Faster Walk Speed", Default = false, PerkAttribute = "PerkWalkSpeed" },
+			{
+				Key = "UniformRemoverEnabled",
+				Label = "Keep My Outfit",
+				Default = true,
+				PerkAttribute = "PerkUniformRemover",
+			},
 		},
 	},
 	{

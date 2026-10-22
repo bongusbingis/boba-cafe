@@ -11,10 +11,22 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Knit = require(Packages.Knit)
 local Gamepasses = require(Shared.Configuration.Gamepasses)
 local ProductIds = require(Shared.Configuration.ProductIds)
+local EventProducts = require(Shared.Utility.EventProducts)
 
 local GamepassBoardController = Knit.CreateController({
 	Name = "GamepassBoardController",
 })
+
+-- The boards stream (Workspace.StreamingEnabled): a board's Part/Union can arrive
+-- after the Model, and are re-created after streaming out, without the cloned GUIs.
+local function getBoardParts(board: Model): (BasePart?, BasePart?)
+	local headerPart = board:FindFirstChild("Part")
+	local bodyPart = board:FindFirstChild("Union") or board:FindFirstChildWhichIsA("UnionOperation")
+	if headerPart and headerPart:IsA("BasePart") and bodyPart and bodyPart:IsA("BasePart") then
+		return headerPart, bodyPart
+	end
+	return nil, nil
+end
 
 local function setupHeader(headerPart: BasePart, templatesFolder: Instance, title: string, subtitle: string)
 	local headerGuiTemplate = templatesFolder:WaitForChild("HeaderGui") :: SurfaceGui
@@ -53,19 +65,19 @@ local function setupGamepassBoard(board: Model, passId: number, templatesFolder:
 		return
 	end
 
-	local headerPart = board:WaitForChild("Part", 10) :: BasePart?
-	local bodyPart = (board:WaitForChild("Union", 10) or board:FindFirstChildWhichIsA("UnionOperation")) :: BasePart?
+	local headerPart, bodyPart = getBoardParts(board)
 
 	if not headerPart or not bodyPart then
-		warn(string.format("[GamepassBoardController] Missing Part or Union on board %s", board.Name))
+		-- Not streamed in yet; setupBoard retries when the parts arrive.
 		return
 	end
 
-	if headerPart:FindFirstChild("HeaderGui") or bodyPart:FindFirstChild("BodyGui") then
+	if not headerPart:FindFirstChild("HeaderGui") then
+		setupHeader(headerPart, templatesFolder, def.Name, "Game Pass")
+	end
+	if bodyPart:FindFirstChild("BodyGui") then
 		return
 	end
-
-	setupHeader(headerPart, templatesFolder, def.Name, "Game Pass")
 
 	local bodyGuiTemplate = templatesFolder:WaitForChild("BodyGui") :: SurfaceGui
 	local bodyGui = bodyGuiTemplate:Clone()
@@ -136,19 +148,19 @@ local function setupGamepassBoard(board: Model, passId: number, templatesFolder:
 end
 
 local function setupDonationBoard(board: Model, templatesFolder: Instance)
-	local headerPart = board:WaitForChild("Part", 10) :: BasePart?
-	local bodyPart = (board:WaitForChild("Union", 10) or board:FindFirstChildWhichIsA("UnionOperation")) :: BasePart?
+	local headerPart, bodyPart = getBoardParts(board)
 
 	if not headerPart or not bodyPart then
-		warn(string.format("[GamepassBoardController] Missing Part or Union on donation board %s", board.Name))
+		-- Not streamed in yet; setupBoard retries when the parts arrive.
 		return
 	end
 
-	if headerPart:FindFirstChild("HeaderGui") or bodyPart:FindFirstChild("DonationGui") then
+	if not headerPart:FindFirstChild("HeaderGui") then
+		setupHeader(headerPart, templatesFolder, "Donations", "Thank you for your support!")
+	end
+	if bodyPart:FindFirstChild("DonationGui") then
 		return
 	end
-
-	setupHeader(headerPart, templatesFolder, "Donations", "Thank you for your support!")
 
 	local donationGuiTemplate = templatesFolder:WaitForChild("DonationGui") :: SurfaceGui
 	local donationGui = donationGuiTemplate:Clone()
@@ -205,19 +217,125 @@ local function setupDonationBoard(board: Model, templatesFolder: Instance)
 	donationGui.Parent = bodyPart
 end
 
+-- BoardType = "Products": Boba Party + Rush Hour developer products, laid out like the Donate! board.
+local function setupProductsBoard(board: Model, templatesFolder: Instance)
+	local headerPart, bodyPart = getBoardParts(board)
+
+	if not headerPart or not bodyPart then
+		return
+	end
+
+	if not headerPart:FindFirstChild("HeaderGui") then
+		setupHeader(headerPart, templatesFolder, "Cafe Events", "Rush Hour for everyone!")
+	end
+	if bodyPart:FindFirstChild("DonationGui") then
+		return
+	end
+
+	local guiTemplate = templatesFolder:WaitForChild("DonationGui") :: SurfaceGui
+	local productsGui = guiTemplate:Clone()
+	local scrollingFrame = productsGui:FindFirstChild("ScrollingFrame", true) :: ScrollingFrame?
+	local templateBtn = if scrollingFrame then scrollingFrame:FindFirstChild("Template") :: GuiButton? else nil
+	if not scrollingFrame or not templateBtn then
+		warn(string.format("[GamepassBoardController] Template not found on products board %s", board.Name))
+		return
+	end
+	templateBtn.Visible = false
+
+	local uiList = scrollingFrame:FindFirstChildWhichIsA("UIListLayout")
+	local buttons: { [string]: GuiButton } = {}
+
+	for i, product in EventProducts.Products do
+		if product.Id ~= nil then
+			local btn = templateBtn:Clone()
+			btn.Name = "Product_" .. product.Key
+			btn.LayoutOrder = i
+			btn.Visible = true
+			btn.Parent = scrollingFrame
+			buttons[product.Key] = btn
+			local textLabel = btn:FindFirstChildWhichIsA("TextLabel")
+			if textLabel then
+				textLabel.Text = product.Name
+			end
+			btn.Activated:Connect(function()
+				EventProducts.prompt(product)
+			end)
+		end
+	end
+
+	-- Party button hides during the post-party cooldown (still shown while a party runs, to extend it).
+	local function refreshVisibility()
+		for _, product in EventProducts.Products do
+			local btn = buttons[product.Key]
+			if btn then
+				btn.Visible = EventProducts.available(product)
+			end
+		end
+	end
+	refreshVisibility()
+	local conns = {
+		workspace:GetAttributeChangedSignal("BobaParty"):Connect(refreshVisibility),
+		workspace:GetAttributeChangedSignal("BobaPartyCooldownEndsAt"):Connect(refreshVisibility),
+	}
+	productsGui.Destroying:Connect(function()
+		for _, conn in conns do
+			conn:Disconnect()
+		end
+	end)
+
+	task.spawn(function()
+		local prices = EventProducts.fetchPrices()
+		for _, product in EventProducts.Products do
+			local btn = buttons[product.Key]
+			local price = prices[product.Key]
+			local textLabel = if btn then btn:FindFirstChildWhichIsA("TextLabel") else nil
+			if textLabel and price then
+				textLabel.Text = `{product.Name}  \u{e002} {price}`
+			end
+		end
+	end)
+
+	if uiList then
+		local function updateCanvas()
+			scrollingFrame.CanvasSize = UDim2.fromOffset(0, uiList.AbsoluteContentSize.Y)
+		end
+		uiList:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(updateCanvas)
+		task.defer(updateCanvas)
+	end
+
+	productsGui.Parent = bodyPart
+
+	-- The cooldown ends by clock, not by an attribute change.
+	task.spawn(function()
+		while productsGui:IsDescendantOf(game) do
+			task.wait(5)
+			refreshVisibility()
+		end
+	end)
+end
+
 local function setupBoard(board: Instance, templatesFolder: Instance)
 	if not board:IsA("Model") then
 		return
 	end
 
 	local boardType = board:GetAttribute("BoardType")
-	if boardType == "Donation" or board.Name == "Donate!" then
-		setupDonationBoard(board, templatesFolder)
+	if boardType == "Products" then
+		local function buildProducts()
+			setupProductsBoard(board, templatesFolder)
+		end
+		board.ChildAdded:Connect(function(child)
+			if child:IsA("BasePart") then
+				task.defer(buildProducts)
+			end
+		end)
+		buildProducts()
 		return
 	end
+	local isDonation = boardType == "Donation" or board.Name == "Donate!"
 
 	local passId = board:GetAttribute("PassId")
-	if passId == nil then
+	if not isDonation and passId == nil then
 		local attrWait = 0
 		while passId == nil and attrWait < 5 do
 			task.wait(0.2)
@@ -225,10 +343,25 @@ local function setupBoard(board: Instance, templatesFolder: Instance)
 			passId = board:GetAttribute("PassId")
 		end
 	end
-
-	if typeof(passId) == "number" and passId > 0 then
-		setupGamepassBoard(board, passId, templatesFolder)
+	if not isDonation and not (typeof(passId) == "number" and passId > 0) then
+		return
 	end
+
+	local function build()
+		if isDonation then
+			setupDonationBoard(board, templatesFolder)
+		else
+			setupGamepassBoard(board, passId, templatesFolder)
+		end
+	end
+
+	-- Build now if the parts are here, and again whenever a part streams (back) in.
+	board.ChildAdded:Connect(function(child)
+		if child:IsA("BasePart") then
+			task.defer(build)
+		end
+	end)
+	build()
 end
 
 function GamepassBoardController:KnitInit() end

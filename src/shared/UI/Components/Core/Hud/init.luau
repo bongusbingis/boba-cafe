@@ -16,6 +16,9 @@ local OrderQueue = require(script.OrderQueue)
 local ShiftCard = require(script.ShiftCard)
 local CafeRating = require(script.CafeRating)
 local QuestCard = require(script.QuestCard)
+local LevelUpCelebration = require(script.LevelUpCelebration)
+local PaycheckCard = require(script.PaycheckCard)
+local EventIntro = require(script.EventIntro)
 ---> private
 local c = React.createElement
 
@@ -111,7 +114,16 @@ return function(props: {
 		OrderQueue = c(OrderQueue, {}),
 		CafeRating = c(CafeRating, {}),
 
+		-- Always mounted; renders only while a Rush Hour / Boba Party intro plays (EVENT-FX).
+		EventIntro = c(EventIntro, {}),
+
 		-- Last sibling, ZIndex 20 on its single outer Frame (above TicketStack 10).
 		QuestPopup = if questsOpen then c(QuestCard, { OnClose = closeQuests, CloseRef = questsCloseRef }) else nil,
+
+		-- Always mounted; renders only while a level-up payload is active.
+		LevelUp = c(LevelUpCelebration, {}),
+
+		-- Always mounted; renders only while a paycheck payload is active.
+		Paycheck = c(PaycheckCard, {}),
 	})
 end

@@ -103,7 +103,7 @@ return function()
 			task.wait()
 		end
 
-		for _, reason in { "PromoCode", "ItemSell", "QuestRerollRefund" } do
+		for _, reason in { "PromoCode", "ItemSell", "QuestRerollRefund", "RobuxPack" } do
 			it("does not feed MostBobaBucks for reason " .. reason, function()
 				modifyAndSettle("BobaBucks", 50, reason)
 				expect(fakeData.Currency.BobaBucks).to.equal(150)

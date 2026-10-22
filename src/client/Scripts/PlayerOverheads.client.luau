@@ -7,7 +7,10 @@ local Packages = ReplicatedStorage:WaitForChild("Packages")
 
 local Knit = require(Packages.Knit)
 
+local RankUtil = require(Shared.Utility.RankUtil)
 local Nametags = require(Shared.Configuration.InventoryItemDefinitions.Nametags)
+local OverheadEmojis = require(Shared.Configuration.OverheadEmojis)
+local PassCosmetics = require(Shared.Configuration.PassCosmetics)
 
 ---> Per-player overhead handles
 local cosmetics: { [number]: { Nickname: string, Nametag: string? } } = {}
@@ -122,26 +125,43 @@ local function buildOverhead(player: Player, character: Model)
 	local roleLabel = Instance.new("TextLabel")
 	roleLabel.BackgroundTransparency = 1
 	roleLabel.FontFace =
-		Font.new("rbxasset://fonts/families/SourceSansPro.json", Enum.FontWeight.Regular, Enum.FontStyle.Italic)
+		Font.new("rbxasset://fonts/families/SourceSansPro.json", Enum.FontWeight.Regular, Enum.FontStyle.Normal)
 	roleLabel.Position = UDim2.fromScale(0, 0.85)
 	roleLabel.Size = UDim2.fromScale(1, 0.15)
-	roleLabel.Text = "Customer"
 	roleLabel.TextColor3 = Color3.new(1, 1, 1)
 	roleLabel.TextScaled = true
+	roleLabel.RichText = true
 	roleLabel.Parent = frame
 
 	---> Level title line, under the name (copy of the role line style)
-	local titleLabel = Instance.new("TextLabel")
-	titleLabel.BackgroundTransparency = 1
-	titleLabel.FontFace =
-		Font.new("rbxasset://fonts/families/SourceSansPro.json", Enum.FontWeight.Regular, Enum.FontStyle.Italic)
-	titleLabel.Position = UDim2.fromScale(0, 1)
-	titleLabel.Size = UDim2.fromScale(1, 0.15)
-	titleLabel.TextColor3 = Color3.new(1, 1, 1)
-	titleLabel.TextScaled = true
-	titleLabel.Parent = frame
+	-- local titleLabel = Instance.new("TextLabel")
+	-- titleLabel.BackgroundTransparency = 1
+	-- titleLabel.FontFace =
+	-- 	Font.new("rbxasset://fonts/families/SourceSansPro.json", Enum.FontWeight.Regular, Enum.FontStyle.Italic)
+	-- titleLabel.Position = UDim2.fromScale(0, 1)
+	-- titleLabel.Size = UDim2.fromScale(1, 0.15)
+	-- titleLabel.TextColor3 = Color3.new(1, 1, 1)
+	-- titleLabel.TextScaled = true
+	-- titleLabel.Parent = frame
+
+	local _rank = nil
+	if RankUtil.IsMR(player) then
+		_rank = RankUtil:GetRoleAsync(player)
+		_rank = `<font color="rgb(250, 239, 37)">{_rank}</font>`
+		-- local rankLabel = Instance.new("TextLabel")
+		-- rankLabel.BackgroundTransparency = 1
+		-- rankLabel.FontFace =
+		-- 	Font.new("rbxasset://fonts/families/SourceSansPro.json", Enum.FontWeight.Regular, Enum.FontStyle.Italic)
+		-- rankLabel.Position = UDim2.fromScale(0, 0.975)
+		-- rankLabel.Size = UDim2.fromScale(1, 0.15)
+		-- rankLabel.TextColor3 = Color3.new(1, 1, 1)
+		-- rankLabel.TextScaled = true
+		-- rankLabel.Parent = frame
+		-- rankLabel.Text = RankUtil:GetRoleAsync(player)
+	end
+
 	local function refreshTitle()
-		local isVeteran = player:GetAttribute("IsVeteran") == true
+		--local isVeteran = player:GetAttribute("IsVeteran") == true
 		-- The equipped title is the earned cosmetic the player chose; an empty
 		-- string means explicitly unequipped. The level title is only a fallback
 		-- until ProgressionService has loaded and set EquippedTitle.
@@ -154,25 +174,56 @@ local function buildOverhead(player: Player, character: Model)
 			levelTitle = rawLevelTitle
 		end
 
-		if isVeteran and levelTitle then
-			titleLabel.Text = "Veteran • " .. levelTitle
-		elseif isVeteran then
-			titleLabel.Text = "Veteran"
+		if _rank and levelTitle then
+			roleLabel.Text = _rank .. " • " .. levelTitle
+		elseif _rank then
+			roleLabel.Text = _rank
 		elseif levelTitle then
-			titleLabel.Text = levelTitle
+			roleLabel.Text = levelTitle
 		else
-			titleLabel.Text = ""
+			roleLabel.Text = ""
 		end
-		titleLabel.Visible = titleLabel.Text ~= ""
+		roleLabel.Visible = roleLabel.Text ~= ""
 	end
 	refreshTitle()
 	local titleConn = player:GetAttributeChangedSignal("LevelTitle"):Connect(refreshTitle)
 	local equippedConn = player:GetAttributeChangedSignal("EquippedTitle"):Connect(refreshTitle)
 	local veteranConn = player:GetAttributeChangedSignal("IsVeteran"):Connect(refreshTitle)
-	titleLabel.Destroying:Connect(function()
+	roleLabel.Destroying:Connect(function()
 		titleConn:Disconnect()
 		equippedConn:Disconnect()
 		veteranConn:Disconnect()
+	end)
+
+	---> Emoji row label: sits above the nickname text, same Y size as usernameLabel
+	local emojiLabel = Instance.new("TextLabel")
+	emojiLabel.AnchorPoint = Vector2.new(0.5, 0)
+	emojiLabel.BackgroundTransparency = 1
+	emojiLabel.FontFace =
+		Font.new("rbxasset://fonts/families/SourceSansPro.json", Enum.FontWeight.Regular, Enum.FontStyle.Normal)
+	emojiLabel.Position = UDim2.fromScale(0.5, 0.30)
+	emojiLabel.Size = UDim2.fromScale(1, 0.175)
+	emojiLabel.TextColor3 = Color3.new(1, 1, 1)
+	emojiLabel.TextScaled = true
+	emojiLabel.Text = ""
+	emojiLabel.Visible = false
+	emojiLabel.Parent = frame
+
+	local function refreshEmojis()
+		task.spawn(function()
+			local emojiString = OverheadEmojis.GetEmojiString(player)
+			if emojiLabel.Parent then
+				emojiLabel.Text = emojiString
+				emojiLabel.Visible = emojiString ~= ""
+			end
+		end)
+	end
+	refreshEmojis()
+	local emojiAttrConn = player.AttributeChanged:Connect(function()
+		refreshEmojis()
+	end)
+	emojiLabel.Destroying:Connect(function()
+		emojiAttrConn:Disconnect()
 	end)
 
 	---> Nickname label: TweenService owns its color exclusively
@@ -192,13 +243,18 @@ local function buildOverhead(player: Player, character: Model)
 	local function rerender(nickname: string, nametag: string?)
 		local nametagDef = nametag and Nametags[nametag]
 		local staticColor = (nametagDef and nametagDef.Color) or Color3.new(1, 1, 1)
+		local animation = nametagDef and nametagDef.Animation
+		---> Rainbow Pack owners get the rainbow nametag unless they equipped another one
+		if nametagDef == nil and player:GetAttribute(PassCosmetics.RAINBOW_ATTRIBUTE) == true then
+			animation = PassCosmetics.RAINBOW_ANIMATION
+		end
 
 		nicknameLabel.Text = nickname ~= "" and nickname or player.Name
 
 		if currentStop then
 			currentStop()
 		end
-		currentStop = startAnimation(nicknameLabel, nametagDef and nametagDef.Animation, staticColor)
+		currentStop = startAnimation(nicknameLabel, animation, staticColor)
 	end
 
 	animationStops[player.UserId] = function()
@@ -212,6 +268,14 @@ local function buildOverhead(player: Player, character: Model)
 
 	local cached = cosmetics[player.UserId]
 	rerender(cached and cached.Nickname or "", cached and cached.Nametag)
+
+	local rainbowConn = player:GetAttributeChangedSignal(PassCosmetics.RAINBOW_ATTRIBUTE):Connect(function()
+		local current = cosmetics[player.UserId]
+		rerender(current and current.Nickname or "", current and current.Nametag)
+	end)
+	nicknameLabel.Destroying:Connect(function()
+		rainbowConn:Disconnect()
+	end)
 end
 
 local function playerAdded(player: Player)

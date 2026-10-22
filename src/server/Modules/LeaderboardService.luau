@@ -317,6 +317,11 @@ function LeaderboardService:_renderTabularContent(
 
 	local headerRow = container:FindFirstChild("HeaderRow")
 	if headerRow then
+		for _, child in headerRow:GetChildren() do
+			if child:IsA("TextLabel") and (child.Name == "Rank" or child.Name == "Name" or child.Name == "Value") then
+				child.TextSize = 38
+			end
+		end
 		local metricHeader = headerRow:FindFirstChild("MetricHeader")
 		if metricHeader and metricHeader:IsA("TextLabel") then
 			metricHeader.Text = string.upper(boardDef.Metric or "SCORE")
@@ -361,7 +366,7 @@ function LeaderboardService:_renderTabularContent(
 			rankLabel.Position = UDim2.fromOffset(0, 0)
 			rankLabel.BackgroundTransparency = 1
 			rankLabel.FontFace = Styles.FONT_FREDOKA
-			rankLabel.TextSize = 24
+			rankLabel.TextSize = 38
 			rankLabel.Text = `#{i}`
 			rankLabel.TextXAlignment = Enum.TextXAlignment.Center
 			if i == 1 then
@@ -381,7 +386,7 @@ function LeaderboardService:_renderTabularContent(
 			nameLabel.Position = UDim2.new(0.18, 12, 0, 0)
 			nameLabel.BackgroundTransparency = 1
 			nameLabel.FontFace = Styles.FONT_FREDOKA
-			nameLabel.TextSize = 22
+			nameLabel.TextSize = 38
 			nameLabel.TextXAlignment = Enum.TextXAlignment.Left
 			nameLabel.TextTruncate = Enum.TextTruncate.AtEnd
 			nameLabel.Parent = row
@@ -392,7 +397,7 @@ function LeaderboardService:_renderTabularContent(
 			valueLabel.Position = UDim2.fromScale(0.70, 0)
 			valueLabel.BackgroundTransparency = 1
 			valueLabel.FontFace = Styles.FONT_FREDOKA
-			valueLabel.TextSize = 22
+			valueLabel.TextSize = 38
 			valueLabel.TextXAlignment = Enum.TextXAlignment.Right
 			valueLabel.Parent = row
 
@@ -400,8 +405,14 @@ function LeaderboardService:_renderTabularContent(
 		end
 
 		local entry = entries[i]
+		local rankLabel = row:FindFirstChild("Rank")
+		if rankLabel and rankLabel:IsA("TextLabel") then
+			rankLabel.TextSize = 38
+		end
+
 		local nameLabel = row:FindFirstChild("Name")
 		if nameLabel and nameLabel:IsA("TextLabel") then
+			nameLabel.TextSize = 38
 			if entry then
 				nameLabel.Text = entry.Name
 				nameLabel.TextColor3 = Styles.GREEN_DEEP
@@ -413,6 +424,7 @@ function LeaderboardService:_renderTabularContent(
 
 		local valueLabel = row:FindFirstChild("Value")
 		if valueLabel and valueLabel:IsA("TextLabel") then
+			valueLabel.TextSize = 38
 			if entry then
 				valueLabel.Text = formatNumber(entry.Value)
 				valueLabel.TextColor3 = Styles.GREEN_DEEP
@@ -453,6 +465,11 @@ function LeaderboardService:_updateBoardGui(
 			end
 
 			local timePeriodLabel = headerGui:FindFirstChild("TimePeriod")
+			if not timePeriodLabel or not timePeriodLabel:IsA("TextLabel") then
+				timePeriodLabel = headerGui:FindFirstChild("Month")
+					or headerGui:FindFirstChild("Period")
+					or headerGui:FindFirstChild("Date")
+			end
 			if timePeriodLabel and timePeriodLabel:IsA("TextLabel") then
 				local isGlobal = boardModel.Parent and boardModel.Parent.Name == "Global"
 				if isGlobal then
@@ -461,7 +478,7 @@ function LeaderboardService:_updateBoardGui(
 					timePeriodLabel.Text = DateTime.now():FormatUniversalTime("MMMM YYYY", "en-us")
 				end
 				timePeriodLabel.FontFace = Styles.FONT_FREDOKA
-				timePeriodLabel.TextColor3 = Styles.GOLD
+				timePeriodLabel.TextColor3 = Color3.new(1, 1, 1)
 			end
 
 			for _, desc in headerGui:GetDescendants() do

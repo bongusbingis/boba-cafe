@@ -40,23 +40,95 @@ local UiSfx = require(UI.Utility.UiSfx)
 
 local c = React.createElement
 
--- Builds the display name for an order item, prepending any selected variant.
-local function resolveItemName(item: { [string]: any }): string
-	local name: string = item.DefaultInfo.ItemName
-	if item.DefaultInfo.Select then
-		for variantType in item.DefaultInfo.Select do
-			local chosen = item.CustomInfo[variantType]
-			if chosen then
-				name = chosen .. " " .. name
-			end
+-- Infers the interaction class for a completed step to trigger class-specific audio.
+local function getStepInteractionClass(step: any): string?
+	if typeof(step) ~= "table" or typeof(step.Station) ~= "string" then
+		return nil
+	end
+	local station = step.Station
+	if
+		station == "Milk"
+		or station == "Steamed Milk"
+		or string.find(station, "Syrup")
+		or string.find(station, "Water")
+	then
+		return "Pour"
+	elseif
+		string.find(station, "Tapioca")
+		or string.find(station, "Powder")
+		or string.find(station, "Sugar")
+		or string.find(station, "Ice Cream")
+	then
+		return "Scoop"
+	elseif string.find(station, "Coffee") or string.find(station, "Ice Machine") or string.find(station, "Machine") then
+		return "Machine"
+	elseif string.find(station, "Blender") then
+		return "Blender"
+	elseif
+		station == "Cup"
+		or station == "Clear Cup"
+		or station == "Mug"
+		or string.find(station, "Display")
+		or string.find(station, "Freezer")
+	then
+		return "Grab"
+	end
+	return nil
+end
+
+local ALIAS_CATEGORIES = {
+	Coffee = "Coffees",
+	["Hot Cocoa"] = "Hot Cocoas",
+	Tea = "Teas",
+	Boba = "Boba Teas",
+}
+
+local function ensureItemDefaultInfo(item: { [string]: any })
+	if item.DefaultInfo ~= nil then
+		return
+	end
+	local ok, menu = pcall(function()
+		return require(Ordering:WaitForChild("Menu"))
+	end)
+	if ok and typeof(menu) == "table" and typeof(menu.FoodTable) == "table" then
+		local catKey = item.Category
+		local cat = menu.FoodTable[catKey] or (catKey and menu.FoodTable[ALIAS_CATEGORIES[catKey]])
+		if cat and typeof(cat.Items) == "table" and item.Item and cat.Items[item.Item] then
+			item.DefaultInfo = cat.Items[item.Item]
 		end
 	end
-	return name
+end
+
+-- Builds the display name for an order item, prepending any selected variant.
+local function resolveItemName(item: { [string]: any }): string
+	if item.DefaultInfo and typeof(item.DefaultInfo.ItemName) == "string" then
+		local name: string = item.DefaultInfo.ItemName
+		if item.DefaultInfo.Select and typeof(item.CustomInfo) == "table" then
+			for variantType in item.DefaultInfo.Select do
+				local chosen = item.CustomInfo[variantType]
+				if chosen then
+					name = chosen .. " " .. name
+				end
+			end
+		end
+		return name
+	end
+	if typeof(item.Label) == "string" then
+		return item.Label
+	end
+	if typeof(item.Item) == "string" then
+		local size = if typeof(item.CustomInfo) == "table" then item.CustomInfo.Size else nil
+		return if size then size .. " " .. item.Item else item.Item
+	end
+	return "Unknown"
 end
 
 -- Returns a flat list of customisation strings for an item (e.g. "+ Boba", "- NO Ice").
 local function resolveCustomisations(item: { [string]: any }): { string }
 	local lines: { string } = {}
+	if item.DefaultInfo == nil or item.CustomInfo == nil then
+		return lines
+	end
 
 	if item.DefaultInfo.RequiredSelection then
 		for selType in item.DefaultInfo.RequiredSelection do
@@ -78,14 +150,89 @@ end
 
 ---> Spec resolution
 
--- Uses KitchenGuidance.ResolveSpec (never a second resolver). KitchenGuidance
--- lives under StarterPlayerScripts, so it is required lazily here at runtime
--- instead of at the top of the file. Any failure resolves to nil, which
--- renders no card (the ticket stays as today).
-local function resolveOrderSpec(order)
-	if typeof(order) ~= "table" then
-		return nil
+-- Finds the candidate attributes and tool instance that match a specific OrderSpec,
+-- taking into account already-used candidates for previous specs so that duplicate
+-- items in an order don't falsely share the same candidate tool.
+local function getSpecCandidate(
+	targetSpecIndex: number?,
+	specs: { any },
+	candidateList: { { [string]: any } },
+	toolsList: { Instance }?
+): ({ [string]: any }?, Instance?)
+	if not targetSpecIndex or not specs or not candidateList or not specs[targetSpecIndex] then
+		return nil, nil
 	end
+	local picked: { [number]: number } = {}
+	local used: { [number]: boolean } = {}
+	for _, wanted in { "Perfect", "Close" } :: { OrderSpec.Grade } do
+		for specIndex, spec in specs do
+			if picked[specIndex] ~= nil then
+				continue
+			end
+			for candidateIndex, attrs in candidateList do
+				if used[candidateIndex] then
+					continue
+				end
+				local grade = OrderSpec.Match(spec, attrs)
+				if grade == wanted then
+					picked[specIndex] = candidateIndex
+					used[candidateIndex] = true
+					break
+				end
+			end
+		end
+	end
+	local candIdx = picked[targetSpecIndex]
+	if candIdx ~= nil then
+		local attrs = candidateList[candIdx]
+		local tool = if toolsList ~= nil then toolsList[candIdx] else nil
+		return attrs, tool
+	end
+	return nil, nil
+end
+
+-- Determines which spec indices in `specs` have matching completed items in `candidates`.
+local function getCompletedSpecs(
+	specs: { OrderSpec.OrderSpec },
+	candidates: { { [string]: any } },
+	allDone: boolean?,
+	isReady: boolean?
+): { [number]: boolean }
+	local completed: { [number]: boolean } = {}
+	if isReady or allDone then
+		for i = 1, #specs do
+			completed[i] = true
+		end
+		return completed
+	end
+	if not specs or not candidates or #specs == 0 or #candidates == 0 then
+		return completed
+	end
+	local usedCandidate: { [number]: boolean } = {}
+	for _, wanted in { "Perfect", "Close" } :: { OrderSpec.Grade } do
+		for specIndex, spec in specs do
+			if completed[specIndex] then
+				continue
+			end
+			for candIndex, attrs in candidates do
+				if usedCandidate[candIndex] then
+					continue
+				end
+				local grade = OrderSpec.Match(spec, attrs)
+				if grade == wanted then
+					completed[specIndex] = true
+					usedCandidate[candIndex] = true
+					break
+				end
+			end
+		end
+	end
+	return completed
+end
+
+-- Uses KitchenGuidance. KitchenGuidance lives under StarterPlayerScripts, so it is
+-- required lazily here at runtime instead of at the top of the file.
+local function getGuidanceModule()
 	local player = Players.LocalPlayer
 	if player == nil then
 		return nil
@@ -108,11 +255,7 @@ local function resolveOrderSpec(order)
 	if not ok or guidance == nil then
 		return nil
 	end
-	local okSpec, result = pcall(guidance.ResolveSpec, order, OrderSpec.FromOrderItem)
-	if not okSpec then
-		return nil
-	end
-	return result
+	return guidance
 end
 
 ---> Patience bar
@@ -140,7 +283,12 @@ end
 ---> Item Row
 
 -- Renders a single order item: its name and any customisation lines beneath it.
-local function ItemRow(props: { item: { [string]: any }, layoutOrder: number, onOpenRecipe: (() -> ())? })
+local function ItemRow(props: {
+	item: { [string]: any },
+	layoutOrder: number,
+	isCompleted: boolean?,
+	onOpenRecipe: (() -> ())?,
+})
 	local item = props.item
 	local name = resolveItemName(item)
 	local customisations = resolveCustomisations(item)
@@ -160,12 +308,14 @@ local function ItemRow(props: { item: { [string]: any }, layoutOrder: number, on
 		})
 	end
 
+	local displayName = if props.isCompleted then `<font color="#48c774">✓</font> {name}` else name
+
 	return c("Frame", {
 		LayoutOrder = props.layoutOrder,
 		AutomaticSize = Enum.AutomaticSize.Y,
 		BackgroundColor3 = Styles.OFFWHITE,
 		BorderSizePixel = 0,
-		Size = UDim2.new(1, 0, 0, 0),
+		Size = UDim2.fromScale(1, 0),
 	}, {
 		Layout = c("UIListLayout", {
 			FillDirection = Enum.FillDirection.Vertical,
@@ -186,8 +336,9 @@ local function ItemRow(props: { item: { [string]: any }, layoutOrder: number, on
 			AutomaticSize = Enum.AutomaticSize.Y,
 			BackgroundTransparency = 1,
 			FontFace = Styles.FONT_FREDOKA,
+			RichText = true,
 			Size = UDim2.new(1, -8, 0, 18),
-			Text = name,
+			Text = displayName,
 			TextColor3 = Styles.GREEN_DEEP,
 			TextSize = 15,
 			TextXAlignment = Enum.TextXAlignment.Left,
@@ -200,7 +351,7 @@ local function ItemRow(props: { item: { [string]: any }, layoutOrder: number, on
 				LayoutOrder = 1,
 				AutomaticSize = Enum.AutomaticSize.Y,
 				BackgroundTransparency = 1,
-				Size = UDim2.new(1, 0, 0, 0),
+				Size = UDim2.fromScale(1, 0),
 			},
 			(function()
 				-- table.unpack only works on integer-keyed tables; merge into a single
@@ -229,16 +380,53 @@ return function(props: {
 	local isSecond = props.slot == 2
 	local order, setOrder = React.useState(nil :: { any }?)
 	local readyNode, setReadyNode = React.useState(nil :: Instance?)
-	local spec, setSpec = React.useState(nil)
+	local candidates, setCandidates = React.useState({} :: { { [string]: any } })
+	local candidateTools, setCandidateTools = React.useState({} :: { Instance })
 	local toolAttrs, setToolAttrs = React.useState(nil :: { [string]: any }?)
 	local toolInst, setToolInst = React.useState(nil :: Instance?)
 	local patience, setPatience = React.useState(nil :: number?)
 	local character, setCharacter =
 		React.useState(if Players.LocalPlayer ~= nil then Players.LocalPlayer.Character else nil)
+	local selectedSpecIndex, setSelectedSpecIndex = React.useState(nil :: number?)
 	-- Phones start collapsed to the header line; a tap on the header toggles.
 	local canCollapse = UserInputService.TouchEnabled
 	local collapsed, setCollapsed = React.useState(canCollapse)
 	local lastStep = React.useRef({ spec = nil, tool = nil, done = 0 })
+
+	local guidance = getGuidanceModule()
+	local specs = if guidance ~= nil and order ~= nil then guidance.ResolveSpecs(order, OrderSpec.FromOrderItem) else {}
+	local activeSpec, allDone, activeIndex, totalSpecs =
+		if guidance ~= nil and #specs > 0 then guidance.FindActiveSpec(specs, candidates, toolAttrs) else nil,
+		false,
+		nil,
+		#specs
+	local currentSpecIndex = selectedSpecIndex or activeIndex or #specs
+	local currentSpec = if selectedSpecIndex ~= nil and specs[selectedSpecIndex] ~= nil
+		then specs[selectedSpecIndex]
+		else (activeSpec or specs[#specs])
+
+	local cardAttrs = toolAttrs
+	local cardTool = toolInst
+	local isComplete = false
+
+	if currentSpec ~= nil then
+		local matchingAttrs, matchingTool = getSpecCandidate(currentSpecIndex, specs, candidates, candidateTools)
+		if matchingAttrs ~= nil then
+			if cardAttrs == nil then
+				cardAttrs = matchingAttrs
+				cardTool = matchingTool
+			else
+				local _, problem = OrderSpec.StepState(currentSpec, cardAttrs)
+				if problem ~= nil and problem.Severity == "Wrong" then
+					cardAttrs = matchingAttrs
+					cardTool = matchingTool
+				end
+			end
+			isComplete = true
+		elseif allDone then
+			isComplete = true
+		end
+	end
 
 	if RunService:IsRunning() then
 		React.useEffect(function()
@@ -250,7 +438,6 @@ return function(props: {
 				setOrder(controller.Tickets[2])
 			else
 				setOrder(controller.CurrentOrder)
-				setSpec(resolveOrderSpec(controller.CurrentOrder))
 			end
 			setReadyNode(controller.ReadyNode)
 			if Players.LocalPlayer ~= nil then
@@ -263,7 +450,6 @@ return function(props: {
 				end)
 				else controller.OrderChanged:Connect(function(newOrder: { any }?)
 					setOrder(newOrder)
-					setSpec(resolveOrderSpec(newOrder))
 				end)
 
 			local connReady = controller.ReadyNodeChanged:Connect(function(node: Instance?)
@@ -311,61 +497,109 @@ return function(props: {
 			if character == nil then
 				setToolInst(nil)
 				setToolAttrs(nil)
+				setCandidates({})
+				setCandidateTools({})
 				return
 			end
-			local attrConn = nil
-			local function refresh()
-				if attrConn ~= nil then
-					attrConn:Disconnect()
-					attrConn = nil
+			local toolConns: { [Instance]: RBXScriptConnection } = {}
+			local function disconnectToolConns()
+				for _, conn in toolConns do
+					conn:Disconnect()
 				end
+				table.clear(toolConns)
+			end
+
+			local function refresh()
+				disconnectToolConns()
 				local tool = character:FindFirstChildWhichIsA("Tool")
 				setToolInst(tool)
 				if tool ~= nil then
 					setToolAttrs(tool:GetAttributes())
-					attrConn = tool.AttributeChanged:Connect(function()
-						if character:FindFirstChildWhichIsA("Tool") == tool then
-							setToolAttrs(tool:GetAttributes())
-						end
-					end)
+					toolConns[tool] = tool.AttributeChanged:Connect(refresh)
 				else
 					setToolAttrs(nil)
 				end
+
+				local candidateAttrsList = {}
+				local candidateToolsList = {}
+				local function addFrom(container: Instance?)
+					if not container then
+						return
+					end
+					for _, child in container:GetChildren() do
+						if child:IsA("Tool") and child:GetAttribute("Served") ~= true then
+							table.insert(candidateAttrsList, child:GetAttributes())
+							table.insert(candidateToolsList, child)
+							if not toolConns[child] then
+								toolConns[child] = child.AttributeChanged:Connect(refresh)
+							end
+						end
+					end
+				end
+				addFrom(character)
+				if Players.LocalPlayer ~= nil then
+					addFrom(Players.LocalPlayer:FindFirstChild("Backpack"))
+				end
+				setCandidates(candidateAttrsList)
+				setCandidateTools(candidateToolsList)
 			end
 			refresh()
 			local connAdded = character.ChildAdded:Connect(refresh)
 			local connRemoved = character.ChildRemoved:Connect(refresh)
+			local backpack = if Players.LocalPlayer ~= nil then Players.LocalPlayer:FindFirstChild("Backpack") else nil
+			local bpAdded = if backpack ~= nil then backpack.ChildAdded:Connect(refresh) else nil
+			local bpRemoved = if backpack ~= nil then backpack.ChildRemoved:Connect(refresh) else nil
 			return function()
 				connAdded:Disconnect()
 				connRemoved:Disconnect()
-				if attrConn ~= nil then
-					attrConn:Disconnect()
+				if bpAdded ~= nil then
+					bpAdded:Disconnect()
 				end
+				if bpRemoved ~= nil then
+					bpRemoved:Disconnect()
+				end
+				disconnectToolConns()
 			end
 		end, { character })
 
 		-- Step tick (SOUNDS D6): progress on the same held tool for the same order only.
 		React.useEffect(function()
-			if isSecond or spec == nil then
+			if isSecond or currentSpec == nil then
 				return
 			end
-			local current = OrderSpec.StepState(spec, toolAttrs)
-			local done = math.clamp(current - 1, 0, #OrderSpec.Steps(spec))
+			local current = OrderSpec.StepState(currentSpec, toolAttrs)
+			local done = math.clamp(current - 1, 0, #OrderSpec.Steps(currentSpec))
 			local last = lastStep.current
-			if done > last.done and last.spec == spec and toolInst ~= nil and last.tool == toolInst then
-				UiSfx.Play("StepDone")
+			if done > last.done and last.spec == currentSpec and toolInst ~= nil and last.tool == toolInst then
+				local steps = OrderSpec.Steps(currentSpec)
+				local completedStep = steps[done]
+				local class = getStepInteractionClass(completedStep)
+				local cues = {}
+				if class then
+					table.insert(cues, "StepDone_" .. class)
+				end
+				table.insert(cues, "StepDone")
+				UiSfx.Play(cues)
 			end
-			lastStep.current = { spec = spec, tool = toolInst, done = done }
-		end, { spec, toolAttrs, toolInst })
+			lastStep.current = { spec = currentSpec, tool = toolInst, done = done }
+		end, { currentSpec, toolAttrs, toolInst })
 	end
 
-	-- A new order (different Id, or non-nil after nil) re-opens a collapsed ticket.
+	-- A new order (different Id, or non-nil after nil) re-opens a collapsed ticket and clears selection.
 	local orderKey = if order ~= nil then (order.Id or order) else nil
 	React.useEffect(function()
+		setSelectedSpecIndex(nil)
 		if orderKey ~= nil and canCollapse then
 			setCollapsed(false)
 		end
 	end, { orderKey })
+
+	-- Equipping a tool refocuses the ticket onto the held item
+	React.useEffect(function()
+		if toolInst ~= nil then
+			setSelectedSpecIndex(nil)
+		end
+	end, { toolInst })
 
 	-- Nothing to show when the player has no active order
 	if not order then
@@ -373,44 +607,57 @@ return function(props: {
 	end
 
 	-- Build one ItemRow per order item
+	local rawItems = if typeof(order) == "table"
+			and typeof(order.Items) == "table"
+			and #order.Items > 0
+		then order.Items
+		else order
+
+	local completedSpecs = getCompletedSpecs(specs, candidates, allDone, readyNode ~= nil)
+
 	local itemRows = {}
-	for i, item in ipairs(order) do
-		if i > 1 then
-			-- Thin divider between items
-			itemRows["Divider_" .. i] = c("Frame", {
-				LayoutOrder = (i - 1) * 2,
-				BackgroundColor3 = Styles.GRAY,
-				BorderSizePixel = 0,
-				Size = UDim2.new(1, 0, 0, 1),
+	if typeof(rawItems) == "table" and #rawItems > 0 then
+		for i, item in ipairs(rawItems) do
+			ensureItemDefaultInfo(item)
+			if i > 1 then
+				-- Thin divider between items
+				itemRows["Divider_" .. i] = c("Frame", {
+					LayoutOrder = (i - 1) * 2,
+					BackgroundColor3 = Styles.GRAY,
+					BorderSizePixel = 0,
+					Size = UDim2.new(1, 0, 0, 1),
+				})
+			end
+			itemRows["Item_" .. i] = c(ItemRow, {
+				LayoutOrder = (i - 1) * 2 + 1,
+				item = item,
+				isCompleted = completedSpecs[i] == true,
+				onOpenRecipe = function()
+					setSelectedSpecIndex(i)
+					if props.SetCurrentPage ~= nil and typeof(item.Item) == "string" then
+						props.SetCurrentPage(UI.Pages.Recipes, item.Item)
+					end
+				end,
 			})
 		end
-		itemRows["Item_" .. i] = c(ItemRow, {
-			LayoutOrder = (i - 1) * 2 + 1,
-			item = item,
-			onOpenRecipe = if props.SetCurrentPage ~= nil and typeof(item.Item) == "string"
-				then function()
-					props.SetCurrentPage(UI.Pages.Recipes, item.Item)
-				end
-				else nil,
-		})
-	end
-
-	-- NPC tickets are a table with a Label (not a list of items): show that label.
-	if typeof(order.Label) == "string" then
+	elseif typeof(order.Label) == "string" then
+		local isCompleted = allDone or readyNode ~= nil or completedSpecs[1] == true
 		itemRows.TicketLabel = c("TextLabel", {
 			LayoutOrder = 1,
 			AutomaticSize = Enum.AutomaticSize.Y,
 			BackgroundTransparency = 1,
 			FontFace = Styles.FONT_FREDOKA,
+			RichText = true,
 			Size = UDim2.new(1, 0, 0, 18),
-			Text = order.Label,
+			Text = if isCompleted then `<font color="#48c774">✓</font> {order.Label}` else order.Label,
 			TextColor3 = Styles.GREEN_DEEP,
 			TextSize = 15,
+			TextWrapped = true,
 		})
 	end
 
 	-- Recipe card section: only when the order resolves to a spec with steps.
-	local hasCard = not isSecond and spec ~= nil and #OrderSpec.Steps(spec) > 0
+	local hasCard = not isSecond and currentSpec ~= nil and #OrderSpec.Steps(currentSpec) > 0
 	local recipeDivider = hasCard
 			and c("Frame", {
 				LayoutOrder = 2,
@@ -422,12 +669,16 @@ return function(props: {
 	local recipe = hasCard
 			and c(RecipeCard, {
 				layoutOrder = 3,
-				spec = spec,
-				attrs = toolAttrs,
-				tool = toolInst,
+				spec = currentSpec,
+				attrs = cardAttrs,
+				tool = cardTool,
 				-- Shift text arrives with M2.
 				patience = patience,
 				shiftText = nil,
+				allDone = allDone,
+				isComplete = isComplete,
+				itemIndex = currentSpecIndex,
+				itemTotal = totalSpecs,
 			})
 		or nil
 
@@ -541,7 +792,7 @@ return function(props: {
 					LayoutOrder = 1,
 					AutomaticSize = Enum.AutomaticSize.Y,
 					BackgroundTransparency = 1,
-					Size = UDim2.new(1, 0, 0, 0),
+					Size = UDim2.fromScale(1, 0),
 				},
 				(function()
 					local children = table.clone(itemRows)

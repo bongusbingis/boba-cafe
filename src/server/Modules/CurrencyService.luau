@@ -12,10 +12,11 @@ local ProfileTemplate = require(Config.ProfileTemplate)
 local DATA_TIMEOUT_SECONDS = 10
 
 -- BB credits that are not play-earned and so never count toward the MostBobaBucks board (DEC-035 Q4).
--- Robux pack receipts are not wired yet (DEC-035 Q8); add their reason here when they are.
+-- Robux pack receipts (RobuxPack) are excluded: bought BB must not buy a leaderboard spot (DEC-035 Q8).
 -- PromoCode and ItemSell grants are excluded too (DEC-038 Q14): codes and item sales are not play-earned.
 local LEADERBOARD_EXCLUDED_REASONS: { [string]: boolean } = {
 	QuestRerollRefund = true,
+	RobuxPack = true,
 	PromoCode = true,
 	ItemSell = true,
 }
@@ -42,35 +43,47 @@ function CurrencyService:Modify(player: Player, type: "BobaBucks" | "Points", am
 	end
 
 	self:_getService("DataService"):GetDataAsync(player):andThen(function(playerData)
-		local current = playerData.Currency[type]
-		if not current then
-			warn(`Player {player.Name} does not have currency type: {type}`)
-			return
-		end
-
-		if type == "BobaBucks" then
-			local statisticsService = self:_getService("StatisticsService")
-			local statToIncrement = amount > 0 and "BobaBucksEarned" or "BobaBucksSpent"
-			statisticsService:IncrementStat(player, statToIncrement, math.abs(amount))
-		end
-
-		playerData:SetValue({ "Currency", type }, current + amount)
-		if type == "BobaBucks" and amount > 0 and not LEADERBOARD_EXCLUDED_REASONS[reason or ""] then
-			-- Lazy lookup: a leaderboard failure must never break a payment.
-			pcall(function()
-				self:_getService("LeaderboardService"):IncrementStat(player, "MostBobaBucks", amount)
-			end)
-		end
-		if type == "BobaBucks" then
-			pcall(function()
-				local a = self:_getService("AnalyticsEvents")
-				a:Economy(player, amount > 0, amount, current + amount, reason or "Shop")
-				if amount > 0 then
-					a:Funnel(player, 5, "FirstPayout")
-				end
-			end)
-		end
+		self:ApplyLoaded(player, playerData, type, amount, reason)
 	end)
+end
+
+--- Applies a credit/debit to already-loaded player data. Does not yield, so a receipt grant can apply it
+--- synchronously and record the receipt back to back. Same stats, leaderboard feed and analytics as Modify.
+function CurrencyService:ApplyLoaded(
+	player: Player,
+	playerData: any,
+	type: "BobaBucks" | "Points",
+	amount: number,
+	reason: string?
+)
+	local current = playerData.Currency[type]
+	if not current then
+		warn(`Player {player.Name} does not have currency type: {type}`)
+		return
+	end
+
+	if type == "BobaBucks" then
+		local statisticsService = self:_getService("StatisticsService")
+		local statToIncrement = amount > 0 and "BobaBucksEarned" or "BobaBucksSpent"
+		statisticsService:IncrementStat(player, statToIncrement, math.abs(amount))
+	end
+
+	playerData:SetValue({ "Currency", type }, current + amount)
+	if type == "BobaBucks" and amount > 0 and not LEADERBOARD_EXCLUDED_REASONS[reason or ""] then
+		-- Lazy lookup: a leaderboard failure must never break a payment.
+		pcall(function()
+			self:_getService("LeaderboardService"):IncrementStat(player, "MostBobaBucks", amount)
+		end)
+	end
+	if type == "BobaBucks" then
+		pcall(function()
+			local a = self:_getService("AnalyticsEvents")
+			a:Economy(player, amount > 0, amount, current + amount, reason or "Shop")
+			if amount > 0 then
+				a:Funnel(player, 5, "FirstPayout")
+			end
+		end)
+	end
 end
 
 --- Atomically checks the balance and deducts `amount`. Yields while the player's data loads.

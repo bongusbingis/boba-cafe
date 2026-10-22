@@ -94,6 +94,161 @@ function KitchenGuidance.ResolveSpec(order: any, fromOrderItem: (any) -> (any?, 
 	return nil
 end
 
+-- Resolves all OrderSpecs in an order (multi-item NPC tickets with .Items or .Specs,
+-- notepad order arrays, or single-spec orders). Never errors.
+function KitchenGuidance.ResolveSpecs(order: any, fromOrderItem: (any) -> (any?, string?)): { OrderSpec.OrderSpec }
+	if typeof(order) ~= "table" then
+		return {}
+	end
+	if typeof(order.Kind) == "string" and typeof(order.Item) == "string" and typeof(order.Label) == "string" then
+		return { order }
+	end
+
+	if typeof(order.Specs) == "table" and #order.Specs > 0 then
+		local list: { OrderSpec.OrderSpec } = {}
+		for _, s in order.Specs do
+			local spec = KitchenGuidance.ResolveSpec(s, fromOrderItem)
+			if spec ~= nil then
+				table.insert(list, spec)
+			end
+		end
+		if #list > 0 then
+			return list
+		end
+	end
+
+	if typeof(order.Items) == "table" and #order.Items > 0 then
+		local list: { OrderSpec.OrderSpec } = {}
+		for _, it in order.Items do
+			local spec = KitchenGuidance.ResolveSpec(it, fromOrderItem)
+			if spec ~= nil then
+				table.insert(list, spec)
+			end
+		end
+		if #list > 0 then
+			return list
+		end
+	end
+
+	if order[1] ~= nil then
+		local list: { OrderSpec.OrderSpec } = {}
+		for _, it in ipairs(order) do
+			local spec = KitchenGuidance.ResolveSpec(it, fromOrderItem)
+			if spec ~= nil then
+				table.insert(list, spec)
+			end
+		end
+		if #list > 0 then
+			return list
+		end
+	end
+
+	if order.Spec ~= nil then
+		local spec = KitchenGuidance.ResolveSpec(order.Spec, fromOrderItem)
+		if spec ~= nil then
+			return { spec }
+		end
+	end
+
+	if typeof(order.Category) == "string" and typeof(order.Item) == "string" then
+		local ok, spec = pcall(fromOrderItem, order)
+		if ok and typeof(spec) == "table" then
+			return { spec }
+		end
+	end
+
+	return {}
+end
+
+-- Finds the currently active OrderSpec for a multi-spec order given the barista's tool
+-- candidates (character + backpack) and held tool attributes.
+-- Returns:
+--   activeSpec: OrderSpec? (the spec currently being worked on or the next unfilled spec)
+--   allDone: boolean (true if all specs have matching finished tools ready)
+--   activeSpecIndex: number? (1-based index of activeSpec in specs)
+--   totalSpecs: number (#specs)
+function KitchenGuidance.FindActiveSpec(
+	specs: { OrderSpec.OrderSpec },
+	candidates: { { [string]: any } },
+	heldAttrs: { [string]: any }?
+): (OrderSpec.OrderSpec?, boolean, number?, number)
+	local total = #specs
+	if total == 0 then
+		return nil, false, nil, 0
+	end
+
+	local picks = OrderSpec.PickTools(specs, candidates)
+	if picks ~= nil then
+		local heldIndex: number? = nil
+		if heldAttrs ~= nil and typeof(heldAttrs) == "table" and heldAttrs.Item ~= nil then
+			for specIndex, spec in specs do
+				local grade = OrderSpec.Match(spec, heldAttrs)
+				if grade == "Perfect" or grade == "Close" then
+					heldIndex = specIndex
+					break
+				end
+			end
+		end
+		local activeIndex = heldIndex or total
+		return specs[activeIndex], true, activeIndex, total
+	end
+
+	local filled: { [number]: boolean } = {}
+	local usedCandidate: { [number]: boolean } = {}
+	for _, wanted in { "Perfect", "Close" } :: { OrderSpec.Grade } do
+		for specIndex, spec in specs do
+			if filled[specIndex] then
+				continue
+			end
+			for candIndex, attrs in candidates do
+				if usedCandidate[candIndex] then
+					continue
+				end
+				local grade = OrderSpec.Match(spec, attrs)
+				if grade == wanted then
+					filled[specIndex] = true
+					usedCandidate[candIndex] = true
+					break
+				end
+			end
+		end
+	end
+
+	local activeIndex: number? = nil
+	if heldAttrs ~= nil and typeof(heldAttrs) == "table" and heldAttrs.Item ~= nil then
+		for specIndex, spec in specs do
+			if not filled[specIndex] then
+				local stepState, problem = OrderSpec.StepState(spec, heldAttrs)
+				if stepState > 1 and (problem == nil or problem.Severity ~= "Wrong") then
+					activeIndex = specIndex
+					break
+				end
+			end
+		end
+		if activeIndex == nil then
+			for specIndex, spec in specs do
+				local grade = OrderSpec.Match(spec, heldAttrs)
+				if grade == "Perfect" or grade == "Close" then
+					activeIndex = specIndex
+					break
+				end
+			end
+		end
+	end
+
+	if activeIndex == nil then
+		for specIndex = 1, total do
+			if not filled[specIndex] then
+				activeIndex = specIndex
+				break
+			end
+		end
+	end
+
+	local activeSpec = if activeIndex ~= nil then specs[activeIndex] else nil
+	return activeSpec, false, activeIndex, total
+end
+
 -- Where the held tool is in the order. nil when the item has no recipe chain (no card,
 -- no hints). `attrs` are the equipped tool's attributes, nil when nothing is held.
 function KitchenGuidance.Compute(spec: OrderSpec.OrderSpec?, attrs: { [string]: any }?): Guidance?

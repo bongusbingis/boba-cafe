@@ -209,6 +209,7 @@ return function()
 	-- so ordering keeps working in that session after the run.
 	local LIVE_FIELDS = {
 		"_orders",
+		"_customerOrders",
 		"_currentOrderNum",
 		"_orderDebounces",
 		"_statusScreens",
@@ -248,6 +249,7 @@ return function()
 
 	beforeEach(function()
 		service._orders = {}
+		service._customerOrders = {}
 		service._currentOrderNum = 0
 		service._orderDebounces = {}
 		service._statusScreens = {}
@@ -1843,6 +1845,29 @@ return function()
 			expect(function()
 				service:_broadcastUpdate()
 			end).never.to.throw()
+		end)
+	end)
+
+	describe("Customer Orders and Status Screens", function()
+		it("should register customer orders and return order numbers", function()
+			local num = service:RegisterCustomerOrder("Cust_1", "Alex", 1, "Being Prepared")
+			expect(num).to.be.a("string")
+			expect(service._customerOrders["Cust_1"]).never.to.equal(nil)
+			expect(service._customerOrders["Cust_1"].customerName).to.equal("Alex")
+			expect(service._customerOrders["Cust_1"].status).to.equal("Being Prepared")
+		end)
+
+		it("should update customer order status", function()
+			service:RegisterCustomerOrder("Cust_2", "Karen", 2, "Being Prepared")
+			service:UpdateCustomerOrderStatus("Cust_2", "Ready for Pick Up")
+			expect(service._customerOrders["Cust_2"].status).to.equal("Ready for Pick Up")
+		end)
+
+		it("should remove customer orders", function()
+			service:RegisterCustomerOrder("Cust_3", "Sam", 1, "Being Prepared")
+			expect(service._customerOrders["Cust_3"]).never.to.equal(nil)
+			service:RemoveCustomerOrder("Cust_3")
+			expect(service._customerOrders["Cust_3"]).to.equal(nil)
 		end)
 	end)
 end

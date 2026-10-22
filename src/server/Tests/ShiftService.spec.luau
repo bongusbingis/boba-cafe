@@ -31,12 +31,20 @@ return function()
 	end
 
 	local originalShiftEnded = service.Client.ShiftEnded
+	local originalPaycheck = service.Client.Paycheck
+	local firedPaychecks = {}
 
 	beforeEach(function()
 		service._toggleDebounces = {}
 		service.Client.Server = service
 		service.Client.ShiftEnded = {
 			Fire = function(_self, _player, _summary) end,
+		}
+		firedPaychecks = {}
+		service.Client.Paycheck = {
+			Fire = function(_self, _player, paycheck)
+				table.insert(firedPaychecks, { Player = _player, Paycheck = paycheck })
+			end,
 		}
 	end)
 
@@ -46,6 +54,7 @@ return function()
 
 	afterAll(function()
 		service.Client.ShiftEnded = originalShiftEnded
+		service.Client.Paycheck = originalPaycheck
 	end)
 
 	describe("IsClockedIn / SetClockedIn", function()
@@ -249,6 +258,38 @@ return function()
 		end)
 	end)
 
+	describe("Paycheck receipt", function()
+		it("fires one paycheck with the shift pay lines and total", function()
+			local player = makePlayer(9201)
+			local state = {
+				Resolved = 10,
+				Target = 10,
+				Served = 9,
+				Walkouts = 1,
+				Perfects = 9,
+				Pay = 17,
+				Tips = 5,
+				BestCombo = 4,
+				Completed = 2,
+				Loaded = true,
+			}
+			service._states[player] = state
+			service:_endShift(player, state)
+			service._states[player] = nil
+
+			expect(#firedPaychecks).to.equal(1)
+			local fired = firedPaychecks[1]
+			expect(fired.Player).to.equal(player)
+			local paycheck = fired.Paycheck
+			expect(paycheck.Pay).to.equal(17)
+			expect(paycheck.Tips).to.equal(5)
+			expect(paycheck.Total).to.equal(paycheck.Pay + paycheck.Tips + paycheck.Bonus)
+			expect(paycheck.Served).to.equal(9)
+			expect(paycheck.Walkouts).to.equal(1)
+			expect(paycheck.Shift).to.equal(3)
+			expect(paycheck.First).to.equal(false)
+		end)
+	end)
 	describe("personal bests and capsule price", function()
 		local function endWith(prevCombo: number?, prevPay: number?, combo: number, pay: number)
 			local player = makePlayer(9300 + combo)

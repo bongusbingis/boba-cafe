@@ -12,6 +12,7 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
 
 ---> Dependencies
 
@@ -19,19 +20,25 @@ local Packages = ReplicatedStorage:WaitForChild("Packages")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local UI = Shared:WaitForChild("UI")
 
+local Knit = require(Packages.Knit)
 local React = require(Packages.React)
 
 local Styles = require(UI.Styles)
 local RatingConfig = require(Shared.Configuration.RatingConfig)
 local Banner = require(UI.Components.Buttons.Banner)
 local Pane = require(UI.Components.Pane)
+local PromptButton = require(UI.Components.Buttons.PromptButton)
 local UiSfx = require(UI.Utility.UiSfx)
+local EventProducts = require(Shared.Utility.EventProducts)
 
 ---> Private
 
 local c = React.createElement
 
 local MAX_NAME_CHARS = 8
+-- EVENT-FX: the banner bounces on the swing theme's beat while a Rush runs.
+local PULSE = TweenInfo.new(0.35, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true)
+local PULSE_SCALE = 1.08
 
 -- D8: buyer name unchanged when 8 chars or fewer, else first 8 chars + "..".
 local function shortName(name: string): string
@@ -56,6 +63,8 @@ return function()
 	local party, setParty = React.useState(false)
 	local buyer, setBuyer = React.useState(nil)
 	local _tick, setTick = React.useState(0)
+	local pulseRef = React.useRef(nil)
+	local openingRef = React.useRef(false)
 
 	if RunService:IsRunning() then
 		React.useEffect(function()
@@ -117,8 +126,63 @@ return function()
 		end, { rush, endsAt })
 	end
 
+	-- Unconditional (guard inside); the pulse frame is only mounted while clocked in.
+	React.useEffect(function()
+		local scale: UIScale? = pulseRef.current
+		if not rush or scale == nil then
+			return nil
+		end
+		scale.Scale = 1
+		local tween = TweenService:Create(scale, PULSE, { Scale = PULSE_SCALE })
+		tween:Play()
+		return function()
+			tween:Cancel()
+			scale.Scale = 1
+		end
+	end, { rush, clockedIn })
+
 	if not clockedIn then
 		return nil
+	end
+
+	-- Tap the meter: choose Boba Party or Rush Hour (live prices, ButtonPrompt via DialogController).
+	local function openBuyChoice()
+		if openingRef.current then
+			return
+		end
+		openingRef.current = true
+		task.spawn(function()
+			local prices = EventProducts.fetchPrices()
+			local buttons = {}
+			local byText = {}
+			for _, product in EventProducts.Products do
+				if EventProducts.available(product) then
+					local price = prices[product.Key]
+					local text = if price then `{product.Name} \u{e002} {price}` else product.Name
+					table.insert(buttons, { Text = text, Color = Styles.GREEN })
+					byText[text] = product
+				end
+			end
+			table.insert(buttons, { Text = "Cancel", Color = Styles.RED })
+			local ok, dialog = pcall(function()
+				return Knit.GetController("DialogController").new("ButtonPrompt", {
+					Title = "Cafe Event",
+					Text = "Boba Party: 10 min Rush for everyone. Rush Hour: 2 min Rush for everyone. Buying during an event adds time!",
+					Buttons = buttons,
+				})
+			end)
+			if not ok then
+				openingRef.current = false
+				return
+			end
+			dialog:Fire():andThen(function(choice)
+				openingRef.current = false
+				local product = byText[choice]
+				if product ~= nil then
+					EventProducts.prompt(product)
+				end
+			end)
+		end)
 	end
 
 	local remaining = 0
@@ -143,6 +207,8 @@ return function()
 	-- itself instead of a stale percentage: it drains with the time left and
 	-- reads the pay boost.
 	local alpha = math.clamp(rating / 100, 0, 1)
+	local color = if party then Styles.ROSE_MID elseif rush then Styles.GOLD_MID else Styles.GREEN
+	local deep = if party then Styles.ROSE_DEEP elseif rush then Styles.GOLD_DEEP else Styles.GREEN_DEEP
 	local barText = `{math.floor(rating + 0.5)}%`
 	if rush then
 		local total = if party then RatingConfig.BOBA_PARTY_SECONDS else RatingConfig.RUSH_SECONDS
@@ -176,7 +242,7 @@ return function()
 		}, {
 			Corner = c("UICorner", { CornerRadius = UDim.new(0.5, 0) }),
 			Fill = c("Frame", {
-				BackgroundColor3 = Styles.GREEN,
+				BackgroundColor3 = color,
 				BorderSizePixel = 0,
 				Size = UDim2.fromScale(alpha, 1),
 			}, {
@@ -189,17 +255,40 @@ return function()
 				Position = UDim2.fromScale(0.5, 0.5),
 				Size = UDim2.fromScale(0.5, 0.8),
 				Text = barText,
-				TextColor3 = Styles.GREEN_DEEP,
+				TextColor3 = deep,
 				TextScaled = true,
 				ZIndex = 2,
 			}),
 		}),
 
-		Title = c(Banner, {
-			Text = bannerText,
-			Color = Styles.GREEN,
-			Position = UDim2.fromScale(0.5, 0.3),
-			Size = UDim2.fromScale(0.7, 0.55),
+		-- Visible buy entry point under the meter (the meter itself stays non-interactive).
+		BuyEvent = c("Frame", {
+			AnchorPoint = Vector2.new(0.5, 0),
+			BackgroundTransparency = 1,
+			Position = UDim2.fromScale(0.5, 1.08),
+			Size = UDim2.fromScale(0.5, 0.6),
+			ZIndex = 10,
+		}, {
+			Button = c(PromptButton, {
+				Text = if rush then "Add Time!" else "Start a Rush!",
+				Color = if party then Styles.ROSE_MID elseif rush then Styles.GOLD_MID else Styles.GREEN,
+				Size = UDim2.fromScale(1, 1),
+				OnClick = openBuyChoice,
+			}),
+		}),
+
+		Pulse = c("Frame", {
+			BackgroundTransparency = 1,
+			Size = UDim2.fromScale(1, 1),
+			ZIndex = 10,
+		}, {
+			Scale = c("UIScale", { ref = pulseRef }),
+			Title = c(Banner, {
+				Text = bannerText,
+				Color = color,
+				Position = UDim2.fromScale(0.5, 0.3),
+				Size = UDim2.fromScale(0.7, 0.55),
+			}),
 		}),
 	})
 end

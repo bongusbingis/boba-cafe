@@ -587,12 +587,12 @@ return function(props: {
 				Thickness = 5,
 			},
 			Native = {
-				AnchorPoint = Vector2.new(0, 0.5),
+				AnchorPoint = Vector2.new(0, 0),
 				BackgroundColor3 = Color3.fromRGB(51, 51, 51),
 				BackgroundTransparency = 0,
 				ClipsDescendants = true,
-				Position = UDim2.fromScale(-0.42, 0.5),
-				Size = UDim2.fromScale(0.4, 0.911841),
+				Position = UDim2.fromScale(-0.42, 0.05),
+				Size = UDim2.fromScale(0.4, 0.5),
 				Visible = notepadVisible,
 			},
 		}, {
@@ -682,7 +682,7 @@ return function(props: {
 		AspectRatio = 1.53648,
 		Native = {
 			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.fromScale(0.5, 0.6),
+			Position = UDim2.fromScale(0.65, 0.6),
 			Size = UDim2.fromScale(1, 1),
 		},
 	}, {

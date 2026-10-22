@@ -223,6 +223,130 @@ return function()
 		end)
 	end)
 
+	describe("ResolveSpecs", function()
+		it("resolves multiple items from an NPC ticket .Items table", function()
+			local spec1 = boba()
+			local spec2 = coffee()
+			local ticket = {
+				Id = "Customer1",
+				Items = {
+					{ Category = "Boba Teas", Item = "Custom Boba", CustomInfo = {} },
+					{ Category = "Coffees", Item = "Latte", CustomInfo = {} },
+				},
+				Spec = { Category = "Boba Teas", Item = "Custom Boba", CustomInfo = {} },
+			}
+			local specs = KitchenGuidance.ResolveSpecs(ticket, function(item)
+				if item.Item == "Custom Boba" then
+					return spec1, nil
+				else
+					return spec2, nil
+				end
+			end)
+			expect(#specs).to.equal(2)
+			expect(specs[1]).to.equal(spec1)
+			expect(specs[2]).to.equal(spec2)
+		end)
+
+		it("resolves an array of items (notepad order)", function()
+			local spec1 = boba()
+			local spec2 = coffee()
+			local order = {
+				{ Category = "Boba Teas", Item = "Custom Boba" },
+				{ Category = "Coffees", Item = "Latte" },
+			}
+			local specs = KitchenGuidance.ResolveSpecs(order, function(item)
+				return if item.Item == "Custom Boba" then spec1 else spec2, nil
+			end)
+			expect(#specs).to.equal(2)
+			expect(specs[1]).to.equal(spec1)
+			expect(specs[2]).to.equal(spec2)
+		end)
+	end)
+
+	describe("FindActiveSpec", function()
+		it("handles sequential progression for a multi-drink order", function()
+			local spec1 = boba()
+			local spec2 = coffee()
+			local specs = { spec1, spec2 }
+
+			-- 1. No tools ready: active is spec1
+			local activeSpec, allDone, activeIdx, total = KitchenGuidance.FindActiveSpec(specs, {}, nil)
+			expect(activeSpec).to.equal(spec1)
+			expect(allDone).to.equal(false)
+			expect(activeIdx).to.equal(1)
+			expect(total).to.equal(2)
+
+			-- 2. Tool 1 is in progress: active is spec1
+			local active2, done2, idx2 = KitchenGuidance.FindActiveSpec(
+				specs,
+				{},
+				{ Item = "Clear Cup", Size = "Medium" }
+			)
+			expect(active2).to.equal(spec1)
+			expect(done2).to.equal(false)
+			expect(idx2).to.equal(1)
+
+			-- 3. Tool 1 is finished in candidates (backpack): active advances to spec2
+			local finishedDrink1 = { Item = "Boba", Size = "Medium", Syrup = "Classic Milk Tea", Tapioca = "Normal" }
+			local active3, done3, idx3 = KitchenGuidance.FindActiveSpec(specs, { finishedDrink1 }, nil)
+			expect(active3).to.equal(spec2)
+			expect(done3).to.equal(false)
+			expect(idx3).to.equal(2)
+
+			-- 4. Tool 1 finished in backpack, tool 2 held in progress
+			local active4, done4 = KitchenGuidance.FindActiveSpec(
+				specs,
+				{ finishedDrink1 },
+				{ Item = "Cup", Size = "Small" }
+			)
+			expect(active4).to.equal(spec2)
+			expect(done4).to.equal(false)
+
+			-- 5. Both drinks are finished in candidates: allDone is true
+			local finishedDrink2 = { Item = "Latte", Size = "Small", Iced = true, Sugar = false }
+			local _, done5 = KitchenGuidance.FindActiveSpec(specs, { finishedDrink1, finishedDrink2 }, nil)
+			expect(done5).to.equal(true)
+		end)
+
+		it("maintains completed state and activeSpec when all items are done or unequipped", function()
+			local spec1 = boba()
+			local spec2 = coffee()
+			local specs = { spec1, spec2 }
+			local finishedDrink1 = { Item = "Boba", Size = "Medium", Syrup = "Classic Milk Tea", Tapioca = "Normal" }
+			local finishedDrink2 = { Item = "Latte", Size = "Small", Iced = true, Sugar = false }
+
+			-- All items done, unequipped: allDone is true, activeSpec resolves to the last spec
+			local active1, allDone1, idx1, total1 =
+				KitchenGuidance.FindActiveSpec(specs, { finishedDrink1, finishedDrink2 }, nil)
+			expect(allDone1).to.equal(true)
+			expect(active1).to.equal(spec2)
+			expect(idx1).to.equal(2)
+			expect(total1).to.equal(2)
+
+			-- All items done, equipped with first drink: activeSpec resolves to first drink
+			local active2, allDone2, idx2 =
+				KitchenGuidance.FindActiveSpec(specs, { finishedDrink1, finishedDrink2 }, finishedDrink1)
+			expect(allDone2).to.equal(true)
+			expect(active2).to.equal(spec1)
+			expect(idx2).to.equal(1)
+
+			-- All items done, equipped with second drink: activeSpec resolves to second drink
+			local active3, allDone3, idx3 =
+				KitchenGuidance.FindActiveSpec(specs, { finishedDrink1, finishedDrink2 }, finishedDrink2)
+			expect(allDone3).to.equal(true)
+			expect(active3).to.equal(spec2)
+			expect(idx3).to.equal(2)
+
+			-- Single item order: completed in backpack, unequipped
+			local singleSpec = { spec1 }
+			local singleActive, singleDone, singleIdx =
+				KitchenGuidance.FindActiveSpec(singleSpec, { finishedDrink1 }, nil)
+			expect(singleDone).to.equal(true)
+			expect(singleActive).to.equal(spec1)
+			expect(singleIdx).to.equal(1)
+		end)
+	end)
+
 	describe("Highlight cap", function()
 		it("allows at most 2", function()
 			expect(KitchenGuidance.MAX_HIGHLIGHTS).to.equal(2)

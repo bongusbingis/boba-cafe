@@ -98,4 +98,136 @@ return function()
 			expect(Titles.IsSecret(hiddenDef, false)).to.equal(false)
 		end)
 	end)
+
+	describe("criteria titles and Veteran abstraction", function()
+		local function createMockPlayer(attributes: { [string]: any }?)
+			local attrs = attributes or {}
+			return {
+				UserId = 12345,
+				Name = "TestPlayer",
+				GetAttribute = function(_self, name: string)
+					return attrs[name]
+				end,
+				SetAttribute = function(_self, name: string, value: any)
+					attrs[name] = value
+				end,
+			} :: any
+		end
+
+		it("defines Veteran as a Criteria title with the approved legacy badges", function()
+			local veteranDef = Titles.Get("Veteran")
+			expect(veteranDef).to.be.ok()
+			expect(veteranDef.Source).to.equal("Criteria")
+			expect(veteranDef.SetsAttribute).to.equal("IsVeteran")
+			expect(veteranDef.UnearnedDisplay).to.equal("Hidden")
+			expect(veteranDef.Criteria).to.be.ok()
+			expect(veteranDef.Criteria.AnyBadge).to.be.ok()
+			expect(#veteranDef.Criteria.AnyBadge).to.equal(5)
+			expect(Titles.VETERAN_BADGES).to.be.ok()
+			expect(#Titles.VETERAN_BADGES).to.equal(5)
+
+			local criteriaList = Titles.GetCriteriaTitles()
+			expect(#criteriaList >= 1).to.equal(true)
+			local foundVeteran = false
+			for _, def in criteriaList do
+				if def.Id == "Veteran" then
+					foundVeteran = true
+					break
+				end
+			end
+			expect(foundVeteran).to.equal(true)
+		end)
+
+		it("evaluates AnyBadge criteria correctly", function()
+			local veteranDef = Titles.Get("Veteran")
+			local player = createMockPlayer()
+
+			local meetsWithBadge = Titles.MeetsCriteria(veteranDef, player, {
+				HasBadge = function(_p, badgeId)
+					return badgeId == 2124640229
+				end,
+			})
+			expect(meetsWithBadge).to.equal(true)
+
+			local failsWithoutBadge = Titles.MeetsCriteria(veteranDef, player, {
+				HasBadge = function(_p, _badgeId)
+					return false
+				end,
+			})
+			expect(failsWithoutBadge).to.equal(false)
+		end)
+
+		it("evaluates Stat criteria correctly", function()
+			local statDef = {
+				Id = "TestStatTitle",
+				Text = "Master Barista",
+				Source = "Criteria" :: any,
+				Description = "Serve 100 drinks",
+				Criteria = {
+					Stat = { Key = "CustomersServed", Value = 100 },
+				},
+			}
+			local player = createMockPlayer()
+
+			local meetsStat = Titles.MeetsCriteria(statDef, player, {
+				GetStat = function(_p, key)
+					return if key == "CustomersServed" then 150 else 0
+				end,
+			})
+			expect(meetsStat).to.equal(true)
+
+			local failsStat = Titles.MeetsCriteria(statDef, player, {
+				GetStat = function(_p, key)
+					return if key == "CustomersServed" then 50 else 0
+				end,
+			})
+			expect(failsStat).to.equal(false)
+		end)
+
+		it("evaluates Attribute and Custom criteria correctly", function()
+			local attrDef = {
+				Id = "TestAttrTitle",
+				Text = "VIP",
+				Source = "Criteria" :: any,
+				Description = "Is VIP",
+				Criteria = {
+					Attribute = { Name = "IsVIP", Value = true },
+				},
+			}
+			local vipPlayer = createMockPlayer({ IsVIP = true })
+			local normalPlayer = createMockPlayer({ IsVIP = false })
+			expect(Titles.MeetsCriteria(attrDef, vipPlayer)).to.equal(true)
+			expect(Titles.MeetsCriteria(attrDef, normalPlayer)).to.equal(false)
+
+			local customDef = {
+				Id = "TestCustomTitle",
+				Text = "Custom",
+				Source = "Criteria" :: any,
+				Description = "Custom check",
+				Criteria = {
+					Custom = function(p)
+						return p.UserId == 12345
+					end,
+				},
+			}
+			expect(Titles.MeetsCriteria(customDef, vipPlayer)).to.equal(true)
+		end)
+
+		it("orders Level titles first, then Criteria titles, then Manual titles", function()
+			local all = Titles.All()
+			local seenCriteria = false
+			local seenManual = false
+			for _, def in all do
+				if def.Source == "Level" then
+					expect(seenCriteria).to.equal(false)
+					expect(seenManual).to.equal(false)
+				elseif def.Source == "Criteria" then
+					seenCriteria = true
+					expect(seenManual).to.equal(false)
+				elseif def.Source == "Manual" then
+					seenManual = true
+				end
+			end
+		end)
+	end)
 end

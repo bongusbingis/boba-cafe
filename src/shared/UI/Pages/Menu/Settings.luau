@@ -21,6 +21,9 @@ local GamepassUtil = require(Shared.Utility.GamepassUtil)
 local Pane = require(UI.Components.Pane)
 local usePx = require(UI.Hooks.usePx)
 local useClock = require(UI.Hooks.useClock)
+local HudTabButton = require(UI.Components.Buttons.HudTabButton)
+local Purchases = require(script.Parent.Purchases)
+local Credits = require(script.Parent.Credits)
 
 ---> private
 local c = React.createElement
@@ -358,7 +361,19 @@ end
 -- ─────────────────────────────────────────────────────────────────────────────
 --  Page root
 -- ─────────────────────────────────────────────────────────────────────────────
-return function()
+export type Props = {
+	SubTab: string?,
+}
+
+return function(props: Props?)
+	local activeTab, setActiveTab = React.useState(props and props.SubTab or "Settings")
+
+	React.useEffect(function()
+		if props and props.SubTab then
+			setActiveTab(props.SubTab)
+		end
+	end, { props and props.SubTab })
+
 	local settings, setSettings = React.useState(nil :: { [string]: boolean }?)
 	local playerRank, setPlayerRank = React.useState(0)
 	local ownedPassIds, setOwnedPassIds = React.useState({} :: { [number]: boolean })
@@ -454,7 +469,9 @@ return function()
 	local function getVisibleSettings(category)
 		local visible = {}
 		for _, setting in ipairs(category.Settings) do
-			if not setting.GamepassId or ownedPassIds[setting.GamepassId] then
+			local passOk = not setting.GamepassId or ownedPassIds[setting.GamepassId]
+			local perkOk = not setting.PerkAttribute or Players.LocalPlayer:GetAttribute(setting.PerkAttribute) == true
+			if passOk and perkOk then
 				table.insert(visible, setting)
 			end
 		end
@@ -492,8 +509,8 @@ return function()
 		}),
 		Spacer = c("Frame", {
 			BackgroundTransparency = 1,
-			LayoutOrder = math.huge,
-			Size = UDim2.fromScale(1, 0.04),
+			LayoutOrder = 9999,
+			Size = UDim2.new(1, 0, 0, 60),
 		}),
 	}
 
@@ -517,10 +534,64 @@ return function()
 			BackgroundTransparency = 1,
 			FontFace = Styles.FONT_FREDOKA,
 			Position = UDim2.fromScale(0.470149, 0),
-			Size = UDim2.fromScale(0.94, 0.09),
-			Text = "Settings",
+			Size = UDim2.fromScale(0.94, 0.075),
+			Text = if activeTab == "Purchases"
+				then "Purchases"
+				elseif activeTab == "Credits" then "Credits"
+				else "Settings",
 			TextColor3 = Styles.GREEN,
 			TextScaled = true,
+		}),
+
+		SubTabBar = c("Frame", {
+			AnchorPoint = Vector2.new(0.5, 0),
+			BackgroundTransparency = 1,
+			Position = UDim2.fromScale(0.470149, 0.08),
+			Size = UDim2.fromScale(0.94, 0.06),
+		}, {
+			UIListLayout = c("UIListLayout", {
+				FillDirection = Enum.FillDirection.Horizontal,
+				HorizontalAlignment = Enum.HorizontalAlignment.Center,
+				VerticalAlignment = Enum.VerticalAlignment.Center,
+				Padding = UDim.new(0.02, 0),
+				SortOrder = Enum.SortOrder.LayoutOrder,
+			}),
+
+			SettingsTab = c(HudTabButton, {
+				Text = "Settings",
+				LayoutOrder = 1,
+				Size = UDim2.fromScale(0.31, 1),
+				BackgroundColor = Styles.OFFWHITE,
+				TextColor3 = if activeTab == "Settings" then Styles.GREEN_DEEP else Styles.GREEN_LIGHT,
+				Selected = activeTab == "Settings",
+				OnClick = function()
+					setActiveTab("Settings")
+				end,
+			}),
+
+			PurchasesTab = c(HudTabButton, {
+				Text = "Purchases",
+				LayoutOrder = 2,
+				Size = UDim2.fromScale(0.31, 1),
+				BackgroundColor = Styles.OFFWHITE,
+				TextColor3 = if activeTab == "Purchases" then Styles.GREEN_DEEP else Styles.GREEN_LIGHT,
+				Selected = activeTab == "Purchases",
+				OnClick = function()
+					setActiveTab("Purchases")
+				end,
+			}),
+
+			CreditsTab = c(HudTabButton, {
+				Text = "Credits",
+				LayoutOrder = 3,
+				Size = UDim2.fromScale(0.31, 1),
+				BackgroundColor = Styles.OFFWHITE,
+				TextColor3 = if activeTab == "Credits" then Styles.GREEN_DEEP else Styles.GREEN_LIGHT,
+				Selected = activeTab == "Credits",
+				OnClick = function()
+					setActiveTab("Credits")
+				end,
+			}),
 		}),
 
 		Body = c("ScrollingFrame", {
@@ -528,15 +599,29 @@ return function()
 			AutomaticCanvasSize = Enum.AutomaticSize.Y,
 			BackgroundTransparency = 1,
 			CanvasSize = UDim2.new(),
-			Position = UDim2.fromScale(0, 0.1),
+			Position = UDim2.fromScale(0, 0.155),
 			ScrollBarImageColor3 = Color3.new(),
 			ScrollBarThickness = 4,
 			ScrollingDirection = Enum.ScrollingDirection.Y,
-			Size = UDim2.fromScale(1, 0.9),
-			Visible = not isLoading,
+			Size = UDim2.fromScale(1, 0.845),
+			Visible = not isLoading and activeTab == "Settings",
 		}, cards),
 
-		LoadingSpinner = isLoading and c("ImageLabel", {
+		PurchasesBody = c(Purchases, {
+			HideTitle = true,
+			Position = UDim2.fromScale(0, 0.155),
+			Size = UDim2.fromScale(1, 0.845),
+			Visible = activeTab == "Purchases",
+		}),
+
+		CreditsBody = c(Credits, {
+			HideTitle = true,
+			Position = UDim2.fromScale(0, 0.155),
+			Size = UDim2.fromScale(1, 0.845),
+			Visible = activeTab == "Credits",
+		}),
+
+		LoadingSpinner = (isLoading and activeTab == "Settings") and c("ImageLabel", {
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			BackgroundTransparency = 1,
 			Image = "rbxassetid://5634393881",

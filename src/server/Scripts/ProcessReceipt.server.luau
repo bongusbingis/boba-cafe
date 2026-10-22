@@ -31,7 +31,6 @@ local GetPurchases = getOrCreateRemoteFunction("GetPurchases")
 
 ---> constants
 local SKIP_HATCH_PRODUCT_ID = 1143554452
-local BOBA_PARTY_PRODUCT_ID: number? = nil -- Creator Hub Product ID to be configured by Jack (DEC-029, E18)
 local DATA_TIMEOUT_SECONDS = 30
 local MAX_PROCESSED_RECEIPTS = 200
 
@@ -51,6 +50,7 @@ end
 local Packages = ReplicatedStorage:WaitForChild("Packages")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Knit = require(Packages.Knit)
+local ProductIds = require(Shared.Configuration.ProductIds)
 
 ---> lifecycle
 local HATCH_DURATION_SECONDS = require(Shared.Configuration.CapsuleConfig).PET_HATCH_DURATION
@@ -95,6 +95,18 @@ for productId, donationAction in DonationReceipts.BuildActions() do
 	ProductActionMap[productId] = { donationAction.Name, donationAction.Grant, donationAction.OnGranted }
 end
 
+-- Robux Boba Bucks packs (IDs in Shared.Configuration.ProductIds). The grant is applied to the loaded profile
+-- synchronously, so it is recorded with the receipt like every other product.
+local BobaBuckReceipts = require(ServerScriptService:WaitForChild("Server").Modules.BobaBuckReceipts)
+for productId, packAction in BobaBuckReceipts.BuildActions() do
+	if ProductActionMap[productId] then
+		warn(`[ProcessReceipt] Boba Bucks ProductId {productId} collides with an existing product; skipped`)
+		continue
+	end
+	ProductActionMap[productId] = { packAction.Name, packAction.Grant }
+end
+
+local BOBA_PARTY_PRODUCT_ID = ProductIds.BobaParty
 if BOBA_PARTY_PRODUCT_ID then
 	ProductActionMap[BOBA_PARTY_PRODUCT_ID] = {
 		"Boba Party",
@@ -103,6 +115,22 @@ if BOBA_PARTY_PRODUCT_ID then
 			local ok, err = cafeRatingService:StartOrExtendBobaParty(player)
 			if not ok then
 				return false, err or "failed to start or extend boba party"
+			end
+			return true
+		end,
+	}
+end
+
+-- Rush Hour: starts the normal server Rush (RatingConfig.RUSH_SECONDS), or adds that long to a running Rush/Party.
+local RUSH_HOUR_PRODUCT_ID = ProductIds.RushHour
+if RUSH_HOUR_PRODUCT_ID then
+	ProductActionMap[RUSH_HOUR_PRODUCT_ID] = {
+		"Rush Hour",
+		function(player, _receiptInfo, _playerData)
+			local cafeRatingService = Knit.GetService("CafeRatingService")
+			local ok, err = cafeRatingService:StartOrExtendRush(player)
+			if not ok then
+				return false, err or "failed to start or extend rush hour"
 			end
 			return true
 		end,

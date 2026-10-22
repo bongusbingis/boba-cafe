@@ -8,6 +8,7 @@ local Config   = Shared:WaitForChild("Configuration")
 
 local Knit      = require(Packages.Knit)
 local RankUtil  = require(Shared.Utility.RankUtil)
+local GoodSignal = require(Packages.GoodSignal)
 
 ---> config (shared — contains no secrets)
 local SettingsConfig = require(Config.SettingsConfig)
@@ -23,6 +24,8 @@ end
 ---> service declaration
 local SettingsService = Knit.CreateService({
     Name = "SettingsService",
+    --- Fired (player, key, value) after a setting is saved.
+    SettingChanged = GoodSignal.new(),
     Client = {
         --- Updates a single boolean setting for the calling player.
         --- Returns (success: boolean, message: string).
@@ -57,6 +60,7 @@ function SettingsService:_setSetting(player: Player, key: string, value: any)
         local current = playerData.Settings or {}
         current[key] = value
         playerData:SetValue({ "Settings" }, current)
+        SettingsService.SettingChanged:Fire(player, key, value)
     end):catch(function(err)
         warn("[SettingsService] Failed to save setting for", player.Name, err)
     end)

@@ -2,7 +2,8 @@
 --[[
 	ProgressionService
 	XP and levels 1-50 (REVIVAL-001 M2-PROGRESS). Serving earns XP, level-ups
-	grant a nametag every 5 levels and show a toast. Nothing is locked.
+	grant a nametag every 5 levels, show a toast, and fire Client.LeveledUp
+	for the HUD celebration card. Nothing is locked.
 
 	Player attributes: Level (number), LevelTitle (string), EquippedTitle (string).
 	Titles are an earned cosmetic: level titles are granted automatically,
@@ -28,7 +29,13 @@ local Rules = require(script.Parent.CustomerService.Rules)
 ---> service declaration
 local ProgressionService = Knit.CreateService({
 	Name = "ProgressionService",
-	Client = {},
+	Client = {
+		-- Fired to the leveling player on every level-up with
+		-- { Level: number, Title: string, Unlocks: { string } }.
+		-- The HUD LevelUpCelebration card renders it; the toast stays
+		-- as the tier-1 fallback when the card cannot show.
+		LeveledUp = Knit.CreateSignal(),
+	},
 
 	_state = {} :: { [Player]: { Level: number, XP: number } }, -- cache; the profile is written on every change
 	_shiftXp = {} :: { [Player]: number }, -- XP gained since the last ShiftEnding
@@ -166,6 +173,12 @@ function ProgressionService:_ensureTitles(player: Player, proxy: any): Titles.Ti
 	if changed then
 		proxy:SetValue({ "Titles" }, data)
 	end
+	for ownedId in data.Owned do
+		local def = Titles.Get(ownedId)
+		if def ~= nil and def.SetsAttribute ~= nil and player:GetAttribute(def.SetsAttribute) ~= true then
+			player:SetAttribute(def.SetsAttribute, true)
+		end
+	end
 	setEquippedTitleAttribute(player, data)
 	return data
 end
@@ -194,6 +207,9 @@ function ProgressionService:GrantTitle(player: Player, titleId: string): (boolea
 			setEquippedTitleAttribute(player, data)
 			local def = Titles.Get(titleId)
 			if def ~= nil then
+				if def.SetsAttribute ~= nil and player:GetAttribute(def.SetsAttribute) ~= true then
+					player:SetAttribute(def.SetsAttribute, true)
+				end
 				Knit.GetService("DialogService")
 					:Notify(player, { Text = `New title: {def.Text}`, SoundEnabled = true } :: any)
 			end
@@ -202,6 +218,39 @@ function ProgressionService:GrantTitle(player: Player, titleId: string): (boolea
 			warn(`[ProgressionService] GrantTitle failed: {err}`)
 		end)
 	return true, nil
+end
+
+-- Evaluates criteria titles (e.g. Veteran) for the player and grants any newly qualified ones.
+function ProgressionService:_checkCriteriaTitlesAsync(player: Player, proxy: any)
+	task.spawn(function()
+		local checkers: Titles.CriteriaCheckers = {
+			GetStat = function(_p: Player, key: string): number?
+				if
+					proxy.Data
+					and typeof(proxy.Data.Statistics) == "table"
+					and typeof(proxy.Data.Statistics[key]) == "number"
+				then
+					return proxy.Data.Statistics[key]
+				end
+				return nil
+			end,
+		}
+
+		local criteriaTitles = Titles.GetCriteriaTitles()
+		for _, def in criteriaTitles do
+			local data = Titles.Normalize(proxy.Data.Titles)
+			if not data.Owned[def.Id] then
+				local meets = Titles.MeetsCriteria(def, player, checkers)
+				if meets then
+					self:GrantTitle(player, def.Id)
+				end
+			else
+				if def.SetsAttribute ~= nil and player:GetAttribute(def.SetsAttribute) ~= true then
+					player:SetAttribute(def.SetsAttribute, true)
+				end
+			end
+		end
+	end)
 end
 
 ---> client
@@ -319,6 +368,11 @@ function ProgressionService:_onLevelUp(player: Player, level: number, proxy: any
 		end
 		local text = ProgressionService.LevelUpText(level)
 		Knit.GetService("DialogService"):Notify(player, { Text = text, SoundEnabled = true } :: any)
+		ProgressionService.Client.LeveledUp:Fire(player, {
+			Level = level,
+			Title = Progression.TitleFor(level),
+			Unlocks = unlocksAt(level),
+		})
 	end)
 	if not ok then
 		warn(`[ProgressionService] Level-up step failed: {err}`)
@@ -399,6 +453,7 @@ function ProgressionService:PlayerAdded(player: Player)
 		self._state[player] = state
 		setAttributes(player, state.Level)
 		self:_ensureTitles(player, proxy)
+		self:_checkCriteriaTitlesAsync(player, proxy)
 	end)
 end
 

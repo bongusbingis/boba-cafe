@@ -15,6 +15,7 @@
 	  workspace.Assets.NPC.Path     Folder of BaseParts named 1..n, walked in order
 	  workspace.Assets.NPC.Queue    BaseParts named 1..k, 1 is the front of the line
 	  workspace.Assets.NPC.Counter  BaseParts named 1..m, facing the kitchen
+	  workspace.Assets.NPC.OrderPickup BasePart plane where NPCs stand and wait
 
 	API for the later serve and assignment work:
 	  CustomerService:GetWaitingCustomers()  NPCs standing at a counter spot, by spot
@@ -136,6 +137,48 @@ local function setCollisionGroup(root: Instance, group: string)
 	end
 end
 
+-- Picks a random position on the top surface of a plane Part, with clearance from already-waiting NPCs.
+local function getRandomPointOnPlane(part: BasePart, occupiedPositions: { Vector3 }?): (Vector3, CFrame)
+	local size = part.Size
+	local marginX = math.min(1, size.X * 0.1)
+	local marginZ = math.min(1, size.Z * 0.1)
+	local halfX = math.max(0, (size.X / 2) - marginX)
+	local halfZ = math.max(0, (size.Z / 2) - marginZ)
+
+	local bestPos: Vector3? = nil
+	local bestDist = -1
+
+	for _ = 1, 8 do
+		local ox = (math.random() * 2 - 1) * halfX
+		local oz = (math.random() * 2 - 1) * halfZ
+		local localPos = Vector3.new(ox, size.Y / 2, oz)
+		local worldPos = (part.CFrame * CFrame.new(localPos)).Position
+
+		if occupiedPositions == nil or #occupiedPositions == 0 then
+			return worldPos, part.CFrame.Rotation
+		end
+
+		local minDist = math.huge
+		for _, occ in occupiedPositions do
+			local d = (worldPos - occ).Magnitude
+			if d < minDist then
+				minDist = d
+			end
+		end
+
+		if minDist >= 2.5 then
+			return worldPos, part.CFrame.Rotation
+		end
+
+		if minDist > bestDist then
+			bestDist = minDist
+			bestPos = worldPos
+		end
+	end
+
+	return bestPos or part.Position, part.CFrame.Rotation
+end
+
 ---> service
 
 local CustomerService = Knit.CreateService({
@@ -165,10 +208,12 @@ local CustomerService = Knit.CreateService({
 	_npcs = {} :: { [Npc.Npc]: boolean },
 	_npcCount = 0,
 	_line = {} :: { Npc.Npc }, -- NPCs waiting for a counter spot, front first
+	_registerLines = {} :: { [number]: { Npc.Npc } }, -- register spot -> NPCs waiting in line, front first
+	_npcRegister = {} :: { [Npc.Npc]: number }, -- NPC -> assigned register spot
 	_counter = {} :: { [number]: Npc.Npc }, -- counter spot -> the NPC that holds it
 	_pickupNodes = {} :: { BasePart }, -- pickup spots from workspace["Ordering System"]["Pick Up"]
 	_pickupHolders = {} :: { [BasePart]: Npc.Npc }, -- pickup spot -> the NPC that holds it
-	_npcPickupSpot = {} :: { [Npc.Npc]: BasePart }, -- NPC -> claimed pickup spot
+	_npcPickupSpot = {} :: { [Npc.Npc]: Vector3 }, -- NPC -> claimed pickup position
 	_activeOrderingNpc = {} :: { [Player]: Npc.Npc }, -- barista -> NPC whose order is currently being taken
 	-- AUDIT-FIX submit: NPC -> baristas who pressed its Take Order. Submit falls back to this when the
 	-- single binding above went stale, so a tablet for a still-waiting NPC never fails.
@@ -177,6 +222,7 @@ local CustomerService = Knit.CreateService({
 	_emptySince = nil :: number?, -- os.clock() when the barista count last dropped to 0 (P2-3 dismiss)
 	_lastSpawnClock = 0,
 	_characterConnections = {} :: { [Player]: RBXScriptConnection },
+	_baristaInventoryWatchers = {} :: { [Player]: { RBXScriptConnection } },
 	_tickets = {} :: { [Player]: { [number]: { [string]: any } } }, -- barista -> slot -> live ticket (at most Progression.SlotsFor(level))
 	_assignee = {} :: { [Npc.Npc]: Player }, -- NPC -> the barista holding its ticket
 	_idleSince = {} :: { [Player]: number }, -- os.clock() at clock-in and at ticket clear
@@ -229,6 +275,7 @@ function CustomerService:_resolveNodes(): Npc.Nodes?
 	local path = numberedParts(find("Path"))
 	local queue = numberedParts(find("Queue"))
 	local counter = numberedParts(find("Counter"))
+	local orderPickup = find("OrderPickup")
 
 	local missing: { string } = {}
 	if entry == nil or not entry:IsA("BasePart") then
@@ -246,8 +293,11 @@ function CustomerService:_resolveNodes(): Npc.Nodes?
 	if #counter == 0 then
 		table.insert(missing, "workspace.Assets.NPC.Counter (BaseParts named 1..m)")
 	end
+	if orderPickup == nil or not orderPickup:IsA("BasePart") then
+		table.insert(missing, "workspace.Assets.NPC.OrderPickup (BasePart)")
+	end
 
-	if #missing > 0 or entry == nil or exit == nil then
+	if #missing > 0 or entry == nil or exit == nil or orderPickup == nil then
 		warn(`[CustomerService] NPC customers disabled; missing authored content: {table.concat(missing, ", ")}`)
 		return nil
 	end
@@ -257,6 +307,7 @@ function CustomerService:_resolveNodes(): Npc.Nodes?
 		Path = path,
 		Queue = queue,
 		Counter = counter,
+		OrderPickup = orderPickup :: BasePart,
 	}
 end
 
@@ -303,74 +354,159 @@ function CustomerService:_watchPlayer(player: Player)
 	end
 end
 
+function CustomerService:_pickRegisterSpot(): number
+	local nodes = if self._context ~= nil then self._context.Nodes else nil
+	local count = if nodes ~= nil and nodes.Counter ~= nil then #nodes.Counter else 12
+	if count <= 1 then
+		return 1
+	end
+
+	local minLength = math.huge
+	for spot = 1, count do
+		local line = self._registerLines[spot]
+		local len = if line ~= nil then #line else 0
+		if len < minLength then
+			minLength = len
+		end
+	end
+
+	local candidates = {}
+	for spot = 1, count do
+		local line = self._registerLines[spot]
+		local len = if line ~= nil then #line else 0
+		if len <= minLength + 1 then
+			table.insert(candidates, spot)
+		end
+	end
+
+	if #candidates > 0 then
+		return candidates[math.random(1, #candidates)]
+	end
+
+	return math.random(1, count)
+end
+
 function CustomerService:_makeContext(nodes: Npc.Nodes, folder: Folder): Npc.Context
 	return {
 		Nodes = nodes,
 		Parent = folder,
+		GetRegisterSpot = function(npc)
+			local spot = self._npcRegister[npc]
+			if spot == nil then
+				spot = self:_pickRegisterSpot()
+				self._npcRegister[npc] = spot
+				if self._registerLines[spot] == nil then
+					self._registerLines[spot] = {}
+				end
+				table.insert(self._registerLines[spot], npc)
+			end
+			return spot
+		end,
 		QueueIndex = function(npc)
-			return table.find(self._line, npc) or 1
+			local spot = self._npcRegister[npc]
+			if spot == nil then
+				spot = self:_pickRegisterSpot()
+				self._npcRegister[npc] = spot
+				if self._registerLines[spot] == nil then
+					self._registerLines[spot] = {}
+				end
+				table.insert(self._registerLines[spot], npc)
+			end
+			local line = self._registerLines[spot]
+			return if line ~= nil then (table.find(line, npc) or 1) else 1
 		end,
 		TryTakeCounter = function(npc)
-			if self._line[1] ~= npc then
+			local spot = self._npcRegister[npc]
+			if spot == nil then
 				return nil
 			end
-			for spot = 1, #nodes.Counter do
-				if self._counter[spot] == nil then
-					self._counter[spot] = npc
-					table.remove(self._line, 1)
-					return spot
-				end
+			local line = self._registerLines[spot]
+			if line == nil or line[1] ~= npc then
+				return nil
+			end
+			if self._counter[spot] == nil or self._counter[spot] == npc then
+				self._counter[spot] = npc
+				return spot
 			end
 			return nil
 		end,
 		Release = function(npc)
+			local spot = self._npcRegister[npc]
+			if spot ~= nil and self._registerLines[spot] ~= nil then
+				local index = table.find(self._registerLines[spot], npc)
+				if index ~= nil then
+					table.remove(self._registerLines[spot], index)
+				end
+			end
+			self._npcRegister[npc] = nil
+
 			local index = table.find(self._line, npc)
 			if index ~= nil then
 				table.remove(self._line, index)
 			end
-			for spot, holder in self._counter do
+			for s, holder in self._counter do
 				if holder == npc then
-					self._counter[spot] = nil
+					self._counter[s] = nil
 				end
 			end
-			local spot = self._npcPickupSpot[npc]
-			if spot ~= nil then
-				if self._pickupHolders[spot] == npc then
-					self._pickupHolders[spot] = nil
+			self._npcPickupSpot[npc] = nil
+			for s, holder in self._pickupHolders do
+				if holder == npc then
+					self._pickupHolders[s] = nil
 				end
-				self._npcPickupSpot[npc] = nil
 			end
 		end,
 		ReleaseCounter = function(npc)
-			for spot, holder in self._counter do
+			local spot = self._npcRegister[npc] or npc.CounterSpot
+			if spot ~= nil and self._registerLines[spot] ~= nil then
+				local index = table.find(self._registerLines[spot], npc)
+				if index ~= nil then
+					table.remove(self._registerLines[spot], index)
+				end
+			end
+			for s, holder in self._counter do
 				if holder == npc then
-					self._counter[spot] = nil
+					self._counter[s] = nil
 				end
 			end
 			npc.CounterSpot = nil
 		end,
 		ClaimPickupSpot = function(npc)
+			local orderPickup = if self._context ~= nil then self._context.Nodes.OrderPickup else nil
+			if orderPickup == nil and nodes ~= nil then
+				orderPickup = nodes.OrderPickup
+			end
+			if orderPickup ~= nil and orderPickup:IsA("BasePart") then
+				local occupied: { Vector3 } = {}
+				for otherNpc, pos in self._npcPickupSpot do
+					if otherNpc ~= npc and otherNpc.State == "AtPickup" and not otherNpc.Left then
+						table.insert(occupied, pos)
+					end
+				end
+				local targetPos, targetRot = getRandomPointOnPlane(orderPickup, occupied)
+				self._npcPickupSpot[npc] = targetPos
+				return targetPos, targetRot
+			end
 			for _, node in self._pickupNodes do
 				if self._pickupHolders[node] == nil then
 					self._pickupHolders[node] = npc
-					self._npcPickupSpot[npc] = node
-					return node
+					self._npcPickupSpot[npc] = node.Position
+					return node.Position, node.CFrame.Rotation
 				end
 			end
 			local fallback = self._pickupNodes[1]
 			if fallback ~= nil then
-				self._npcPickupSpot[npc] = fallback
-				return fallback
+				self._npcPickupSpot[npc] = fallback.Position
+				return fallback.Position, fallback.CFrame.Rotation
 			end
-			return nil
+			return nil, nil
 		end,
 		ReleasePickupSpot = function(npc)
-			local spot = self._npcPickupSpot[npc]
-			if spot ~= nil then
-				if self._pickupHolders[spot] == npc then
+			self._npcPickupSpot[npc] = nil
+			for spot, holder in self._pickupHolders do
+				if holder == npc then
 					self._pickupHolders[spot] = nil
 				end
-				self._npcPickupSpot[npc] = nil
 			end
 		end,
 		IsPaused = function()
@@ -432,8 +568,14 @@ function CustomerService:_spawnIfNeeded()
 	if activeCount >= self:_pacingTarget() then
 		return
 	end
-	local maxLine = if self:IsRushHour() then (RatingConfig.RUSH_QUEUE_CAP or 35) else #context.Nodes.Queue
-	if #self._line >= maxLine then
+	local totalQueued = 0
+	for _, line in self._registerLines do
+		totalQueued += #line
+	end
+	local maxLine = if self:IsRushHour()
+		then (RatingConfig.RUSH_QUEUE_CAP or 35)
+		else math.max(6, #context.Nodes.Counter * 3)
+	if totalQueued >= maxLine then
 		return -- never spawn into a full queue
 	end
 	local gap = if self:IsRushHour()
@@ -466,6 +608,12 @@ function CustomerService:_spawnIfNeeded()
 	end
 	self._npcs[npc] = true
 	self._npcCount += 1
+	local spot = self:_pickRegisterSpot()
+	self._npcRegister[npc] = spot
+	if self._registerLines[spot] == nil then
+		self._registerLines[spot] = {}
+	end
+	table.insert(self._registerLines[spot], npc)
 	table.insert(self._line, npc)
 	npc:Start()
 end
@@ -854,6 +1002,91 @@ function CustomerService:_registerPatience(npc: Npc.Npc): number
 	return seconds * CustomerConfig.REGISTER_PATIENCE_MULT
 end
 
+function CustomerService:_checkOrderReadiness(npc: Npc.Npc)
+	if npc.Left or self._order == nil or typeof(self._order.UpdateCustomerOrderStatus) ~= "function" then
+		return
+	end
+	local holder = self._assignee[npc]
+	if holder == nil or not holder:IsDescendantOf(Players) then
+		return
+	end
+	local tools = self._order:FindServeTools(holder, npc.Specs)
+	if tools ~= nil then
+		self._order:UpdateCustomerOrderStatus(npc.Id, "Ready for Pick Up")
+	else
+		self._order:UpdateCustomerOrderStatus(npc.Id, "Being Prepared")
+	end
+end
+
+function CustomerService:_watchBaristaInventory(player: Player)
+	if self._baristaInventoryWatchers[player] ~= nil then
+		return
+	end
+
+	local conns: { RBXScriptConnection } = {}
+	self._baristaInventoryWatchers[player] = conns
+
+	local function onInventoryChanged()
+		local held = self._tickets[player]
+		if not held then
+			return
+		end
+		for _, ticket in held do
+			for npc in self._npcs do
+				if npc.Model ~= nil and npc.Model.Name == ticket.Id then
+					self:_checkOrderReadiness(npc)
+					break
+				end
+			end
+		end
+	end
+
+	local function hookBackpack(backpack: Instance?)
+		if not backpack then
+			return
+		end
+		table.insert(conns, backpack.ChildAdded:Connect(onInventoryChanged))
+		table.insert(conns, backpack.ChildRemoved:Connect(onInventoryChanged))
+	end
+
+	local function hookCharacter(char: Model?)
+		if not char then
+			return
+		end
+		table.insert(conns, char.ChildAdded:Connect(onInventoryChanged))
+		table.insert(conns, char.ChildRemoved:Connect(onInventoryChanged))
+	end
+
+	hookBackpack(player:FindFirstChildOfClass("Backpack"))
+	hookCharacter(player.Character)
+
+	table.insert(
+		conns,
+		player.ChildAdded:Connect(function(child)
+			if child:IsA("Backpack") then
+				hookBackpack(child)
+			end
+		end)
+	)
+
+	table.insert(
+		conns,
+		player.CharacterAdded:Connect(function(char)
+			hookCharacter(char)
+		end)
+	)
+end
+
+function CustomerService:_unwatchBaristaInventory(player: Player)
+	local conns = self._baristaInventoryWatchers[player]
+	if conns ~= nil then
+		for _, conn in conns do
+			conn:Disconnect()
+		end
+		self._baristaInventoryWatchers[player] = nil
+	end
+end
+
 -- Puts a ticket for `npc` in the player's first free slot and tells their client.
 function CustomerService:_issueTicket(player: Player, npc: Npc.Npc)
 	local held = self._tickets[player]
@@ -870,6 +1103,8 @@ function CustomerService:_issueTicket(player: Player, npc: Npc.Npc)
 	held[slot] = ticket
 	self._assignee[npc] = player
 	self:_fireTicket(player, ticket, slot)
+	self:_watchBaristaInventory(player)
+	self:_checkOrderReadiness(npc)
 end
 
 -- The holder left or clocked out: hands an accepted order to the longest-idle clocked-in
@@ -933,7 +1168,7 @@ function CustomerService:_ensureNpcPrompt(npc: Npc.Npc, actionText: string, obje
 		prompt = Instance.new("ProximityPrompt")
 		prompt.Name = "CustomerPrompt"
 		prompt.HoldDuration = 0
-		prompt.MaxActivationDistance = 8
+		prompt.MaxActivationDistance = 15
 		prompt.RequiresLineOfSight = false
 		prompt.Parent = root
 		prompt.Triggered:Connect(function(player)
@@ -1093,19 +1328,27 @@ function CustomerService:_submitNpcOrder(
 	npc:SetAssignment(player.UserId, patienceSeconds, scripted)
 	self:_issueTicket(player, npc)
 
+	if self._order and typeof(self._order.RegisterCustomerOrder) == "function" then
+		local regularName = npc.Model:GetAttribute("RegularName")
+		local customerName = if typeof(regularName) == "string" and #regularName > 0 then regularName else "Customer"
+		self._order:RegisterCustomerOrder(npc.Id, customerName, #npc.Orders, "Being Prepared", npc.Model)
+	end
+
 	-- Free counter spot so next in queue can step up
 	self._context.ReleaseCounter(npc)
 
 	-- Claim pickup spot and move NPC there
-	local pickupSpot = self._context.ClaimPickupSpot(npc)
+	local pickupPos, pickupRot = self._context.ClaimPickupSpot(npc)
 	for taker, ordering in self._activeOrderingNpc do
 		if ordering == npc then
 			self._activeOrderingNpc[taker] = nil
 		end
 	end
 	self._orderTakers[npc] = nil
-	if pickupSpot ~= nil then
-		npc:GoToPickup(pickupSpot)
+	if pickupPos ~= nil then
+		npc:GoToPickup(pickupPos, pickupRot)
+	else
+		npc:GoToPickup()
 	end
 
 	return { Success = true }
@@ -1310,6 +1553,9 @@ function CustomerService:_onServeTriggered(npc: Npc.Npc, player: Player)
 
 	npc.Rescue = rescue
 	local holder = self._assignee[npc]
+	if self._order and typeof(self._order.RemoveCustomerOrder) == "function" then
+		self._order:RemoveCustomerOrder(npc.Id)
+	end
 	self:_clearTicket(npc)
 	if self._context ~= nil then
 		self._context.ReleasePickupSpot(npc)
@@ -1406,6 +1652,7 @@ function CustomerService:_clearTicket(npc: Npc.Npc)
 		end
 		if next(held) == nil then
 			self._tickets[holder] = nil
+			self:_unwatchBaristaInventory(holder)
 		end
 	end
 end
@@ -1430,6 +1677,9 @@ end
 -- Walkouts clear the ticket and reset the combo (design 3.4, 4.8). A served
 -- or despawned NPC only frees the slot. Never stops the pacing thread.
 function CustomerService:_onCustomerLeft(npc: Npc.Npc, reason: string)
+	if self._order and typeof(self._order.RemoveCustomerOrder) == "function" then
+		self._order:RemoveCustomerOrder(npc.Id)
+	end
 	if self._context ~= nil then
 		self._context.ReleasePickupSpot(npc)
 	end
@@ -1556,6 +1806,7 @@ function CustomerService:PlayerAdded(player: Player)
 end
 
 function CustomerService:PlayerRemoving(player: Player)
+	self:_unwatchBaristaInventory(player)
 	self._activeOrderingNpc[player] = nil
 	self._firstServe[player] = nil
 	self._sessionShifts[player] = nil

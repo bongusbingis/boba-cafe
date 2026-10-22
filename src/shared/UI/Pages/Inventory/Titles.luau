@@ -56,6 +56,24 @@ local function SectionHeader(props: {
 	})
 end
 
+-- Category section footer matching ShopCategory anatomy (footer slice
+-- asset 13465749908, GREEN_LIGHT tint) that sandwiches section content.
+local function SectionFooter(props: {
+	LayoutOrder: number,
+})
+	return c(Pane, {
+		ClassName = "ImageLabel",
+		Native = {
+			BackgroundTransparency = 1,
+			Image = "http://www.roblox.com/asset/?id=13465749908",
+			ImageColor3 = Styles.GREEN_LIGHT,
+			LayoutOrder = props.LayoutOrder,
+			Size = UDim2.fromScale(0.981, 0.02),
+			SizeConstraint = Enum.SizeConstraint.RelativeXX,
+		},
+	})
+end
+
 -- One title row: ShopItem row anatomy (0.981 x 0.065 RelativeXX, left inset
 -- 0.03, white Fredoka label) with an Equip / Unequip PromptButton on the right.
 local function TitleRow(props: {
@@ -208,8 +226,8 @@ return function()
 		}),
 		Spacer = c("Frame", {
 			BackgroundTransparency = 1,
-			LayoutOrder = math.huge,
-			Size = UDim2.fromScale(1, 0.05),
+			LayoutOrder = 9999,
+			Size = UDim2.new(1, 0, 0, 60),
 		}),
 	}
 
@@ -253,10 +271,14 @@ return function()
 			})
 		end
 
+		bodyChildren.LevelFooter = c(SectionFooter, {
+			LayoutOrder = 100 + #levelDefs + 1,
+		})
+
 		if #manualDefs > 0 then
 			bodyChildren.ManualHeader = c(SectionHeader, {
 				Title = "Event Titles",
-				LayoutOrder = 200,
+				LayoutOrder = 1000,
 			})
 
 			for i, def in ipairs(manualDefs) do
@@ -264,10 +286,14 @@ return function()
 					Def = def,
 					Owned = titlesData.Owned[def.Id] == true,
 					Equipped = titlesData.Equipped == def.Id,
-					LayoutOrder = 200 + i,
+					LayoutOrder = 1000 + i,
 					OnEquip = equip,
 				})
 			end
+
+			bodyChildren.ManualFooter = c(SectionFooter, {
+				LayoutOrder = 1000 + #manualDefs + 1,
+			})
 		end
 	end
 

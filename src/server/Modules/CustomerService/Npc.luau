@@ -19,6 +19,7 @@
 ---> services
 
 local Debris = game:GetService("Debris")
+local PathfindingService = game:GetService("PathfindingService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -47,6 +48,7 @@ export type Nodes = {
 	Path: { BasePart },
 	Queue: { BasePart },
 	Counter: { BasePart },
+	OrderPickup: BasePart?,
 }
 
 -- What an NPC needs from CustomerService. All of these run on the server thread
@@ -54,11 +56,12 @@ export type Nodes = {
 export type Context = {
 	Nodes: Nodes,
 	Parent: Instance, -- folder the NPC models live in
+	GetRegisterSpot: ((npc: Npc) -> number)?,
 	QueueIndex: (npc: Npc) -> number, -- 1 = front of the line
 	TryTakeCounter: (npc: Npc) -> number?, -- a counter spot, only for the front NPC when one is free
 	Release: (npc: Npc) -> (), -- free the NPC's place in line, counter spot, and pickup spot
 	ReleaseCounter: (npc: Npc) -> (), -- free only the counter spot (called on order submit)
-	ClaimPickupSpot: (npc: Npc) -> BasePart?, -- claim an open spot at the pickup counter
+	ClaimPickupSpot: (npc: Npc) -> (Vector3?, CFrame?), -- claim an open spot at the pickup counter / plane
 	ReleasePickupSpot: (npc: Npc) -> (),
 	IsPaused: () -> boolean, -- true while nobody is clocked in
 	RegisterPatience: (npc: Npc) -> number, -- seconds the NPC waits at the register for its order to be taken
@@ -93,7 +96,8 @@ type NpcFields = {
 	State: State,
 	PatienceTotal: number,
 	CounterSpot: number?,
-	PickupSpot: BasePart?,
+	PickupSpot: (BasePart | Vector3)?,
+	PickupRotation: CFrame?,
 	RequestedDrinkText: string?,
 	OrderRolled: boolean, -- the register order is fixed once the first "Take Order" rolls it (TAKEOVER-FIX 3)
 	RolledScriptedFor: number?, -- UserId whose first-session script the rolled order is (nil = pool order)
@@ -106,6 +110,7 @@ type NpcFields = {
 	_ctx: Context,
 	_bar: Frame,
 	_bubbleUI: BubbleUI?,
+	_nametag: BillboardGui?,
 	_patienceEnd: number,
 	_registerEnd: number, -- os.clock() deadline at the register (0 = not at the register)
 	_fallbacks: number, -- PivotTo fallbacks in a row
@@ -123,6 +128,12 @@ local ARRIVE_RADIUS_STUDS = 3 -- close enough counts as arrived when MoveToFinis
 local WALK_POLL_SECONDS = 0.1
 local WAIT_POLL_SECONDS = 0.25 -- queue shuffling and patience updates
 local ROOT_HEIGHT_STUDS = 3 -- default R15 root part centre above the floor
+local PATHFINDING_OPTIONS = {
+	AgentRadius = 2,
+	AgentHeight = 5,
+	AgentCanJump = false,
+	WaypointSpacing = 4,
+}
 -- UI-REVISION: the gui is tall enough for the speech card over the order card; the
 -- order card keeps its 200 x 64 footprint at the bottom.
 local BUBBLE_CARD_H = 64
@@ -138,6 +149,8 @@ local BUBBLE_OFFSET = Vector3.new(0, 3.5, 0) -- above the head
 -- Lifts the gui so the order card's centre (not the gui's) sits on BUBBLE_OFFSET.
 local BUBBLE_SIZE_OFFSET = Vector2.new(0, (BUBBLE_SPEECH_H + 6) / 2 / (BUBBLE_CARD_H + BUBBLE_SPEECH_H + 6))
 local BUBBLE_MAX_DISTANCE_STUDS = 80
+local NAMETAG_SIZE = UDim2.fromScale(4, 2.5)
+local NAMETAG_SIZE_OFFSET = Vector2.new(0, 1.125)
 
 -- S9-SPARKLE: Perfect-serve burst, reusing the authored CleanlinessStorage.Sparkles
 -- (same Emit count as Spill). Never build a substitute.
@@ -388,6 +401,7 @@ local function buildBubble(model: Model, specs: { OrderSpec.OrderSpec }, variant
 	card.Size = UDim2.new(1, 0, 0, BUBBLE_CARD_H)
 	card.BackgroundColor3 = if variant == "VIP" then Styles.GOLD else Styles.CREAM
 	card.BorderSizePixel = 0
+	card.Visible = false
 	card.Parent = gui
 	addCorner(card, Styles.CORNER_BUTTON)
 
@@ -505,6 +519,81 @@ local function buildBubble(model: Model, specs: { OrderSpec.OrderSpec }, variant
 	return bubble
 end
 
+-- Builds the overhead nametag for an NPC, matching the player overhead style
+-- (PlayerOverheads.client.luau): BillboardGui at (4, 2.5) scale with SizeOffset (0, 1.125),
+-- SourceSansPro Bold username at (0, 0.725), and SourceSansPro Regular Italic role at (0, 0.85).
+local function buildNametag(model: Model): BillboardGui
+	local head = model:FindFirstChild("Head") or model.PrimaryPart
+	local gui = Instance.new("BillboardGui")
+	gui.Name = "Nametag"
+	gui.Adornee = head
+	gui.Size = NAMETAG_SIZE
+	gui.SizeOffset = NAMETAG_SIZE_OFFSET
+	gui.LightInfluence = 0
+	gui.MaxDistance = BUBBLE_MAX_DISTANCE_STUDS
+	gui.ResetOnSpawn = false
+	gui:SetAttribute("BuiltBy", BUILT_BY)
+
+	local frame = Instance.new("Frame")
+	frame.Name = "Container"
+	frame.BackgroundTransparency = 1
+	frame.Size = UDim2.fromScale(1, 1)
+	frame.Parent = gui
+
+	local usernameLabel = Instance.new("TextLabel")
+	usernameLabel.Name = "UsernameLabel"
+	usernameLabel.BackgroundTransparency = 1
+	usernameLabel.FontFace =
+		Font.new("rbxasset://fonts/families/SourceSansPro.json", Enum.FontWeight.Bold, Enum.FontStyle.Normal)
+	usernameLabel.Position = UDim2.fromScale(0, 0.725)
+	usernameLabel.Size = UDim2.fromScale(1, 0.15)
+	usernameLabel.TextColor3 = Color3.new(1, 1, 1)
+	usernameLabel.TextScaled = true
+	usernameLabel.Parent = frame
+
+	local roleLabel = Instance.new("TextLabel")
+	roleLabel.Name = "RoleLabel"
+	roleLabel.BackgroundTransparency = 1
+	roleLabel.FontFace =
+		Font.new("rbxasset://fonts/families/SourceSansPro.json", Enum.FontWeight.Regular, Enum.FontStyle.Italic)
+	roleLabel.Position = UDim2.fromScale(0, 0.85)
+	roleLabel.Size = UDim2.fromScale(1, 0.15)
+	roleLabel.TextColor3 = Color3.new(1, 1, 1)
+	roleLabel.TextScaled = true
+	roleLabel.Parent = frame
+
+	local humanoid = model:FindFirstChildOfClass("Humanoid")
+
+	local function refresh()
+		local variant = model:GetAttribute("Variant") :: Rules.Variant?
+		local regularName = model:GetAttribute("RegularName") :: string?
+		local name, tag = Rules.DisplayNames(variant, regularName)
+		usernameLabel.Text = name
+		if humanoid ~= nil then
+			humanoid.DisplayName = name
+		end
+		if tag ~= nil and tag ~= "" then
+			roleLabel.Text = tag
+			roleLabel.Visible = true
+		else
+			roleLabel.Text = ""
+			roleLabel.Visible = false
+		end
+	end
+
+	refresh()
+
+	local regConn = model:GetAttributeChangedSignal("RegularName"):Connect(refresh)
+	local varConn = model:GetAttributeChangedSignal("Variant"):Connect(refresh)
+	gui.Destroying:Connect(function()
+		regConn:Disconnect()
+		varConn:Disconnect()
+	end)
+
+	gui.Parent = model
+	return gui
+end
+
 local PATIENCE_COLORS = {
 	Green = Styles.GREEN,
 	Yellow = Styles.GOLD_MID,
@@ -561,6 +650,7 @@ function Npc.new(
 	model:SetAttribute("PatienceTotal", patienceSeconds)
 
 	local bubble = buildBubble(model, { spec }, variant)
+	local nametag = buildNametag(model)
 	local fields: NpcFields = {
 		Id = id,
 		Model = model,
@@ -576,6 +666,7 @@ function Npc.new(
 		PatienceTotal = patienceSeconds,
 		CounterSpot = nil,
 		PickupSpot = nil,
+		PickupRotation = nil,
 		RequestedDrinkText = nil,
 		OrderRolled = false,
 		RolledScriptedFor = nil,
@@ -588,6 +679,7 @@ function Npc.new(
 		_ctx = ctx,
 		_bar = bubble.Fill,
 		_bubbleUI = bubble,
+		_nametag = nametag,
 		_patienceEnd = 0,
 		_registerEnd = 0,
 		_fallbacks = 0,
@@ -704,6 +796,7 @@ function Npc.ShowGreetingBubble(self: Npc)
 		return
 	end
 	layoutBubble(bubble, false, false)
+	bubble.Card.Visible = true
 	bubble.Track.Visible = true -- register patience shows on the same bar (TAKEOVER-FIX 2)
 	bubble.Label.Text = "Hi, can I order?"
 	self:_setPatienceBar(1)
@@ -724,6 +817,7 @@ function Npc.ShowOrderBubble(self: Npc)
 	end
 	local title, detail = describeOrders(self.Specs, self.Variant)
 	layoutBubble(bubble, true, detail ~= "")
+	bubble.Card.Visible = true
 	bubble.Track.Visible = true
 	bubble.Chip.BackgroundColor3 = chipColor(self.Spec)
 	bubble.Label.Text = title
@@ -731,8 +825,9 @@ function Npc.ShowOrderBubble(self: Npc)
 	self:_setPatienceBar(1)
 end
 
-function Npc.GoToPickup(self: Npc, pickupSpot: BasePart)
+function Npc.GoToPickup(self: Npc, pickupSpot: (BasePart | Vector3)?, pickupRotation: CFrame?)
 	self.PickupSpot = pickupSpot
+	self.PickupRotation = pickupRotation
 	self:_setState("Walking")
 end
 
@@ -895,6 +990,123 @@ function Npc._walkTo(self: Npc, target: BasePart | Vector3)
 	end
 end
 
+local function getRandomPointOnPlane(part: BasePart, occupiedPositions: { Vector3 }?): (Vector3, CFrame)
+	local size = part.Size
+	local marginX = math.min(1, size.X * 0.1)
+	local marginZ = math.min(1, size.Z * 0.1)
+	local halfX = math.max(0, (size.X / 2) - marginX)
+	local halfZ = math.max(0, (size.Z / 2) - marginZ)
+
+	local bestPos: Vector3? = nil
+	local bestDist = -1
+
+	for _ = 1, 8 do
+		local ox = (math.random() * 2 - 1) * halfX
+		local oz = (math.random() * 2 - 1) * halfZ
+		local localPos = Vector3.new(ox, size.Y / 2, oz)
+		local worldPos = (part.CFrame * CFrame.new(localPos)).Position
+
+		if occupiedPositions == nil or #occupiedPositions == 0 then
+			return worldPos, part.CFrame.Rotation
+		end
+
+		local minDist = math.huge
+		for _, occ in occupiedPositions do
+			local d = (worldPos - occ).Magnitude
+			if d < minDist then
+				minDist = d
+			end
+		end
+
+		if minDist >= 2.5 then
+			return worldPos, part.CFrame.Rotation
+		end
+
+		if minDist > bestDist then
+			bestDist = minDist
+			bestPos = worldPos
+		end
+	end
+
+	return bestPos or part.Position, part.CFrame.Rotation
+end
+
+-- Pathfinds to `target` (BasePart or Vector3) using PathfindingService.
+-- Smoothly advances along waypoints, falling back to direct _walkTo if pathfinding fails or stalls.
+function Npc._pathfindTo(self: Npc, target: BasePart | Vector3, abortOnLeft: boolean?): boolean
+	local goal = if typeof(target) == "Vector3" then target else target.Position
+	local start = self.Root.Position
+
+	local initialOffset = (start - goal) * Vector3.new(1, 0, 1)
+	if initialOffset.Magnitude <= ARRIVE_RADIUS_STUDS then
+		self._fallbacks = 0
+		return true
+	end
+
+	local path = PathfindingService:CreatePath(PATHFINDING_OPTIONS)
+	local okCompute = pcall(function()
+		path:ComputeAsync(start, goal)
+	end)
+
+	if not okCompute or path.Status ~= Enum.PathStatus.Success then
+		self:_walkTo(goal)
+		return false
+	end
+
+	local waypoints = path:GetWaypoints()
+	if #waypoints <= 1 then
+		self:_walkTo(goal)
+		return true
+	end
+
+	for i = 2, #waypoints do
+		if self._destroyed then
+			return false
+		end
+		if abortOnLeft and self.Left then
+			return false
+		end
+
+		local wp = waypoints[i]
+		local wpPos = wp.Position
+		local finished = false
+
+		local conn = self.Humanoid.MoveToFinished:Connect(function()
+			finished = true
+		end)
+
+		self.Humanoid:MoveTo(wpPos)
+		if wp.Action == Enum.PathWaypointAction.Jump then
+			self.Humanoid.Jump = true
+		end
+
+		local dist = (self.Root.Position - wpPos).Magnitude
+		local timeout = math.max(1.5, (dist / math.max(self.Humanoid.WalkSpeed, 1)) * 3)
+		local deadline = os.clock() + timeout
+
+		while not finished and os.clock() < deadline and not self._destroyed do
+			if abortOnLeft and self.Left then
+				break
+			end
+			local flatDist = ((self.Root.Position - wpPos) * Vector3.new(1, 0, 1)).Magnitude
+			if i < #waypoints and flatDist <= ARRIVE_RADIUS_STUDS then
+				break
+			end
+			task.wait(WALK_POLL_SECONDS)
+		end
+		conn:Disconnect()
+	end
+
+	local finalOffset = (self.Root.Position - goal) * Vector3.new(1, 0, 1)
+	if finalOffset.Magnitude <= ARRIVE_RADIUS_STUDS then
+		self._fallbacks = 0
+		return true
+	end
+
+	self:_walkTo(goal)
+	return true
+end
+
 function Npc._setPatienceBar(self: Npc, fractionLeft: number)
 	local fraction = math.clamp(fractionLeft, 0, 1)
 	self._bar.Size = UDim2.fromScale(fraction, 1)
@@ -946,11 +1158,13 @@ function Npc._run(self: Npc)
 		self:_walkTo(node)
 	end
 
-	-- Wait in line. The front NPC takes the next free counter spot; everyone else
-	-- walks forward to the queue spot for their place.
+	-- Wait in line at their chosen register. The front NPC takes the counter spot; everyone else
+	-- waits behind them in line like in a real cafe.
 	self:_setState("Queued")
 	local spot: number? = nil
 	local standingAt = 0
+	local regSpot = if ctx.GetRegisterSpot ~= nil then ctx.GetRegisterSpot(self) else 1
+	local counterPart = nodes.Counter[regSpot]
 	local lineLeft = CustomerConfig.QUEUE_PATIENCE_SECONDS
 	local lineLast = os.clock()
 	while spot == nil and not self._destroyed and not self.Left do
@@ -968,20 +1182,15 @@ function Npc._run(self: Npc)
 			self:Leave("LineGaveUp")
 			break
 		elseif standingAt ~= qIndex then
-			if qIndex <= #nodes.Queue then
-				self:_walkTo(nodes.Queue[qIndex])
+			if counterPart ~= nil then
+				local offset = (qIndex - 1) * 3.5
+				local queuePos = counterPart.Position - counterPart.CFrame.LookVector * offset
+				self:_walkTo(queuePos)
+				self.Model:PivotTo(CFrame.new(self.Model:GetPivot().Position) * counterPart.CFrame.Rotation)
+				self:_playTrack("Idle", true, Enum.AnimationPriority.Idle)
 				standingAt = qIndex
 			else
-				local last = nodes.Queue[#nodes.Queue]
-				local prev = nodes.Queue[math.max(1, #nodes.Queue - 1)]
-				local dir = if last and prev
-					then (last.Position - prev.Position) * Vector3.new(1, 0, 1)
-					else Vector3.new(-1, 0, 0)
-				local dirUnit = if dir.Magnitude > 0.01 then dir.Unit else Vector3.new(-1, 0, 0)
-				local overflowIndex = qIndex - #nodes.Queue
-				local offsetGoal = last.Position + dirUnit * (overflowIndex * 2.8)
-				self:_walkTo(offsetGoal)
-				standingAt = qIndex
+				task.wait(WAIT_POLL_SECONDS)
 			end
 		else
 			task.wait(WAIT_POLL_SECONDS)
@@ -989,6 +1198,7 @@ function Npc._run(self: Npc)
 	end
 	if spot == nil then
 		if self.Left and not self._destroyed then
+			self:_pathfindTo(nodes.Exit.Position)
 			self:_walkTo(nodes.Exit)
 		end
 		return
@@ -1048,20 +1258,55 @@ function Npc._run(self: Npc)
 		return
 	end
 	if self.Left then
+		self:_pathfindTo(nodes.Exit.Position)
 		self:_walkTo(nodes.Exit)
 		return
 	end
 
-	-- Walk from register to open pickup spot under workspace["Ordering System"]["Pick Up"]
+	-- Walk from register to open pickup spot on workspace.Assets.NPC.OrderPickup
+	local targetPos: Vector3? = nil
+	local targetRot: CFrame? = self.PickupRotation
+
 	if self.PickupSpot ~= nil then
-		self:_walkTo(self.PickupSpot)
-		self.Model:PivotTo(CFrame.new(self.Model:GetPivot().Position) * self.PickupSpot.CFrame.Rotation)
+		if typeof(self.PickupSpot) == "Vector3" then
+			targetPos = self.PickupSpot
+		elseif typeof(self.PickupSpot) == "Instance" and self.PickupSpot:IsA("BasePart") then
+			targetPos = self.PickupSpot.Position
+			if targetRot == nil then
+				targetRot = self.PickupSpot.CFrame.Rotation
+			end
+		end
+	end
+
+	if targetPos == nil and nodes.OrderPickup ~= nil and nodes.OrderPickup:IsA("BasePart") then
+		local pos, rot = getRandomPointOnPlane(nodes.OrderPickup, nil)
+		targetPos = pos
+		if targetRot == nil then
+			targetRot = rot
+		end
+	end
+
+	if targetPos ~= nil then
+		self:_pathfindTo(targetPos, true)
+		if targetRot ~= nil and not self._destroyed and not self.Left then
+			self.Model:PivotTo(CFrame.new(self.Model:GetPivot().Position) * targetRot)
+		end
+	end
+
+	if self._destroyed then
+		return
+	end
+	if self.Left then
+		self:_pathfindTo(nodes.Exit.Position)
+		self:_walkTo(nodes.Exit)
+		return
 	end
 
 	-- Arrive at Pick Up: patience starts ticking down here, overhead shows order icons and bar
 	self:_setState("AtPickup")
 	self:ShowOrderBubble()
 	self:StartPatience()
+	self:_playTrack("Idle", true, Enum.AnimationPriority.Idle)
 
 	local okPickup, errPickup = pcall(self._ctx.OnAtPickup, self)
 	if not okPickup then
@@ -1091,6 +1336,7 @@ function Npc._run(self: Npc)
 				end
 			end
 
+			self:_pathfindTo(seat.Position)
 			self:_walkTo(seat)
 			if seat.Occupant == nil and not self._destroyed then
 				self.Humanoid:SetStateEnabled(Enum.HumanoidStateType.Seated, true)
@@ -1118,6 +1364,8 @@ function Npc._run(self: Npc)
 		end
 	end
 
+	self:_setState("Leaving")
+	self:_pathfindTo(nodes.Exit.Position)
 	self:_walkTo(nodes.Exit)
 end
 

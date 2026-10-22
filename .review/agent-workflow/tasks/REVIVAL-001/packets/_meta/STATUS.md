@@ -35,3 +35,15 @@ See chat 2026-10-20 / KICKOFF.md.
 
 ## Session 2026-10-20 part 2
 Ship-set builders all committed (see KICKOFF-2.md for hashes). Remaining: B1 build + Espresso/Mango extension, evidence docs commit, Ship Plan artifact, branch review, Studio checklist. Jack decisions: DEC-056 ship set OK, DEC-057 ticket middle-right + Quests button removed, Espresso/Mango yes. Pending from Jack: Hot Cocoa/Strawberry Tapioca place-file checks, sounds.
+
+## Session 2026-10-21
+Done since b703c74 (see board.json for hashes):
+- B1-EXT Espresso L7/Mango L8 (0b75279). Branch-review fixes (efb12ff, 4267ad3, 1b54074, 3265c30, 15aa28e).
+- Takeover checkpoint 2f41d8a (B7 pour, Q6, H6, X10, Titles/Staff, tablet ordering, boards, rush cap 50); takeover fixes (94e6dcf, c52bb5e, abddac6, 1555790, 9e67036, 1532d14).
+- Donations d20d3c0, invite hardening ad90722, Top Donators bdd9561. Takeover-review fixes 00f77bc..0d5a5cd plus P3s.
+- B5 Regulars merged 4deac53; B2 Cafe Upgrades merged f31680b. B6 Boba Pass CANCELLED by Jack.
+- B4 seating built but OFF (SeatingConfig.ENABLED=false) pending 50-NPC perf check.
+Running: UI-REVISION (Opus), GAMEPLAY-AUDIT (Opus, GAMEPLAY-AUDIT/report.md). BOBA-PHONE un-deferred: Gemini 3.8 Flash on agy-boba-phone, Claude reviews/merges.
+Jack decisions: Opus decides design/numbers under DEC-058; donation receipts wired; register NPCs walk out; invite needs friends + 7-day account; no-tap = Poor OK; leaderboard migration last; Orders Served/Most Active start fresh.
+Remaining before Friday: audit quick-wins, UI revision, Jack's Studio pass, perf check, leaderboard migration, Ship Plan, final docs commit (SYSTEMS.md Regulars, B6 cancel).
+Waiting on Jack: M3-ECON-GATE product IDs, NPC-QUEUES playtest, Q32 verify, M4-QUESTS-REDO look, Hot Cocoa/Strawberry Tapioca checks, SFX.UI sounds, STREAK-REMINDER secret.

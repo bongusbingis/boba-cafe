@@ -114,6 +114,29 @@ local function heldToolAttributes(): { [string]: any }?
 	return tool:GetAttributes()
 end
 
+local function allToolCandidates(): { { [string]: any } }
+	local candidates: { { [string]: any } } = {}
+	local player = Players.LocalPlayer
+	if not player then
+		return candidates
+	end
+	local character = player.Character
+	local backpack = player:FindFirstChild("Backpack")
+	local function addFrom(container: Instance?)
+		if not container then
+			return
+		end
+		for _, item in container:GetChildren() do
+			if item:IsA("Tool") and item:GetAttribute("Served") ~= true then
+				table.insert(candidates, item:GetAttributes())
+			end
+		end
+	end
+	addFrom(character)
+	addFrom(backpack)
+	return candidates
+end
+
 local function isClockedOut(): boolean
 	return Players.LocalPlayer:GetAttribute(CLOCKED_IN_ATTRIBUTE) == false
 end
@@ -284,8 +307,29 @@ local function guidanceStep(serveTarget: Model?)
 	local player = Players.LocalPlayer
 	local OrderController = Knit.GetController("OrderController")
 	local order = OrderController.CurrentOrder
-	local spec = KitchenGuidance.ResolveSpec(order, OrderSpec.FromOrderItem)
-	local guidance = KitchenGuidance.Compute(spec, heldToolAttributes())
+	local specs = KitchenGuidance.ResolveSpecs(order, OrderSpec.FromOrderItem)
+	local candidates = allToolCandidates()
+	local heldAttrs = heldToolAttributes()
+	local activeSpec, allDone = KitchenGuidance.FindActiveSpec(specs, candidates, heldAttrs)
+
+	local guidance: KitchenGuidance.Guidance? = nil
+	if allDone then
+		guidance = {
+			Station = nil,
+			Choice = nil,
+			Label = "Serve your customer",
+			IsServe = true,
+			Current = 1,
+			Total = 1,
+			Item = if activeSpec then activeSpec.Item elseif specs[1] then specs[1].Item else "",
+		}
+	elseif activeSpec ~= nil then
+		guidance = KitchenGuidance.Compute(activeSpec, heldAttrs)
+		if guidance ~= nil and guidance.IsServe and not allDone then
+			guidance.IsServe = false
+		end
+	end
+
 	runtime.Current = guidance
 	trackProgress(guidance, order)
 

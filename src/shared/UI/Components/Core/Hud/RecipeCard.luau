@@ -109,12 +109,20 @@ return function(props)
 		return nil
 	end
 
+	local isComplete = props.isComplete == true or (props.allDone == true and props.attrs == nil)
 	local current, problem = OrderSpec.StepState(spec, props.attrs)
 	local total = #steps
+	if isComplete and current <= total then
+		current = total + 1
+		problem = nil
+	end
 	local doneCount = math.clamp(current - 1, 0, total)
 
 	-- Header sub-line: "Shift 1 · 1/4", or just "1/4" with no shift source.
 	local countText = ("%d/%d"):format(doneCount, total)
+	if typeof(props.itemTotal) == "number" and props.itemTotal > 1 and typeof(props.itemIndex) == "number" then
+		countText = ("Drink %d/%d · %s"):format(props.itemIndex, props.itemTotal, countText)
+	end
 	local subText = if props.shiftText ~= nil then (props.shiftText .. " · " .. countText) else countText
 	-- Fast-bonus cue (T4): shown while patience is at or above the Fast threshold.
 	if typeof(props.patience) == "number" and props.patience >= CustomerConfig.FAST_FRACTION and current <= total then
@@ -233,7 +241,8 @@ return function(props)
 		}),
 	})
 
-	local footer = if current > total
+	local showFooter = if props.allDone ~= nil then props.allDone else (current > total)
+	local footer = if showFooter
 		then c("Frame", {
 			LayoutOrder = total + 2,
 			AutomaticSize = Enum.AutomaticSize.Y,

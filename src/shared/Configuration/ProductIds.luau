@@ -22,6 +22,7 @@ export type DonationProduct = {
 export type ProductIds = {
 	Donations: { DonationProduct },
 	BobaParty: number?,
+	RushHour: number?,
 	BobaBucks: {
 		Pack50: number?,
 		Pack150: number?,
@@ -54,15 +55,16 @@ local ProductIds: ProductIds = {
 		{ ProductId = 928276567, Robux = 100000 },
 		{ ProductId = 1168137385, Robux = 500000 },
 	},
-	-- JACK: paste the Boba Party Creator Hub developer-product ID here (nil = party purchase disabled).
-	BobaParty = nil,
+	-- Creator Hub IDs from Jack (2026-10-21).
+	BobaParty = 3300909405,
+	RushHour = 3318558073, -- 2-minute server Rush; a purchase during a Rush/Party adds 2 minutes
+
 	BobaBucks = {
-		-- JACK: paste the Creator Hub developer-product ID for each BB pack (nil = pack inert).
-		Pack50 = nil,
-		Pack150 = nil,
-		Pack500 = nil,
-		Pack1000 = nil,
-		Pack5000 = nil,
+		Pack50 = 1780164398,
+		Pack150 = 1780164611,
+		Pack500 = 1780165079,
+		Pack1000 = 1780165241,
+		Pack5000 = 1780164860,
 	},
 	CapsuleRobux = {
 		-- JACK: paste Creator Hub developer-product IDs for Robux capsule offers here

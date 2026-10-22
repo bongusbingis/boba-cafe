@@ -36,6 +36,15 @@ type Order = {
 	statusColor: Color3,
 }
 
+type CustomerOrder = {
+	orderNum: string,
+	customerName: string,
+	numItems: number,
+	status: string,
+	statusColor: Color3,
+	npcModel: Model?,
+}
+
 type ToolEntry = {
 	Name: string,
 	Tool: Tool,
@@ -109,6 +118,7 @@ local OrderService = Knit.CreateService({
 	_currentOrderNum = 0 :: number,
 	_orders = {} :: { Order },
 	_queue = {} :: { number }, -- ordered list of waiting barista UserIds
+	_customerOrders = {} :: { [string]: CustomerOrder },
 	_statusScreens = {} :: { SurfaceGui },
 	_staffScreens = {} :: { SurfaceGui },
 	_pickUpAreas = {} :: { Model },
@@ -431,6 +441,11 @@ function OrderService:_updateOrders()
 			node.ProximityPrompt.ActionText = "Deposit Order"
 		end
 	end
+	for id, order in self._customerOrders do
+		if order.npcModel and order.npcModel.Parent == nil then
+			self._customerOrders[id] = nil
+		end
+	end
 end
 
 function OrderService:_updateStaffScreens()
@@ -505,25 +520,79 @@ function OrderService:_updateStaffScreens()
 end
 
 function OrderService:_updateStatusScreens()
+	local allOrders = {}
+
+	for _, order in self._orders do
+		local customer = Players:GetPlayerByUserId(order.customer)
+		table.insert(allOrders, {
+			orderNum = order.orderNum,
+			customerName = customer and customer.Name or "Unknown",
+			status = order.status,
+			statusColor = order.statusColor,
+			numItems = order.numItems,
+		})
+	end
+
+	for id, order in self._customerOrders do
+		if order.npcModel and order.npcModel.Parent == nil then
+			self._customerOrders[id] = nil
+		else
+			table.insert(allOrders, {
+				orderNum = order.orderNum,
+				customerName = order.customerName,
+				status = order.status,
+				statusColor = order.statusColor,
+				numItems = order.numItems,
+			})
+		end
+	end
+
+	table.sort(allOrders, function(a, b)
+		local prioA = STATUS_PRIORITY[a.status] or 0
+		local prioB = STATUS_PRIORITY[b.status] or 0
+		if prioA ~= prioB then
+			return prioA < prioB
+		end
+		return (tonumber(a.orderNum) or 0) < (tonumber(b.orderNum) or 0)
+	end)
+
 	for _, screen in self._statusScreens do
-		for _, frame in screen.Frame.Frame:GetChildren() do
+		local listFrame = screen:FindFirstChild("Frame") and screen.Frame:FindFirstChild("Frame")
+		if not listFrame then
+			continue
+		end
+		local template = listFrame:FindFirstChild("Template")
+		if not template then
+			continue
+		end
+
+		for _, frame in listFrame:GetChildren() do
 			if frame:IsA("ImageLabel") and frame.Visible then
 				frame:Destroy()
 			end
 		end
 
-		for _, order in self._orders do
-			local customer = Players:GetPlayerByUserId(order.customer)
-			local entry = screen.Frame.Frame.Template:Clone()
+		local maxDisplay = math.min(#allOrders, 10)
+		for i = 1, maxDisplay do
+			local order = allOrders[i]
+			local entry = template:Clone()
 			entry.Name = order.orderNum
-			entry.Order.Text = "Order " .. order.orderNum
-			entry.Customer.Text = customer and customer.Name or "Unknown"
-			entry.Status.Text = "Status: " .. order.status
-			entry.Items.Text = order.numItems .. (order.numItems == 1 and " Item" or " Items")
+			if entry:FindFirstChild("Order") then
+				entry.Order.Text = "Order " .. order.orderNum
+			end
+			if entry:FindFirstChild("Customer") then
+				entry.Customer.Text = order.customerName
+			end
+			if entry:FindFirstChild("Status") then
+				entry.Status.Text = "Status: " .. order.status
+			end
+			if entry:FindFirstChild("Items") then
+				entry.Items.Text = order.numItems .. (order.numItems == 1 and " Item" or " Items")
+			end
 			entry.ImageColor3 = order.statusColor
-			entry.LayoutOrder = STATUS_PRIORITY[order.status] + (tonumber(order.orderNum) :: number)
+			entry.LayoutOrder = (STATUS_PRIORITY[order.status] or 0) + (tonumber(order.orderNum) or 0)
 			entry.Visible = true
-			entry.Parent = screen.Frame.Frame
+			entry.Parent = listFrame
 		end
 	end
 end
@@ -664,6 +733,7 @@ function OrderService:_tryDispatchFromQueue()
 				end
 
 				self:_broadcastQueuePositions()
+				self:_updateStatusScreens()
 				return
 			end
 		end
@@ -867,6 +937,61 @@ end
 ---> Public Methods
 
 -- Number of orders waiting for a barista to claim.
+-- Registers an NPC customer order to display on the in-world Status Screens.
+function OrderService:RegisterCustomerOrder(
+	orderId: string,
+	customerName: string,
+	numItems: number,
+	status: string?,
+	npcModel: Model?
+): string
+	self._currentOrderNum += 1
+	local orderNum = string.format("%04i", self._currentOrderNum % 1000)
+	local orderStatus = status or "Being Prepared"
+	local color = if orderStatus == "Ready for Pick Up"
+		then COLOR_READY
+		elseif orderStatus == "Being Prepared" then COLOR_PREPARING
+		else COLOR_PENDING
+
+	self._customerOrders[orderId] = {
+		orderNum = orderNum,
+		customerName = customerName,
+		numItems = numItems,
+		status = orderStatus,
+		statusColor = color,
+		npcModel = npcModel,
+	}
+
+	self:_updateStatusScreens()
+	return orderNum
+end
+
+-- Updates the status of an active customer order ("Being Prepared", "Ready for Pick Up").
+function OrderService:UpdateCustomerOrderStatus(orderId: string, status: string)
+	local order = self._customerOrders[orderId]
+	if not order then
+		return
+	end
+	if order.status == status then
+		return
+	end
+	order.status = status
+	order.statusColor = if status == "Ready for Pick Up"
+		then COLOR_READY
+		elseif status == "Being Prepared" then COLOR_PREPARING
+		else COLOR_PENDING
+
+	self:_updateStatusScreens()
+end
+
+-- Removes a customer order from Status Screens (e.g. customer served or walked out).
+function OrderService:RemoveCustomerOrder(orderId: string)
+	if self._customerOrders[orderId] then
+		self._customerOrders[orderId] = nil
+		self:_updateStatusScreens()
+	end
+end
+
 function OrderService:GetPendingCount(): number
 	local count = 0
 	for _, order in self._orders do
@@ -1063,6 +1188,8 @@ function OrderService:_setupOrderingSystem(orderingSystem: Instance)
 	else
 		warn('[OrderService] "Ordering System.Pick Up" missing; order pick-up disabled.')
 	end
+
+	self:_updateStatusScreens()
 end
 
 function OrderService:KnitInit()

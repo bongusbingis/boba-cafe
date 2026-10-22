@@ -11,6 +11,7 @@ local React = require(Packages.React)
 ---> config
 local ProductIds = require(Shared.Configuration.ProductIds)
 local UIFlags = require(Shared.Configuration.UIFlags)
+local EventProducts = require(Shared.Utility.EventProducts)
 
 ---> styles
 local Styles = require(UI.Styles)
@@ -69,6 +70,61 @@ return function()
 		end
 	end, {})
 
+	-- Boba Party / Rush Hour developer products (live prices; party hidden on cooldown).
+	local eventPrices, setEventPrices = React.useState({})
+	local _eventTick, setEventTick = React.useState(0)
+
+	React.useEffect(function()
+		local mounted = true
+		task.spawn(function()
+			local fetched = EventProducts.fetchPrices()
+			if mounted then
+				setEventPrices(fetched)
+			end
+		end)
+		local function bump()
+			setEventTick(function(n)
+				return n + 1
+			end)
+		end
+		local conns = {
+			workspace:GetAttributeChangedSignal("BobaParty"):Connect(bump),
+			workspace:GetAttributeChangedSignal("BobaPartyCooldownEndsAt"):Connect(bump),
+		}
+		-- The cooldown ends by clock, not by attribute change.
+		task.spawn(function()
+			while mounted do
+				task.wait(5)
+				if mounted then
+					bump()
+				end
+			end
+		end)
+		return function()
+			mounted = false
+			for _, conn in conns do
+				conn:Disconnect()
+			end
+		end
+	end, {})
+
+	local eventItems = {}
+	for _, product in EventProducts.Products do
+		if EventProducts.available(product) then
+			table.insert(eventItems, {
+				Label = `{product.Name} · {product.Blurb}`,
+				Price = eventPrices[product.Key],
+				Product = product,
+			})
+		end
+	end
+
+	local function onPurchaseEvent(item)
+		if item.Product ~= nil then
+			EventProducts.prompt(item.Product)
+		end
+	end
+
 	local bucksItems = {}
 	for i, pack in BOBA_BUCKS_PACKS do
 		bucksItems[i] = {
@@ -126,6 +182,15 @@ return function()
 				LayoutOrder = 0,
 				OnPurchase = onPurchaseBucks,
 			}),
+
+			Events = if #eventItems > 0
+				then c(ShopCategory, {
+					Title = "Cafe Events",
+					Items = eventItems,
+					LayoutOrder = 2,
+					OnPurchase = onPurchaseEvent,
+				})
+				else nil,
 
 			-- Hidden while Points have no use (UIFlags.SHOW_POINTS).
 			Points = if UIFlags.SHOW_POINTS

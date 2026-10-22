@@ -407,4 +407,20 @@ function Rules.ValidateSubmittedOrder(submittedList: { OrderItem }, expectedList
 	return true
 end
 
+-- Resolves the overhead display name and subtitle tag for an NPC customer:
+-- Regulars use their assigned name with "Regular" tag;
+-- Karen uses "Karen" with no tag;
+-- VIP uses "Customer" with "VIP" tag;
+-- Standard customers use "Customer" with no tag.
+function Rules.DisplayNames(variant: Variant?, regularName: string?): (string, string?)
+	if typeof(regularName) == "string" and regularName ~= "" then
+		return regularName, "Regular"
+	elseif variant == "Karen" then
+		return "Karen", nil
+	elseif variant == "VIP" then
+		return "Customer", "VIP"
+	end
+	return "Customer", nil
+end
+
 return Rules

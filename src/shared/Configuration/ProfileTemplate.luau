@@ -42,6 +42,7 @@ type Statistics = {
 export type PlayerSettings = {
 	HeadlessHead: boolean,
 	FasterWalkSpeed: boolean,
+	UniformRemoverEnabled: boolean?,
 	MusicEnabled: boolean,
 	SFXEnabled: boolean,
 	SyrupHighlighting: boolean,
@@ -176,6 +177,7 @@ return {
 	Settings = {
 		HeadlessHead = false,
 		FasterWalkSpeed = false,
+		UniformRemoverEnabled = true,
 		MusicEnabled = true,
 		SFXEnabled = true,
 		SyrupHighlighting = true,

@@ -79,6 +79,10 @@ local function LevelBarComponent(props: { LayoutOrder: number? })
 		end, {})
 
 		-- Level-up (SOUNDS D8): flash and sound on a rise of the Level attribute, not on first read.
+		-- SuperSuccess first: plays SoundService.SFX.UI.SuperSuccess (else
+		-- SoundService.UISounds.SuperSuccess) when authored, falling back to
+		-- the previous cues. LevelBar owns the level-up sound, so the
+		-- celebration card stays silent (see SmallNotification.soundFor).
 		React.useEffect(function()
 			local player = Players.LocalPlayer
 			if player == nil then
@@ -89,7 +93,7 @@ local function LevelBarComponent(props: { LayoutOrder: number? })
 				local now = player:GetAttribute("Level")
 				if typeof(now) == "number" and typeof(lastLevel) == "number" and now > lastLevel then
 					flashEvent:Fire()
-					UiSfx.Play({ "LevelUp", "Success" })
+					UiSfx.Play({ "SuperSuccess", "LevelUp", "Success" })
 				end
 				if typeof(now) == "number" then
 					lastLevel = now

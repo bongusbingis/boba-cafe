@@ -348,23 +348,7 @@ end
 function TreasureHuntService:KnitStart()
 	self._started = true
 
-	local folder = WorldPath.find(Workspace, { "OldScriptables", "ChestNodesFolder" })
-	if not folder then
-		folder = WorldPath.find(Workspace, { "Assets", "Chests" })
-	end
-	if not folder then
-		folder = WorldPath.waitFor(Workspace, { "OldScriptables", "ChestNodesFolder" }, 5)
-	end
-	if not folder then
-		folder = WorldPath.waitFor(Workspace, { "Assets", "Chests" }, 5)
-	end
-
-	if not folder then
-		warn(
-			"[TreasureHuntService] Chest nodes folder not found at Workspace.OldScriptables.ChestNodesFolder or Workspace.Assets.Chests; disabling chest spawning."
-		)
-		return
-	end
+	local folder = workspace:WaitForChild("Assets"):WaitForChild("ChestNodes")
 
 	self:InitNodes(folder)
 	self:SpawnInitialChests()

@@ -17,8 +17,6 @@ local FoodMenu = require(script.FoodMenu)
 local Staff = require(script.Staff)
 local Daily = require(script.Daily)
 local PromoCodes = require(script.PromoCodes)
-local Credits = require(script.Credits)
-local Purchases = require(script.Purchases)
 -- local ServerInfo = require(script.ServerInfo)
 local Settings = require(script.Settings)
 local Statistics = require(script.Statistics)
@@ -73,64 +71,56 @@ local PAGES: { OpenableMenu.Page } = {
 		Content = c(Regulars, {}),
 	},
 	{
-		Key = "Purchases",
-		Label = "Purchases",
-		LayoutOrder = 8,
-		Content = c(Purchases, {}),
-	},
-	-- ServerInfo button is made invisible for now to fit the side menu cleanly (DEC-019).
-	-- {
-	-- 	Key = "ServerInfo",
-	-- 	Label = "Server Info",
-	-- 	LayoutOrder = 7,
-	-- 	Content = c(ServerInfo, {}),
-	-- },
-	{
+		-- Purchases and Credits are merged as sub-tabs inside Settings to keep side tabs uncrowded.
 		Key = "Settings",
 		Label = "Settings",
-		LayoutOrder = 9,
+		LayoutOrder = 8,
 		Content = c(Settings, {}),
-	},
-	{
-		Key = "Credits",
-		Label = "Credits",
-		LayoutOrder = 10,
-		Content = c(Credits, {}),
 	},
 }
 
 return function(props)
 	local questClaimable = useQuestClaimable()
+	local landingKey = PAGES[1].Key
+	local requestedSubTab: string? = nil
+
+	if props and props.Args and props.Args[1] then
+		local arg = props.Args[1]
+		if arg == "Purchases" or arg == "Credits" then
+			landingKey = "Settings"
+			requestedSubTab = arg
+		else
+			for _, page in PAGES do
+				if page.Key == arg then
+					landingKey = page.Key
+					break
+				end
+			end
+		end
+	end
+
 	local pages: { OpenableMenu.Page } = {}
 	for _, page in PAGES do
 		local copy = table.clone(page)
 		if page.Key == "Quests" then
 			copy.ShowDot = questClaimable
+		elseif page.Key == "Settings" and requestedSubTab ~= nil then
+			copy.Content = c(Settings, { SubTab = requestedSubTab })
 		end
 		table.insert(pages, copy)
-	end
-
-	local landingPage = PAGES[1]
-	if props and props.Args and props.Args[1] then
-		for _, page in PAGES do
-			if page.Key == props.Args[1] then
-				landingPage = page
-				break
-			end
-		end
 	end
 
 	return c(OpenableMenu, {
 		TitleText = "Menu",
 		TitleColor = Styles.GREEN,
-		DefaultPage = landingPage.Key,
+		DefaultPage = landingKey,
 		Pages = pages,
-		TabHeight = 0.088,
+		TabHeight = 0.095,
 		SideButtonsProps = {
 			ListLayout = {
 				HorizontalAlignment = Enum.HorizontalAlignment.Center,
 				VerticalAlignment = Enum.VerticalAlignment.Top,
-				Padding = UDim.new(0.006, 0), -- ten tabs at 0.088 each fit the side panel
+				Padding = UDim.new(0.015, 0), -- eight tabs at 0.095 each fit comfortably
 				SortOrder = Enum.SortOrder.LayoutOrder,
 			},
 		},

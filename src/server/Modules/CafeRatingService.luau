@@ -19,6 +19,9 @@ local CafeRatingService = Knit.CreateService({
 	_rush = false,
 	_rushEndsAt = nil :: number?,
 	_lastRushEnd = nil :: number?,
+	_rushEndTime = nil :: number?, -- os.clock() end of an earned/paid (non-party) rush; the party has _partyEndTime
+	_rushToken = 0, -- bumped on every rush start so a stale end-time loop exits
+	_rushBuyer = nil :: string?,
 	_partyActive = false,
 	_partyEndTime = nil :: number?,
 	_partyCooldownEnd = nil :: number?,
@@ -59,10 +62,19 @@ end
 
 function CafeRatingService:_publish()
 	workspace:SetAttribute("CafeRating", self._rating)
-	workspace:SetAttribute("RushHour", self._rush)
+	workspace:SetAttribute("RushHour", self._rush or self:_eventRushActive())
 	workspace:SetAttribute("BobaParty", self._partyActive)
 	workspace:SetAttribute("RushEndsAt", self._rushEndsAt)
 	workspace:SetAttribute("BobaPartyBuyer", self._partyBuyer)
+	workspace:SetAttribute("RushHourBuyer", self._rushBuyer)
+end
+
+--- True while EventService's staff-hosted Rush Hour is running, so _publish does not clobber its attribute.
+function CafeRatingService:_eventRushActive(): boolean
+	local ok, active = pcall(function()
+		return Knit.GetService("EventService"):GetActiveEvent().EventName == "RushHour"
+	end)
+	return ok and active == true
 end
 
 function CafeRatingService:_notifyAll(text: string)
@@ -141,6 +153,9 @@ function CafeRatingService:StartOrExtendBobaParty(buyer: Player?): (boolean, str
 	self._partyCooldownEnd = nil
 	workspace:SetAttribute("BobaPartyCooldownEndsAt", nil)
 	self._rush = true
+	self._rushToken += 1 -- the party owns the rush now; any earned/paid rush loop exits without ending it
+	self._rushEndTime = nil
+	self._rushBuyer = nil
 	self._rushEndsAt = workspace:GetServerTimeNow() + RatingConfig.BOBA_PARTY_SECONDS
 	self._partyBuyer = buyerName(buyer)
 	workspace:SetAttribute("RushHour", true)
@@ -209,20 +224,76 @@ function CafeRatingService:_checkRush()
 	if last ~= nil and os.clock() - last < RatingConfig.MIN_GAP_SECONDS then
 		return -- stays at 100 inside the gap
 	end
-	self._rush = true
-	self._rushEndsAt = workspace:GetServerTimeNow() + RatingConfig.RUSH_SECONDS
+	self:_beginRush(RatingConfig.RUSH_SECONDS, nil)
 	self:_notifyAll("Rush Hour! More customers and double pay!")
-	task.delay(RatingConfig.RUSH_SECONDS, function()
-		if self._partyActive then
-			return
+end
+
+--- Starts a non-party rush ending `seconds` from now and runs the end-time loop for it.
+function CafeRatingService:_beginRush(seconds: number, buyer: string?)
+	self._rush = true
+	self._rushToken += 1
+	local token = self._rushToken
+	self._rushEndTime = os.clock() + seconds
+	self._rushEndsAt = workspace:GetServerTimeNow() + seconds
+	self._rushBuyer = buyer
+	self:_publish()
+
+	task.spawn(function()
+		while self._rush and self._rushToken == token and self._rushEndTime ~= nil do
+			local remaining = self._rushEndTime - os.clock()
+			if remaining <= 0 then
+				self:_endRush()
+				return
+			end
+			task.wait(math.clamp(remaining, 0.05, 1))
 		end
-		self._rush = false
-		self._rushEndsAt = nil
-		self._rating = RatingConfig.AFTER_RUSH
-		self._lastRushEnd = os.clock()
-		self:_publish()
-		self:_notifyAll("Rush Hour is over.")
 	end)
+end
+
+--- Ends an earned/paid rush: meter resets to AFTER_RUSH and the gap timer starts. A running party is untouched.
+function CafeRatingService:_endRush()
+	if self._partyActive then
+		return
+	end
+	self._rush = false
+	self._rushEndTime = nil
+	self._rushEndsAt = nil
+	self._rushBuyer = nil
+	self._rating = RatingConfig.AFTER_RUSH
+	self._lastRushEnd = os.clock()
+	self:_publish()
+	self:_notifyAll("Rush Hour is over.")
+end
+
+--- Rush Hour developer product: starts the normal rush, or adds RUSH_SECONDS to a running rush or Boba Party.
+function CafeRatingService:StartOrExtendRush(buyer: Player?): (boolean, string?)
+	local name = buyerName(buyer)
+	local who = name or "Someone"
+	local minutes = RatingConfig.RUSH_SECONDS / 60
+	local extendText = `{who} added {minutes} minutes of Rush Hour!`
+
+	if self._partyActive then
+		self._partyEndTime = (self._partyEndTime or os.clock()) + RatingConfig.RUSH_SECONDS
+		self._rushEndsAt = workspace:GetServerTimeNow() + (self._partyEndTime - os.clock())
+		self:_publish()
+		self:_notifyAll(extendText)
+		return true
+	end
+
+	if self._rush and self._rushEndTime ~= nil then
+		self._rushEndTime += RatingConfig.RUSH_SECONDS
+		self._rushEndsAt = workspace:GetServerTimeNow() + (self._rushEndTime - os.clock())
+		if name ~= nil then
+			self._rushBuyer = name
+		end
+		self:_publish()
+		self:_notifyAll(extendText)
+		return true
+	end
+
+	self:_beginRush(RatingConfig.RUSH_SECONDS, name)
+	self:_notifyAll(`{who} started a Rush Hour!`)
+	return true
 end
 
 function CafeRatingService:_spillsPresent(): boolean

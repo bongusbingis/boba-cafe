@@ -25,7 +25,13 @@ local COMBO_MILESTONES = { [3] = true, [5] = true, [10] = true }
 local VOLUME = {
 	Serve = 1.0,
 	StepDone = 0.6,
+	StepDone_Pour = 0.6,
+	StepDone_Scoop = 0.6,
+	StepDone_Machine = 0.6,
+	StepDone_Blender = 0.6,
+	StepDone_Grab = 0.6,
 	Rush = 1.0,
+	SuperSuccess = 1.0,
 	LevelUp = 1.0,
 	Success = 1.0,
 	Pop1 = 0.8,

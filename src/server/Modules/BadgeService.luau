@@ -17,6 +17,7 @@ local Packages = ReplicatedStorage:WaitForChild("Packages")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Knit = require(Packages.Knit)
 local RankUtil = require(Shared.Utility.RankUtil)
+local Titles = require(Shared.Configuration.Titles)
 
 ---> variables
 local Service = Knit.CreateService({ Name = "BadgeService", Client = {} })
@@ -37,13 +38,7 @@ Service.Badges = {
 	LevelUp = 2150110948,
 }
 
-local LEGACY_BADGES = { -- DEC-035 Q3, DEC-037 Q12
-	2124640229, -- FirstQuest
-	2124640231, -- Celebrity
-	2124640232, -- SakuraIsland
-	2124774046, -- ShinyPet
-	2124837610, -- HalloweenEvent
-}
+local LEGACY_BADGES = Titles.VETERAN_BADGES -- Defined in Titles.luau (DEC-035 Q3, DEC-037 Q12)
 Service.LEGACY_BADGES = LEGACY_BADGES
 
 local ClientAwardableBadges = {
@@ -167,6 +162,12 @@ function Service:CheckVeteranStatusAsync(player: Player): boolean
 				badgeOwnershipCache[player.UserId][badgeId] = true
 			end
 			player:SetAttribute("IsVeteran", true)
+			pcall(function()
+				local progressionService = Knit.GetService("ProgressionService")
+				if progressionService and progressionService.GrantTitle then
+					progressionService:GrantTitle(player, "Veteran")
+				end
+			end)
 			return true
 		end
 	end

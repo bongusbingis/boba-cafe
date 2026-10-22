@@ -118,6 +118,35 @@ return function()
 		end)
 	end)
 
+	describe("UnlocksAt", function()
+		local function has(level: number, needle: string): boolean
+			for _, line in service.UnlocksAt(level) do
+				if string.find(line, needle, 1, true) then
+					return true
+				end
+			end
+			return false
+		end
+
+		it("lists the level 5 bundle", function()
+			expect(has(5, "New title: Barista")).to.equal(true)
+			expect(has(5, "2 order tickets")).to.equal(true)
+			expect(has(5, "Orders with 2 items")).to.equal(true)
+			expect(has(5, "New nametag: Crimson")).to.equal(true)
+		end)
+
+		it("lists new drinks at their level", function()
+			expect(has(2, "Taro Boba")).to.equal(true)
+			expect(has(2, "Strawberry Boba")).to.equal(true)
+			expect(has(7, "Espresso")).to.equal(true)
+		end)
+
+		it("lists variant customers at their level", function()
+			expect(has(6, "VIP customers")).to.equal(true)
+			expect(has(10, "Karen customers")).to.equal(true)
+		end)
+	end)
+
 	describe("LevelUpText", function()
 		it("names every drink that opens at its level", function()
 			for _, entry in CustomerConfig.ORDER_POOL do

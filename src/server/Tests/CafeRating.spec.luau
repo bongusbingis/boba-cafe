@@ -217,4 +217,110 @@ return function()
 			expect(workspace:GetAttribute("BobaPartyBuyer")).to.equal(nil)
 		end)
 	end)
+
+	describe("Rush Hour product", function()
+		local ReplicatedStorage = game:GetService("ReplicatedStorage")
+		local RatingConfig = require(ReplicatedStorage.Shared.Configuration.RatingConfig)
+		local CafeRatingService = require(ServerScriptService.Server.Modules.CafeRatingService) :: any
+
+		local function reset()
+			CafeRatingService._partyActive = false
+			CafeRatingService._partyEndTime = nil
+			CafeRatingService._partyCooldownEnd = nil
+			CafeRatingService._partyBuyer = nil
+			CafeRatingService._rush = false
+			CafeRatingService._rushEndTime = nil
+			CafeRatingService._rushEndsAt = nil
+			CafeRatingService._rushBuyer = nil
+			CafeRatingService._rushToken += 1 -- retire any running end-time loop
+			CafeRatingService._rating = 50
+			CafeRatingService._lastRushEnd = nil
+			workspace:SetAttribute("RushHour", false)
+			workspace:SetAttribute("BobaParty", false)
+			workspace:SetAttribute("RushHourBuyer", nil)
+			workspace:SetAttribute("RushEndsAt", nil)
+			workspace:SetAttribute("BobaPartyBuyer", nil)
+		end
+
+		beforeEach(reset)
+		afterEach(reset)
+
+		it("starts a rush for RUSH_SECONDS and names the buyer", function()
+			local before = os.clock()
+			local ok = CafeRatingService:StartOrExtendRush({ Name = "bob", DisplayName = "Bobby" } :: any)
+			expect(ok).to.equal(true)
+			expect(CafeRatingService._rush).to.equal(true)
+			expect(CafeRatingService._partyActive).to.equal(false)
+			expect(CafeRatingService._rushEndTime >= before + RatingConfig.RUSH_SECONDS).to.equal(true)
+			expect(workspace:GetAttribute("RushHour")).to.equal(true)
+			expect(workspace:GetAttribute("RushHourBuyer")).to.equal("Bobby")
+			expect(workspace:GetAttribute("RushEndsAt") > workspace:GetServerTimeNow()).to.equal(true)
+		end)
+
+		it("adds RUSH_SECONDS to a running rush and keeps RushEndsAt accurate", function()
+			CafeRatingService:StartOrExtendRush({ Name = "first" } :: any)
+			local endTime = CafeRatingService._rushEndTime
+			local endsAt = workspace:GetAttribute("RushEndsAt")
+
+			CafeRatingService:StartOrExtendRush({ Name = "second" } :: any)
+			expect(CafeRatingService._rushEndTime).to.equal(endTime + RatingConfig.RUSH_SECONDS)
+			expect(workspace:GetAttribute("RushHourBuyer")).to.equal("second")
+			local newEndsAt = workspace:GetAttribute("RushEndsAt")
+			expect(math.abs(newEndsAt - (endsAt + RatingConfig.RUSH_SECONDS)) < 1).to.equal(true)
+		end)
+
+		it("adds RUSH_SECONDS to an active Boba Party", function()
+			CafeRatingService:StartOrExtendBobaParty()
+			local partyEnd = CafeRatingService._partyEndTime
+
+			local ok = CafeRatingService:StartOrExtendRush({ Name = "buyer" } :: any)
+			expect(ok).to.equal(true)
+			expect(CafeRatingService._partyActive).to.equal(true)
+			expect(CafeRatingService._partyEndTime).to.equal(partyEnd + RatingConfig.RUSH_SECONDS)
+			expect(CafeRatingService._rushEndTime).to.equal(nil)
+		end)
+
+		it("ends a paid rush like an earned one and clears the buyer", function()
+			CafeRatingService:StartOrExtendRush({ Name = "buyer" } :: any)
+			CafeRatingService:_endRush()
+
+			expect(CafeRatingService._rush).to.equal(false)
+			expect(CafeRatingService._rating).to.equal(RatingConfig.AFTER_RUSH)
+			expect(CafeRatingService._lastRushEnd ~= nil).to.equal(true)
+			expect(workspace:GetAttribute("RushHour")).to.equal(false)
+			expect(workspace:GetAttribute("RushHourBuyer")).to.equal(nil)
+			expect(workspace:GetAttribute("RushEndsAt")).to.equal(nil)
+		end)
+
+		it("does not end a running Boba Party", function()
+			CafeRatingService:StartOrExtendBobaParty()
+			CafeRatingService:_endRush()
+			expect(CafeRatingService._rush).to.equal(true)
+			expect(CafeRatingService._partyActive).to.equal(true)
+		end)
+
+		it("earned rush uses the end-time loop and ends with the same effects", function()
+			CafeRatingService._rating = 100
+			CafeRatingService:_checkRush()
+			expect(CafeRatingService._rush).to.equal(true)
+			expect(CafeRatingService._rushBuyer).to.equal(nil)
+			expect(CafeRatingService._rushEndTime > os.clock()).to.equal(true)
+
+			-- Expire it; the loop wakes within a second.
+			CafeRatingService._rushEndTime = os.clock() - 1
+			local deadline = os.clock() + 3
+			while CafeRatingService._rush and os.clock() < deadline do
+				task.wait(0.1)
+			end
+			expect(CafeRatingService._rush).to.equal(false)
+			expect(CafeRatingService._rating).to.equal(RatingConfig.AFTER_RUSH)
+			expect(CafeRatingService._lastRushEnd ~= nil).to.equal(true)
+		end)
+
+		it("freezes the meter during a paid rush", function()
+			CafeRatingService:StartOrExtendRush(nil)
+			CafeRatingService:_change(4)
+			expect(CafeRatingService._rating).to.equal(50)
+		end)
+	end)
 end
