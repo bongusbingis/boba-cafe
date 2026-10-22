@@ -63,6 +63,9 @@ local function buildLines(summary): { string }
 		pay ..= ` · {v("+" .. summary.Tips)} tips`
 	end
 	local lines = { served, pay }
+	if (summary.Stars or 0) < STAR_NOTE_MAX then
+		table.insert(lines, `{v("3 stars")}: no walkouts and 80%+ Perfect`)
+	end
 	if (summary.BestCombo or 0) >= 2 then
 		if summary.NewBestCombo == true then
 			table.insert(lines, `New best combo! {v("×" .. summary.BestCombo)}`)
