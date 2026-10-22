@@ -54,6 +54,7 @@ local TeamComboConfig = require(Shared.Configuration.TeamComboConfig)
 local CafeUpgradeConfig = require(Shared.Configuration.CafeUpgradeConfig)
 local Progression = require(Shared.Configuration.Progression)
 local OrderSpec = require(Shared.Ordering.OrderSpec)
+local MistakeText = require(Shared.Ordering.MistakeText)
 local WorldPath = require(Shared.Utility.WorldPath)
 local Npc = require(script.Npc)
 local Rules = require(script.Rules)
@@ -1155,14 +1156,29 @@ function CustomerService:_onServeTriggered(npc: Npc.Npc, player: Player)
 		end)
 		npc:PlayConfused()
 		npc:SayWrong()
+		-- AUDIT-FIX D1.3: plain words for the reason ("Wrong size: they wanted Medium").
 		self._dialog:Notify(player, {
 			Title = "Wrong drink",
-			Description = reasons[1] or "That isn't what they ordered.",
+			Description = MistakeText.FromSpec(reasons[1], if #npc.Specs == 1 then npc.Specs[1] else nil),
 		})
 		return
 	end
 	if grade ~= "Perfect" and grade ~= "Close" then
 		return
+	end
+	-- AUDIT-FIX D1.3: what made a Close serve Close, read before the tools are destroyed.
+	local closeText: string? = nil
+	if grade == "Close" then
+		for index, tool in tools do
+			local spec = npc.Specs[index]
+			if spec ~= nil then
+				local toolGrade, toolReasons = OrderSpec.Match(spec, tool:GetAttributes())
+				if toolGrade == "Close" and toolReasons[1] ~= nil then
+					closeText = MistakeText.FromSpec(toolReasons[1], spec)
+					break
+				end
+			end
+		end
 	end
 	-- BIG-B7 skill moment: flat pour tip, read before the tools are destroyed (guarded; serve never breaks).
 	local pourTip = 0
@@ -1253,6 +1269,9 @@ function CustomerService:_onServeTriggered(npc: Npc.Npc, player: Player)
 	self._firstServe[player] = nil
 
 	local text = `+{pay} · {grade}`
+	if closeText ~= nil then
+		text ..= ` ({closeText})`
+	end
 	if npc.Variant ~= nil then
 		text ..= ` · {npc.Variant}`
 	end

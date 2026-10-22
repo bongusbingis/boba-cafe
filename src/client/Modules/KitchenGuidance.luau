@@ -149,4 +149,26 @@ function KitchenGuidance.WrongStationMessage(guidance: Guidance?, station: strin
 	return "Next: " .. guidance.Label
 end
 
+export type CustomerView = {
+	State: any, -- the NPC model's State attribute
+	PromptAction: any, -- the NPC model's PromptAction attribute (the CustomerPrompt's text)
+	Position: Point,
+}
+
+-- AUDIT-FIX D1.2: with no ticket, a clocked-in player is guided to the nearest
+-- customer waiting to order (State "AtCounter", prompt "Take Order"). Returns the
+-- index into `customers`, or nil when nobody is waiting.
+function KitchenGuidance.TakeOrderTarget(customers: { CustomerView }, origin: Point): number?
+	local points: { Point } = {}
+	local indexes: { number } = {}
+	for index, customer in customers do
+		if customer.State == "AtCounter" and customer.PromptAction == "Take Order" then
+			table.insert(points, customer.Position)
+			table.insert(indexes, index)
+		end
+	end
+	local nearest = KitchenGuidance.NearestIndex(points, origin)
+	return if nearest then indexes[nearest] else nil
+end
+
 return KitchenGuidance

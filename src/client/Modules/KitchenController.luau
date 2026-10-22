@@ -236,6 +236,50 @@ local function trackProgress(guidance: KitchenGuidance.Guidance?, order: any)
 	end
 end
 
+-- AUDIT-FIX D1.2: no ticket yet. Highlights the nearest customer waiting to order
+-- (the welcome toast's "Follow the gold glow"); the beam follows the same first-
+-- customers rule as the rest of guidance. True when it drew a hint.
+local function takeOrderHint(rootPart: BasePart): boolean
+	local folder = workspace:FindFirstChild("Customers")
+	if folder == nil then
+		return false
+	end
+	local views: { KitchenGuidance.CustomerView } = {}
+	local models: { Model } = {}
+	for _, model in folder:GetChildren() do
+		if model:IsA("Model") then
+			table.insert(views, {
+				State = model:GetAttribute("State"),
+				PromptAction = model:GetAttribute("PromptAction"),
+				Position = model:GetPivot().Position,
+			})
+			table.insert(models, model)
+		end
+	end
+	local index = KitchenGuidance.TakeOrderTarget(views, rootPart.Position)
+	local target = if index then models[index] else nil
+	if target == nil then
+		return false
+	end
+	for slot = 1, KitchenGuidance.MAX_HIGHLIGHTS do
+		local highlight = getHighlight(slot)
+		highlight.Adornee = if slot == 1 then target else nil
+		highlight.Enabled = slot == 1
+	end
+	local targetPart = anchorPart(target)
+	local beamAllowed = KitchenGuidance.ShouldShowBeam({
+		CustomersSeen = runtime.CustomersSeen,
+		ItemSeenBefore = true,
+		IdleSeconds = 0,
+	})
+	if targetPart and beamAllowed then
+		showBeam(rootPart, targetPart)
+	elseif runtime.Beam then
+		runtime.Beam.Enabled = false
+	end
+	return true
+end
+
 local function guidanceStep(serveTarget: Model?)
 	local player = Players.LocalPlayer
 	local OrderController = Knit.GetController("OrderController")
@@ -247,6 +291,16 @@ local function guidanceStep(serveTarget: Model?)
 
 	local character = player.Character
 	local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+	if
+		order == nil
+		and runtime.Enabled
+		and player:GetAttribute(CLOCKED_IN_ATTRIBUTE) == true
+		and rootPart
+		and rootPart:IsA("BasePart")
+		and takeOrderHint(rootPart)
+	then
+		return
+	end
 	if not runtime.Enabled or guidance == nil or isClockedOut() or not rootPart or not rootPart:IsA("BasePart") then
 		clearVisuals()
 		return

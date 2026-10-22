@@ -21,6 +21,7 @@ local SizeOptionsPage = require(script.SizeOptionsPage)
 
 ---> data
 local FoodService = require(Shared.Ordering.Menu)
+local MistakeText = require(Shared.Ordering.MistakeText)
 -- Only launch items are orderable (server refuses the rest): hide the others.
 local function buildLaunchFoodTable()
 	local filtered = {}
@@ -183,6 +184,60 @@ local function validateSubmittedOrder(submittedList: { any }, expectedList: { an
 		end
 	end
 	return true
+end
+
+-- AUDIT-FIX D1.3: names the first field that differs, e.g. "Wrong size: they wanted Medium".
+local function describeMismatch(submittedList: { any }, expectedList: { any }): string
+	if #submittedList ~= #expectedList then
+		return MistakeText.Field("Count", #expectedList)
+	end
+	local usedExpected = table.create(#expectedList, false)
+	local unmatched = {}
+	for _, submitted in submittedList do
+		local found = false
+		for j, expected in expectedList do
+			if not usedExpected[j] and itemsMatch(submitted, expected) then
+				usedExpected[j] = true
+				found = true
+				break
+			end
+		end
+		if not found then
+			table.insert(unmatched, submitted)
+		end
+	end
+	local firstExpected = nil
+	for j, expected in expectedList do
+		if usedExpected[j] then
+			continue
+		end
+		firstExpected = firstExpected or expected
+		for _, submitted in unmatched do
+			if submitted.Category ~= expected.Category or submitted.Item ~= expected.Item then
+				continue
+			end
+			local want = expected.CustomInfo or {}
+			local have = submitted.CustomInfo or {}
+			if want.Size ~= have.Size then
+				return MistakeText.Field("Size", want.Size)
+			elseif want["Syrup Flavor"] ~= have["Syrup Flavor"] then
+				return MistakeText.Field("Syrup", want["Syrup Flavor"])
+			elseif want["Tapioca Flavor"] ~= have["Tapioca Flavor"] then
+				return MistakeText.Field("Tapioca", want["Tapioca Flavor"])
+			elseif (want.Iced == true or want.Ice == true) ~= (have.Iced == true or have.Ice == true) then
+				return MistakeText.Field("Iced", want.Iced == true or want.Ice == true)
+			end
+			return MistakeText.Field("Sugar", want.Sugar == true)
+		end
+	end
+	if firstExpected == nil then
+		return MistakeText.Field(nil, nil)
+	end
+	local category = FoodService.FoodTable[firstExpected.Category]
+	local def = if category and category.Items then category.Items[firstExpected.Item] else nil
+	local name = if def and def.ItemName then def.ItemName else firstExpected.Item
+	local syrup = (firstExpected.CustomInfo or {})["Syrup Flavor"]
+	return MistakeText.Field("Item", if syrup then `{syrup} {name}` else name)
 end
 
 ---> public
@@ -426,7 +481,7 @@ return function(props: {
 			if not matches then
 				Knit.GetController("DialogController"):Notify({
 					Title = "Order Error",
-					Description = "That doesn't match what the customer asked for!",
+					Description = describeMismatch(request, npcOrderData.Orders),
 				})
 				return
 			end
