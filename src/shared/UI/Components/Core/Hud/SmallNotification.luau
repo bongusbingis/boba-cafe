@@ -51,18 +51,21 @@ local PANEL_IMAGE = "rbxassetid://2018256936"
 local CARD_HEIGHT = 135 -- pixels; height the card springs to when visible
 local ICON_SIZE = UDim2.fromScale(0.55, 0.55)
 local HINTS = {
-	"Join our group for a FREE pet!",
+	"Join our group in the Shop to claim a free Ant Pet!",
 	"Having fun? Be sure to leave a like and favorite on our game!",
-	"Join our group for 20 Boba Bucks!",
 	"Want exclusive perks and items? Check out our Shop located above! ",
 	"Can't find the pet or trail purchases you made? Check the inventory tab above! ",
 	"Boba Cafe is owned by Flez_ent!",
-	"Want to become one of the top pet owners? Play our game and earn Boba Bucks every minute!",
+	"Serve a customer while their patience is above half for a Fast bonus!",
+	"Chain Perfect serves in a row to build a pay combo!",
+	"Tap the pour meter in the sweet spot for a tip!",
+	"Regulars drop by sometimes. Serve their favorite drink to fill the Regulars page in the Menu!",
+	"Spend your Boba Bucks on Cafe Upgrades to decorate the cafe!",
 	"Need help? Find one of our moderation staff members around the cafe!",
 	"Want to know more about updates? Join our communications server for more information!",
 	"To hatch your pet, go to your inventory, click capsules, choose a capsule, and click hatch!",
 	"Don't forget to explore the island!",
-	"Complete quests and unlock new badges!",
+	"Check the Quests tab in the Menu for daily and weekly rewards!",
 }
 
 local HOLD_DURATION = 5
