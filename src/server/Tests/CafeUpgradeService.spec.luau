@@ -28,20 +28,22 @@ return function()
 			end
 		end)
 
+		it("is cosmetic only: no tip jar, jukebox, or gameplay-effect helpers", function()
+			expect(CafeUpgradeConfig.GetUpgrade("TipJar")).to.equal(nil)
+			expect(CafeUpgradeConfig.GetUpgrade("Jukebox")).to.equal(nil)
+			expect((CafeUpgradeConfig :: any).TIP_JAR_CHANCE).to.equal(nil)
+			expect((CafeUpgradeConfig :: any).TIP_JAR_EXTRA).to.equal(nil)
+			expect((CafeUpgradeConfig :: any).TIP_JAR_LEVEL_ATTRIBUTE).to.equal(nil)
+			expect((CafeUpgradeConfig :: any).TipJarExtra).to.equal(nil)
+		end)
+
 		it("gives every upgrade a placement", function()
 			local p = CafeUpgradeConfig.PLACEMENT
 			expect(p.Board).to.be.ok()
-			expect(p.TipJar).to.be.ok()
-			expect(p.Jukebox).to.be.ok()
 			local plants = CafeUpgradeConfig.GetUpgrade("Plants")
 			local lights = CafeUpgradeConfig.GetUpgrade("Lights")
 			expect(#p.Plants >= #(plants :: any).Levels * CafeUpgradeConfig.PLANTS_PER_LEVEL).to.equal(true)
 			expect(#p.Lights >= #(lights :: any).Levels).to.equal(true)
-		end)
-
-		it("has a tip-jar chance for every Tip Jar level", function()
-			local tipJar = CafeUpgradeConfig.GetUpgrade("TipJar") :: any
-			expect(#CafeUpgradeConfig.TIP_JAR_CHANCE).to.equal(#tipJar.Levels)
 		end)
 
 		it("GetNextLevel walks the levels and stops at max", function()
@@ -65,21 +67,10 @@ return function()
 			end
 		end)
 
-		it("TipJarExtra pays only under the level's chance", function()
-			expect(CafeUpgradeConfig.TipJarExtra(nil, 0)).to.equal(0)
-			expect(CafeUpgradeConfig.TipJarExtra(0, 0)).to.equal(0)
-			local chance = CafeUpgradeConfig.TIP_JAR_CHANCE[1]
-			expect(CafeUpgradeConfig.TipJarExtra(1, chance - 0.001)).to.equal(CafeUpgradeConfig.TIP_JAR_EXTRA)
-			expect(CafeUpgradeConfig.TipJarExtra(1, chance)).to.equal(0)
-			-- Levels above the table clamp to the last chance.
-			local last = CafeUpgradeConfig.TIP_JAR_CHANCE[#CafeUpgradeConfig.TIP_JAR_CHANCE]
-			expect(CafeUpgradeConfig.TipJarExtra(99, last - 0.001)).to.equal(CafeUpgradeConfig.TIP_JAR_EXTRA)
-		end)
-
 		it("PlaqueLines lists newest first and caps the count", function()
 			local entries = {}
 			for i = 1, 5 do
-				table.insert(entries, { Name = `P{i}`, UpgradeName = "Jukebox", Level = 1 })
+				table.insert(entries, { Name = `P{i}`, UpgradeName = "Fairy Lights", Level = 1 })
 			end
 			local lines = CafeUpgradeConfig.PlaqueLines(entries, 3)
 			expect(#lines).to.equal(3)
@@ -157,15 +148,22 @@ return function()
 
 		it("charges nothing and changes nothing when funds are short", function()
 			balance = 10
-			local ok, reason = service:TryPurchaseAsync(player, "Jukebox")
+			local ok, reason = service:TryPurchaseAsync(player, "Lights")
 			expect(ok).to.equal(false)
 			expect(reason).to.equal("InsufficientFunds")
-			expect(service:GetLevel("Jukebox")).to.equal(0)
+			expect(service:GetLevel("Lights")).to.equal(0)
 			expect(#applied).to.equal(0)
 		end)
 
 		it("rejects unknown ids without spending", function()
 			local ok, reason = service:TryPurchaseAsync(player, "FreeMoney")
+			expect(ok).to.equal(false)
+			expect(reason).to.equal("UnknownUpgrade")
+			expect(spendCalls).to.equal(0)
+		end)
+
+		it("rejects the removed tip jar without spending", function()
+			local ok, reason = service:TryPurchaseAsync(player, "TipJar")
 			expect(ok).to.equal(false)
 			expect(reason).to.equal("UnknownUpgrade")
 			expect(spendCalls).to.equal(0)
@@ -188,19 +186,19 @@ return function()
 		end)
 
 		it("refuses a second buyer while a purchase of the same upgrade is pending", function()
-			service._pending.TipJar = true
-			local ok, reason = service:TryPurchaseAsync(player, "TipJar")
+			service._pending.Plants = true
+			local ok, reason = service:TryPurchaseAsync(player, "Plants")
 			expect(ok).to.equal(false)
 			expect(reason).to.equal("Busy")
 			expect(spendCalls).to.equal(0)
 		end)
 
 		it("clears the pending lock after the spend", function()
-			service:TryPurchaseAsync(player, "TipJar")
-			expect(service._pending.TipJar).to.equal(nil)
+			service:TryPurchaseAsync(player, "Plants")
+			expect(service._pending.Plants).to.equal(nil)
 			balance = 0
-			service:TryPurchaseAsync(player, "TipJar")
-			expect(service._pending.TipJar).to.equal(nil)
+			service:TryPurchaseAsync(player, "Plants")
+			expect(service._pending.Plants).to.equal(nil)
 		end)
 	end)
 end

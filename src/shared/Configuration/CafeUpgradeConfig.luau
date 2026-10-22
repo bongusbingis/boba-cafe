@@ -1,13 +1,12 @@
 --!strict
 --[[
 	CafeUpgradeConfig.luau
-	BIG-B2 Cafe Upgrades: server-wide cafe improvements bought with BobaBucks.
+	BIG-B2 Cafe Upgrades: server-wide cosmetic cafe improvements bought with BobaBucks.
 
 	Design (DEC-058 Opus-set, Jack to tune):
 	- Per-server, not saved. A fresh server starts with a bare cafe, so every server is a
 	  new BobaBucks sink and a new chance to put your name on the plaque.
-	- Everything is cosmetic except the Tip Jar: each NPC serve has a small chance of
-	  +TIP_JAR_EXTRA BB for whoever served it, for everyone in the server.
+	- Everything is cosmetic and nonfunctional: decor only, no gameplay effects.
 	- Positions are rough. Every entry in PLACEMENT is relative to ORIGIN (y = 0 is the
 	  floor), so moving ORIGIN moves the whole set; nudge single pieces in PLACEMENT.
 ]]
@@ -38,20 +37,14 @@ local CafeUpgradeConfig = {}
 
 CafeUpgradeConfig.BUILT_BY = "Opus-B2"
 CafeUpgradeConfig.FOLDER_NAME = "CafeUpgrades"
-CafeUpgradeConfig.TIP_JAR_LEVEL_ATTRIBUTE = "CafeTipJarLevel" -- workspace attribute read by the NPC serve path
 CafeUpgradeConfig.PROMPT_MAX_DISTANCE = 10
 CafeUpgradeConfig.PLAQUE_MAX_LINES = 8
 CafeUpgradeConfig.CURRENCY_LABEL = "Boba Bucks"
 
--- Tip Jar: chance per NPC serve of +TIP_JAR_EXTRA BB, indexed by Tip Jar level.
--- At ~3-5 BB per serve this is roughly +3% / +6% / +9% pay. DEC-058 Opus-set, Jack to tune.
-CafeUpgradeConfig.TIP_JAR_CHANCE = { 0.10, 0.20, 0.30 } :: { number }
-CafeUpgradeConfig.TIP_JAR_EXTRA = 1 -- DEC-058 Opus-set, Jack to tune
-
 -- Plants shown per Plants level (level 3 shows all six pots).
 CafeUpgradeConfig.PLANTS_PER_LEVEL = 2
 
--- Upgrades in menu order. Full set in one server: 4,800 BB. DEC-058 Opus-set, Jack to tune.
+-- Upgrades in menu order. Full set in one server: 1,700 BB. DEC-058 Opus-set, Jack to tune.
 CafeUpgradeConfig.UPGRADES = {
 	{
 		Id = "Plants",
@@ -64,18 +57,6 @@ CafeUpgradeConfig.UPGRADES = {
 		Name = "Fairy Lights",
 		Description = "Warm string lights over the floor.",
 		Levels = { { Price = 250 }, { Price = 500 } }, -- DEC-058 Opus-set, Jack to tune
-	},
-	{
-		Id = "TipJar",
-		Name = "Tip Jar",
-		Description = "A bigger tip jar: customers sometimes tip +1 BB.",
-		Levels = { { Price = 300 }, { Price = 600 }, { Price = 1000 } }, -- DEC-058 Opus-set, Jack to tune
-	},
-	{
-		Id = "Jukebox",
-		Name = "Jukebox",
-		Description = "A glowing jukebox for the cafe.",
-		Levels = { { Price = 400 }, { Price = 800 } }, -- DEC-058 Opus-set, Jack to tune
 	},
 } :: { Upgrade }
 
@@ -96,8 +77,6 @@ CafeUpgradeConfig.PLACEMENT = {
 		{ From = Vector3.new(-14, 11, -2), To = Vector3.new(14, 11, -2) },
 		{ From = Vector3.new(-14, 11, 12), To = Vector3.new(14, 11, 12) },
 	} :: { LightStrand },
-	TipJar = CFrame.new(3, 3.5, -3), -- on the counter top
-	Jukebox = CFrame.new(12, 0, 6) * CFrame.Angles(0, math.rad(-90), 0),
 }
 
 ---> helpers
@@ -135,19 +114,6 @@ function CafeUpgradeConfig.ButtonLabel(upgrade: Upgrade, currentLevel: number): 
 		return `{upgrade.Name}: Maxed`
 	end
 	return `{upgrade.Name} Lv {nextLevel}: {price} BB`
-end
-
---- Extra BB for one NPC serve. `roll` is a number in [0, 1).
-function CafeUpgradeConfig.TipJarExtra(level: any, roll: number): number
-	if typeof(level) ~= "number" or level < 1 then
-		return 0
-	end
-	local chances = CafeUpgradeConfig.TIP_JAR_CHANCE
-	local chance = chances[math.min(math.floor(level), #chances)] or 0
-	if roll < chance then
-		return CafeUpgradeConfig.TIP_JAR_EXTRA
-	end
-	return 0
 end
 
 --- Plaque lines, newest first, capped at `maxLines`.

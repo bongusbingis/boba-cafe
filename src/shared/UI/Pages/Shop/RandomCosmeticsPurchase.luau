@@ -1,3 +1,4 @@
+local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Packages = ReplicatedStorage:WaitForChild("Packages")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -20,7 +21,7 @@ local Styles = require(UI.Styles)
 ---> private
 local c = React.createElement
 local nametagColors = InventoryItemDefinitions.Nametags
-local CapsuleService = require(Packages.Knit).GetService("CapsuleService")
+local Knit = require(Packages.Knit)
 
 ---> constants
 local TIER_COLORS = InventoryItemDefinitions.Tiers
@@ -32,7 +33,12 @@ return function()
 	local px = usePx()
 	local policyState, setPolicyState = React.useState("loading")
 	React.useEffect(function()
+		if not RunService:IsRunning() then
+			setPolicyState("allowed")
+			return nil
+		end
 		local alive = true
+		local CapsuleService = Knit.GetService("CapsuleService")
 		CapsuleService:GetPaidRandomPolicy()
 			:andThen(function(ok, restricted)
 				if alive then
@@ -163,6 +169,7 @@ return function()
 								return
 							end
 							local amount = if k == 1 then 1 elseif k == 2 then 10 else 50
+							local CapsuleService = Knit.GetService("CapsuleService")
 							CapsuleService:PurchaseNametagCapsules(amount):andThen(function(ok, reason)
 								if not ok and reason == "InsufficientFunds" then
 									BobaBucksShortfall.Prompt({ Price = capsule.Price, What = "that capsule" })

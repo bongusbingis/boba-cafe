@@ -15,3 +15,6 @@
 # Agent workflow (operational state; evidence and decisions.md are committed)
 /.review/agent-workflow/board.json
 /.review/agent-workflow/completed.ndjson
+
+# Dispatched subagent worktrees
+/.worktrees/

@@ -87,10 +87,11 @@ return function(props: {
 		}))
 	end
 
+	local actionCount = #buttonElements
 	table.insert(buttonElements, c(PromptButton, {
 		Text = props.CloseText or "Close",
 		Color = Styles.CORAL,
-		LayoutOrder = math.huge,
+		LayoutOrder = actionCount + 1,
 		Size = UDim2.new(1, 0, 0, px(BUTTON_HEIGHT)),
 		OnClick = function()
 			resolve(props.CloseText or "Close")
@@ -98,21 +99,21 @@ return function(props: {
 	}))
 
 	table.insert(buttonElements, c("Frame", {
-		LayoutOrder = math.huge,
+		LayoutOrder = actionCount + 2,
 		Size = UDim2.new(1, 0, 0, px(5)),
 		BackgroundTransparency = 1,
 	}))
 
-	local yOffset = #buttonElements / 2 * (BUTTON_HEIGHT + 8) + 20
-
+	-- Content-driven height, always centered: the dialog grows with its
+	-- buttons instead of overflowing the viewport on short screens.
 	local promptElement = c(Pane, {
 		ClassName = "Frame",
-		AspectRatio = 0.937,
 		Native = {
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			BackgroundTransparency = 1,
-			Position = UDim2.fromScale(0.5 + (props.OffsetX or 0), 0.5 - yOffset / 1000),
-			Size = UDim2.fromScale(0.65, 0.65),
+			Position = UDim2.fromScale(0.5 + (props.OffsetX or 0), 0.5),
+			Size = UDim2.fromScale(0.65, 0),
+			AutomaticSize = Enum.AutomaticSize.Y,
 		},
 	}, {
 		UISizeConstraint = c("UISizeConstraint", {
@@ -139,7 +140,7 @@ return function(props: {
 				BackgroundTransparency = 0,
 				BackgroundColor3 = Styles.OFFWHITE,
 				Position = UDim2.fromScale(0.5, 0.1),
-				Size = UDim2.fromScale(1, 0.5),
+				Size = UDim2.fromScale(1, 0),
 				AutomaticSize = Enum.AutomaticSize.Y,
 			},
 		}, {
@@ -149,7 +150,7 @@ return function(props: {
 					FillDirection = Enum.FillDirection.Vertical,
 					HorizontalAlignment = Enum.HorizontalAlignment.Center,
 					VerticalAlignment = Enum.VerticalAlignment.Top,
-					Padding = UDim.new(0.1, 0),
+					Padding = UDim.new(0, px(10)),
 				},
 				Native = {
 					AnchorPoint = Vector2.new(0.5, 0),
@@ -162,6 +163,7 @@ return function(props: {
 				Description = c(Pane, {
 					ClassName = "TextLabel",
 					MaxTextSize = 28,
+					LayoutOrder = 1,
 					Native = {
 						AnchorPoint = Vector2.new(0.5, 0),
 						BackgroundTransparency = 1,
@@ -171,7 +173,8 @@ return function(props: {
 						Text = props.Text,
 						TextColor3 = Styles.GREEN_LIGHT,
 						TextYAlignment = Enum.TextYAlignment.Top,
-						TextScaled = true,
+						TextSize = px(26),
+						TextWrapped = true,
 						RichText = true,
 						AutomaticSize = Enum.AutomaticSize.Y,
 					},
@@ -179,12 +182,12 @@ return function(props: {
 
 				ActionButtons = props.Buttons and c(Pane, {
 					ClassName = "Frame",
+					LayoutOrder = 2,
 					ListLayout = {
 						FillDirection = Enum.FillDirection.Vertical,
 						HorizontalAlignment = Enum.HorizontalAlignment.Center,
 						VerticalAlignment = Enum.VerticalAlignment.Top,
-						--VerticalFlex = Enum.UIFlexAlignment.SpaceEvenly,
-						Padding = UDim.new(0.2, 0),
+						Padding = UDim.new(0, px(8)),
 					},
 					Native = {
 						AnchorPoint = Vector2.new(0.5, 0),

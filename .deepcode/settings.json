@@ -5,5 +5,11 @@
     "API_KEY": "sk-72affd2ba51c475eb1b6b48ef363e5be"
   },
   "thinkingEnabled": true,
-  "reasoningEffort": "max"
+  "reasoningEffort": "high",
+  "mcpServers": {
+    "roblox": {
+      "command": "cmd.exe",
+      "args": ["/c", "cd /d %LOCALAPPDATA%\\Roblox && .\\mcp.bat"]
+    }
+  }
 }

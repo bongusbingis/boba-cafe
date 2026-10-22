@@ -2,14 +2,13 @@
 --[[
 	CafeUpgradeService
 	BIG-B2 Cafe Upgrades. Players spend BobaBucks at the Cafe Upgrades board to add
-	server-wide improvements (plants, fairy lights, tip jar, jukebox); the buyer's name
+	server-wide cosmetic decor (plants, fairy lights); the buyer's name
 	goes on the board's plaque. Per-server state: nothing is saved, a new server starts
 	bare. Spending is server-authoritative through CurrencyService:TrySpendAsync.
 
 	World: everything is built in code under workspace.CafeUpgrades (BuiltBy = "Opus-B2"),
 	placed from CafeUpgradeConfig.PLACEMENT. No authored content is required.
-	Effect: the Tip Jar level is published as workspace attribute CafeTipJarLevel, which
-	CustomerService reads synchronously on the NPC serve path.
+	All upgrades are cosmetic and nonfunctional: no gameplay effects.
 ]]
 
 ---> services
@@ -109,10 +108,6 @@ function CafeUpgradeService:_buildVisuals(id: string)
 				Builders.LightStrand(origin:PointToWorldSpace(strand.From), origin:PointToWorldSpace(strand.To), i)
 			)
 		end
-	elseif id == "TipJar" then
-		table.insert(built, Builders.TipJar(origin * placement.TipJar, level))
-	elseif id == "Jukebox" then
-		table.insert(built, Builders.Jukebox(origin * placement.Jukebox, level))
 	end
 	for _, instance in built do
 		instance.Parent = folder
@@ -142,9 +137,6 @@ end
 
 --- World and broadcast side effects after a level is recorded. Never throws.
 function CafeUpgradeService:_onLevelApplied(id: string, level: number, player: Player)
-	if id == "TipJar" then
-		Workspace:SetAttribute(CafeUpgradeConfig.TIP_JAR_LEVEL_ATTRIBUTE, level)
-	end
 	local okBuild, err = pcall(function()
 		self:_buildVisuals(id)
 	end)
@@ -237,15 +229,10 @@ function CafeUpgradeService:OpenMenu(player: Player)
 			})
 		end
 
-		local tipLevel = self:GetLevel("TipJar")
-		local tipChance = CafeUpgradeConfig.TIP_JAR_CHANCE[tipLevel]
-		local tipText = if tipChance
-			then ` Tip Jar now: {math.round(tipChance * 100)}% chance of +{CafeUpgradeConfig.TIP_JAR_EXTRA} BB per serve.`
-			else ""
 		local okChoice, choice = dialogService
 			:CreateDialog(player, "ActionPrompt", {
 				Title = "Cafe Upgrades",
-				Text = `Upgrades are shared by everyone in this server, and your name goes on the plaque!{tipText}`,
+				Text = `Upgrades are shared by everyone in this server, and your name goes on the plaque!`,
 				Buttons = buttons,
 				CloseText = "Close",
 			}, DIALOG_TIMEOUT_SECONDS)
@@ -320,33 +307,33 @@ function CafeUpgradeService:PlayerRemoving(player: Player)
 	self._busyPlayers[player] = nil
 end
 
--- function CafeUpgradeService:KnitStart()
--- 	local existing = Workspace:FindFirstChild(CafeUpgradeConfig.FOLDER_NAME)
--- 	if existing then
--- 		existing:Destroy()
--- 	end
--- 	local folder = Instance.new("Folder")
--- 	folder.Name = CafeUpgradeConfig.FOLDER_NAME
--- 	folder:SetAttribute("BuiltBy", CafeUpgradeConfig.BUILT_BY)
--- 	folder.Parent = Workspace
--- 	self._folder = folder
+function CafeUpgradeService:KnitStart()
+	local existing = Workspace:FindFirstChild(CafeUpgradeConfig.FOLDER_NAME)
+	if existing then
+		existing:Destroy()
+	end
+	local folder = Instance.new("Folder")
+	folder.Name = CafeUpgradeConfig.FOLDER_NAME
+	folder:SetAttribute("BuiltBy", CafeUpgradeConfig.BUILT_BY)
+	folder.Parent = Workspace
+	self._folder = folder
 
--- 	local board, prompt, label = Builders.Board(CafeUpgradeConfig.ORIGIN * CafeUpgradeConfig.PLACEMENT.Board)
--- 	board.Parent = folder
--- 	self._board = board
--- 	self._plaqueLabel = label
--- 	self:_refreshPlaque()
+	local board, prompt, label = Builders.Board(CafeUpgradeConfig.ORIGIN * CafeUpgradeConfig.PLACEMENT.Board)
+	board.Parent = folder
+	self._board = board
+	self._plaqueLabel = label
+	self:_refreshPlaque()
 
--- 	prompt.Triggered:Connect(function(player: Player)
--- 		task.spawn(function()
--- 			self:OpenMenu(player)
--- 		end)
--- 	end)
+	prompt.Triggered:Connect(function(player: Player)
+		task.spawn(function()
+			self:OpenMenu(player)
+		end)
+	end)
 
--- 	-- Any level recorded before start (none in a live server) gets its models now.
--- 	for _, upgrade in CafeUpgradeConfig.UPGRADES do
--- 		self:_buildVisuals(upgrade.Id)
--- 	end
--- end
+	-- Any level recorded before start (none in a live server) gets its models now.
+	for _, upgrade in CafeUpgradeConfig.UPGRADES do
+		self:_buildVisuals(upgrade.Id)
+	end
+end
 
 return CafeUpgradeService

@@ -1,7 +1,6 @@
 --!strict
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
-local Workspace = game:GetService("Workspace")
 
 local Packages = ReplicatedStorage:WaitForChild("Packages")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -37,10 +36,6 @@ return function(_context, upgrade: string, level: number)
 	local ok, err = pcall(function()
 		local CafeUpgradeService = getService("CafeUpgradeService")
 		CafeUpgradeService._levels[upgrade] = level
-
-		if upgrade == "TipJar" then
-			Workspace:SetAttribute(CafeUpgradeConfig.TIP_JAR_LEVEL_ATTRIBUTE, level)
-		end
 
 		if typeof(CafeUpgradeService._renderAll) == "function" then
 			CafeUpgradeService:_renderAll()

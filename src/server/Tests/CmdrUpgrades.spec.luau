@@ -8,7 +8,6 @@
 return function()
 	local ServerScriptService = game:GetService("ServerScriptService")
 	local Workspace = game:GetService("Workspace")
-	local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 	local CmdrFolder = ServerScriptService.Server.Cmdr
 	local UpgradesFolder = CmdrFolder.Commands.Upgrades
@@ -19,8 +18,6 @@ return function()
 	local SetRatingServer = require(UpgradesFolder.SetRatingServer) :: any
 	local ResetUpgradesDef = require(UpgradesFolder.ResetUpgrades) :: any
 	local ResetUpgradesServer = require(UpgradesFolder.ResetUpgradesServer) :: any
-
-	local CafeUpgradeConfig = require(ReplicatedStorage.Shared.Configuration.CafeUpgradeConfig)
 
 	local okUpg, CafeUpgradeService = pcall(function()
 		return require(ServerScriptService.Server.Modules.CafeUpgradeService) :: any
@@ -73,29 +70,28 @@ return function()
 			expect(string.find(result, "Invalid level") ~= nil).to.equal(true)
 		end)
 
-		it("sets level and attributes for valid input", function()
+		it("sets level for valid input", function()
 			if not okUpg or not CafeUpgradeService then
 				return
 			end
-			local result = SetUpgradeServer(mockContext, "TipJar", 2)
-			expect(result).to.equal("Set upgrade TipJar to level 2.")
-			expect(CafeUpgradeService._levels["TipJar"]).to.equal(2)
-			expect(Workspace:GetAttribute(CafeUpgradeConfig.TIP_JAR_LEVEL_ATTRIBUTE)).to.equal(2)
+			local result = SetUpgradeServer(mockContext, "Plants", 2)
+			expect(result).to.equal("Set upgrade Plants to level 2.")
+			expect(CafeUpgradeService._levels["Plants"]).to.equal(2)
+			expect(CafeUpgradeService:GetLevel("Plants")).to.equal(2)
 		end)
 	end)
 
 	describe("ResetUpgradesServer", function()
-		it("resets all upgrades and TipJar attribute to 0", function()
+		it("resets all upgrades to 0", function()
 			if not okUpg or not CafeUpgradeService then
 				return
 			end
 			SetUpgradeServer(mockContext, "Plants", 1)
-			SetUpgradeServer(mockContext, "TipJar", 1)
+			SetUpgradeServer(mockContext, "Lights", 1)
 			local result = ResetUpgradesServer(mockContext)
 			expect(result).to.equal("All cafe upgrades reset to level 0.")
 			expect(CafeUpgradeService._levels["Plants"]).to.equal(0)
-			expect(CafeUpgradeService._levels["TipJar"]).to.equal(0)
-			expect(Workspace:GetAttribute(CafeUpgradeConfig.TIP_JAR_LEVEL_ATTRIBUTE)).to.equal(0)
+			expect(CafeUpgradeService._levels["Lights"]).to.equal(0)
 		end)
 	end)
 

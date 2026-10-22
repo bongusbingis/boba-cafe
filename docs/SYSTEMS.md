@@ -448,15 +448,15 @@ ticket = {
 **Consumers:** EventService (Treasure Frenzy).
 
 ### Cafe Upgrades (BIG-B2)
-**Purpose:** BobaBucks sink and server pride: players buy server-wide cafe upgrades (Potted Plants, Fairy Lights, Tip Jar, Jukebox) at a board whose plaque names the buyers.
+**Purpose:** BobaBucks sink and server pride: players buy server-wide cosmetic cafe upgrades (Potted Plants, Fairy Lights) at a board whose plaque names the buyers. Cosmetic only, no gameplay effects.
 **Owner modules:** `server/Modules/CafeUpgradeService/` (`init`, `Builders`), `shared/Configuration/CafeUpgradeConfig.luau`, `server/Tests/CafeUpgradeService.spec.luau`
 **Key invariants:**
-- Per-server state, never saved (DEC-058 Opus-set): a new server starts bare. Prices, levels and the tip-jar chance live in `CafeUpgradeConfig`.
+- Per-server state, never saved (DEC-058 Opus-set): a new server starts bare. Prices and levels live in `CafeUpgradeConfig`.
 - No authored content. `KnitStart` builds `workspace.CafeUpgrades` (BuiltBy `Opus-B2`) with the board and each bought level's models, placed from `CafeUpgradeConfig.ORIGIN` * `PLACEMENT` (rough; Jack adjusts).
 - Purchase: board prompt, then server-driven `ActionPrompt` (one button per upgrade) and `ButtonPrompt` confirm. `TryPurchaseAsync` spends through `CurrencyService:TrySpendAsync`; a per-upgrade pending lock and the expected-level check stop two buyers paying for one level. A distance check runs before the spend.
-- Tip Jar: the level is the workspace attribute `CafeTipJarLevel`. The NPC serve path (`CustomerService:_onServeTriggered`) rolls `CafeUpgradeConfig.TipJarExtra` synchronously (no yield) and adds the extra to `Tip` and pay.
+- No gameplay effects and no cross-service hooks: bought levels only change which decor models are built.
 **Depends on:** CurrencyService, DialogService, AnalyticsEvents.
-**Consumers:** CustomerService (tip jar).
+**Consumers:** none (decor only).
 
 ### Leaderboards
 **Purpose:** Five monthly OrderedDataStore boards, in-world SurfaceGuis and top-player statues.

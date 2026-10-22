@@ -1,7 +1,6 @@
 --!strict
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
-local Workspace = game:GetService("Workspace")
 
 local Packages = ReplicatedStorage:WaitForChild("Packages")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -31,8 +30,6 @@ return function(_context)
 		for _, upgrade in CafeUpgradeConfig.UPGRADES do
 			CafeUpgradeService._levels[upgrade.Id] = 0
 		end
-
-		Workspace:SetAttribute(CafeUpgradeConfig.TIP_JAR_LEVEL_ATTRIBUTE, 0)
 
 		if typeof(CafeUpgradeService._renderAll) == "function" then
 			CafeUpgradeService:_renderAll()

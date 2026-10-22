@@ -312,7 +312,6 @@ function Titles.MeetsCriteria(def: { Criteria: CriteriaDef? }, player: Player, c
 			return false
 		end
 	end
-
 	-- 1. AnyBadge: player must own at least one of these badges
 	if criteria.AnyBadge ~= nil and #criteria.AnyBadge > 0 then
 		local hasAny = false

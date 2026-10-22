@@ -144,10 +144,11 @@ end
 
 ---> Component
 
-return function()
-	local summary, setSummary = React.useState(nil :: any)
+return function(props: { Preview: any? }?)
+	local preview = if props then props.Preview else nil
+	local summary, setSummary = React.useState(preview)
 
-	if RunService:IsRunning() then
+	if RunService:IsRunning() and preview == nil then
 		React.useEffect(function()
 			local conn = Knit.GetService("ShiftService").ShiftEnded:Connect(function(newSummary)
 				setSummary(newSummary)
@@ -160,9 +161,9 @@ return function()
 		end, {})
 	end
 
-	-- Remove itself after summary.Seconds; a newer summary restarts the timer.
+	-- Remove itself after summary.Seconds; a newer summary restarts the timer (unless pinned in preview).
 	React.useEffect(function()
-		if summary == nil then
+		if summary == nil or preview ~= nil then
 			return nil
 		end
 		local thread = task.delay(summary.Seconds or 6, function()

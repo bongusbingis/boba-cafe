@@ -4,8 +4,6 @@ return function(registry)
 		registry.Cmdr.Util.MakeEnumType("upgradeType", {
 			"Plants",
 			"Lights",
-			"TipJar",
-			"Jukebox",
 		})
 	)
 end

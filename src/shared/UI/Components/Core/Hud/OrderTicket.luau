@@ -375,16 +375,18 @@ return function(props: {
 	slot: number?,
 	layoutOrder: number?,
 	SetCurrentPage: ((page: any, ...any) -> ())?,
+	PreviewOrder: { [string]: any }?,
+	PreviewPatience: number?,
 })
 	-- slot 2 is the second NPC ticket (level 5+): label and patience only.
 	local isSecond = props.slot == 2
-	local order, setOrder = React.useState(nil :: { any }?)
+	local order, setOrder = React.useState(props.PreviewOrder)
 	local readyNode, setReadyNode = React.useState(nil :: Instance?)
 	local candidates, setCandidates = React.useState({} :: { { [string]: any } })
 	local candidateTools, setCandidateTools = React.useState({} :: { Instance })
 	local toolAttrs, setToolAttrs = React.useState(nil :: { [string]: any }?)
 	local toolInst, setToolInst = React.useState(nil :: Instance?)
-	local patience, setPatience = React.useState(nil :: number?)
+	local patience, setPatience = React.useState(props.PreviewPatience)
 	local character, setCharacter =
 		React.useState(if Players.LocalPlayer ~= nil then Players.LocalPlayer.Character else nil)
 	local selectedSpecIndex, setSelectedSpecIndex = React.useState(nil :: number?)
@@ -428,7 +430,7 @@ return function(props: {
 		end
 	end
 
-	if RunService:IsRunning() then
+	if RunService:IsRunning() and props.PreviewOrder == nil then
 		React.useEffect(function()
 			local controller = Knit.GetController("OrderController")
 
@@ -471,7 +473,9 @@ return function(props: {
 				end
 			end
 		end, {})
+	end
 
+	if RunService:IsRunning() and props.PreviewPatience == nil then
 		-- Live patience fraction of an NPC ticket (PatienceEnd is server time). Quantised
 		-- so React only re-renders when the bar visibly moves; nil hides the bar.
 		React.useEffect(function()
@@ -729,8 +733,8 @@ return function(props: {
 		BackgroundColor3 = Color3.fromRGB(245, 245, 245),
 		BorderSizePixel = 0,
 		LayoutOrder = props.layoutOrder,
-		Position = if props.stacked then nil else UDim2.new(0.99, 0, 0.92, 0),
-		Size = if props.stacked then UDim2.fromScale(1, 0) else UDim2.new(0, 190, 0, 0),
+		Position = if props.stacked then nil else UDim2.fromScale(0.99, 0.92),
+		Size = if props.stacked then UDim2.fromScale(1, 0) else UDim2.fromOffset(190, 0),
 		ZIndex = 10,
 	}, {
 		Corner = c("UICorner", { CornerRadius = UDim.new(0, 6) }),
