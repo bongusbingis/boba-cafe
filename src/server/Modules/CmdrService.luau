@@ -71,6 +71,21 @@ function CmdrService:KnitInit()
 
 		return "You do not have permission to execute this command."
 	end)
+
+	-- Audit Logging Hook: records command executions into LogService
+	Cmdr.Registry:RegisterHook("AfterRun", function(context)
+		local executor = context.Executor
+		local text = context.RawText
+		if text and text ~= "" then
+			local ok, logService = pcall(function()
+				return Knit.GetService("LogService")
+			end)
+			if ok and logService then
+				logService:AddAdminLog(executor or "Server", text)
+			end
+		end
+		return nil
+	end)
 end
 
 function CmdrService:KnitStart()

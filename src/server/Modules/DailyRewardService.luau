@@ -165,6 +165,13 @@ function DailyRewardService:ClaimReward(player: Player): (boolean, string?, { [s
 			currencyService:Modify(player, "BobaBucks", grantAmount, "DailyReward")
 		end
 
+		pcall(function()
+			local analyticsEvents = self:_getService("AnalyticsEvents")
+			if analyticsEvents and typeof(analyticsEvents.Custom) == "function" then
+				analyticsEvents:Custom(player, "DailyRewardClaim", nextStreak)
+			end
+		end)
+
 		return true, nil, {
 			Streak = nextStreak,
 			BobaBucks = grantAmount,

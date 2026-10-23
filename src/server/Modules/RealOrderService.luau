@@ -311,7 +311,7 @@ function RealOrderService:_onOrderPickedUp(
 		end
 	end
 	pcall(function()
-		self._currency:Modify(barista, "BobaBucks", pay)
+		self._currency:Modify(barista, "BobaBucks", pay, "RealOrder")
 	end)
 	if okCombo and RealOrderService.CountsForTeamChain(multiplier) then
 		pcall(function()
@@ -363,9 +363,16 @@ end
 
 function RealOrderService:PlayerRemoving(player: Player)
 	self._rating[player] = nil
-	for key in self._history do
-		local b, c = string.match(key, "^(%d+):(%d+)$")
-		if b == tostring(player.UserId) or c == tostring(player.UserId) then
+	local now = os.clock()
+	for key, stamps in self._history do
+		local allExpired = true
+		for _, t in stamps do
+			if now - t < RealOrderConfig.WINDOW_SECONDS then
+				allExpired = false
+				break
+			end
+		end
+		if allExpired then
 			self._history[key] = nil
 		end
 	end

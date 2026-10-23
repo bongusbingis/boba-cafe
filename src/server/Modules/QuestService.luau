@@ -7,6 +7,7 @@ local Packages = ReplicatedStorage:WaitForChild("Packages")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 
 local Knit = require(Packages.Knit)
+local GoodSignal = require(Packages.GoodSignal)
 local QuestConfig = require(Shared.Configuration.QuestConfig)
 local GamepassUtil = require(Shared.Utility.GamepassUtil)
 
@@ -38,6 +39,10 @@ local QuestService = Knit.CreateService({
 		end,
 	},
 })
+
+-- SEASON-PASS: fires (player, questIndex) after a successful daily or weekly
+-- claim. SeasonPassService awards Season XP from it. Never yields.
+QuestService.QuestClaimed = GoodSignal.new()
 
 function QuestService:_getService(name: string): any
 	return Knit.GetService(name)
@@ -91,8 +96,21 @@ function QuestService:_ensureDailyQuests(player: Player, playerData: any): { Que
 			end
 		end
 
-		local slotCount = QuestConfig.BASE_SLOTS + (if hasBonusSlot then 1 else 0)
+		-- SEASON-PASS: premium perk tiers add one slot / one reroll while
+		-- claimed this season. Resolved at call time, nil-safe: a missing
+		-- SeasonPassService means no bonus. GenerateDailyQuests clamps to pool.
+		local seasonSlot, seasonReroll = false, false
+		pcall(function()
+			local season = Knit.GetService("SeasonPassService")
+			if season and season.HasPerk then
+				seasonSlot = season:HasPerk(player, "QuestSlot") == true
+				seasonReroll = season:HasPerk(player, "QuestReroll") == true
+			end
+		end)
+
+		local slotCount = QuestConfig.BASE_SLOTS + (if hasBonusSlot then 1 else 0) + (if seasonSlot then 1 else 0)
 		local freeRerolls = if self:_hasPass(player, QuestConfig.FREE_REROLL_PASS) then 1 else 0
+		freeRerolls += if seasonReroll then 1 else 0
 
 		-- Rollover race fix: _hasPass yields (PlayerOwnsPassAsync), so a
 		-- concurrent ensure may have already rolled the day over while this
@@ -352,6 +370,10 @@ function QuestService:ClaimQuest(player: Player, questIndex: number): (boolean, 
 			self.Client.QuestsUpdated:Fire(player, activeQuests)
 		end)
 
+		pcall(function()
+			QuestService.QuestClaimed:Fire(player, questIndex)
+		end)
+
 		return true, nil
 	end)
 
@@ -444,6 +466,10 @@ function QuestService:ClaimWeeklyQuest(player: Player, questIndex: number): (boo
 
 		pcall(function()
 			self.Client.WeeklyQuestsUpdated:Fire(player, if stillCurrent then weeklyQuests else current.ActiveQuests)
+		end)
+
+		pcall(function()
+			QuestService.QuestClaimed:Fire(player, questIndex)
 		end)
 
 		return true, nil

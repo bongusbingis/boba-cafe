@@ -26,6 +26,7 @@ return function(target)
 				Level = 5,
 				Title = "Barista",
 				Unlocks = {
+					"New drinks: Taro Milk Tea, Brown Sugar Boba, Matcha Latte, Mango Slush",
 					"New title: Barista",
 					"2 order tickets",
 					"Orders with 2 items",

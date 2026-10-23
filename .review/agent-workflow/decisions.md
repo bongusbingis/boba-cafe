@@ -2,6 +2,18 @@
 
 Newest first. Each entry is `## <GOAL> / DEC-###: <title>` with Date, Source, and Decision. Prime is the only writer. Numbering continues; never reuse a number.
 
+## REVIVAL-001 / DEC-061: NPC bubble is a Take Order button
+
+- **Date:** 2026-10-23.
+- **Source:** Jack, this session: make the waiting-at-counter chat bubble a satisfying-click "Take Order" button following STYLE.md.
+- **Design:** The greeting card keeps its bubble identity (CREAM, GREEN stroke 2, CORNER_BUTTON, Fredoka GREEN_DEEP) and its card text becomes "Take Order" (Title Case); the "Hi, can I order?" greeting (or "{Name}: Hi, can I order?" for regulars) moves to the speech line above it. Press feedback is PromptButton's 0.93 press / 1.07 hover pair, tweened on a server-built UIScale (0.1 s Sine Out) — no new sound (STYLE 3.10: buttons are silent), no new token, no new pattern. The client shows the button only to clocked-in baristas (same ClockedIn-attribute gate as the counter prompts); the server exposes TakeNpcOrder(npcId) with a 2 s debounce, and all guards still run in _onTakeOrderTriggered. The CustomerPrompt stays as the gamepad/accessibility fallback. Tablet guided walkthrough (DEC-060 PENDING) is paused, not dropped.
+
+## REVIVAL-001 / DEC-060: NPC orders always in the tablet notepad; prefill removed
+
+- **Date:** 2026-10-23.
+- **Source:** Jack, this session: "for real customers its ok but for npcs it should put the order in the NOTEPAD for the worker to punch in on the computer; it should do this every time. for the onboarding distinction, my goal was just to make it easier/more guided; perhaps instead of giving them such a freebie by filling the order in during onboarding we should guide them the same way we do for the stations."
+- **Decision:** (1) `_onTakeOrderTriggered` always sends `RequestedDrinkText` as `RequestedText` for NPC tablets, scripted or not; the "Ask the customer" line stays only for real counter customers. (2) The `Prefill` tablet flag and `prefillFromNpc` are removed: onboarding no longer one-tap-fills the order. (3) Amends DEC-059's prefill half. What station-style guidance the tablet gives first-session workers (toast, notepad pulse, or nothing beyond the notepad + mismatch text) is PENDING JACK.
+
 ## REVIVAL-001 / DEC-059: Order-flow rework (tablet pre-fill, real orders on ticket slots, no claim queue, counter ordering)
 
 - **Date:** 2026-10-21.

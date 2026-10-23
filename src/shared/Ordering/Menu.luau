@@ -9,9 +9,6 @@ local SIZE_SMALL_MEDIUM_LARGE = { "Small", "Medium", "Large" }
 local SIZE_MUG = { "Mug" }
 local TEMPERATURE_COLD_HOT = { "Cold", "Hot" }
 
-local TOP_MENU_COLOR = Color3.fromRGB(139, 199, 104)
-local TOP_MENU_ITEM_COLOR = Color3.fromRGB(156, 255, 141)
-
 local COFFEE_NAMES = {
 	"Regular",
 	"Espresso",
@@ -253,30 +250,8 @@ local SyrupFlavor = {
 
 -- ServeItem is the tool "Item" attribute a served order is matched on (OrderSpec), for
 -- items whose kitchen tool is not named ItemName. Without it, ItemName is used.
-local featuredMatcha = {
-	Color = TOP_MENU_ITEM_COLOR,
-	ItemName = "Matcha Tea Boba",
-	ServeItem = "Boba",
-	RequiredSelection = {
-		["Tapioca Flavor"] = TapiocaFlavor,
-		["Syrup Flavor"] = {
-			["Matcha"] = {
-				Color = SyrupFlavor["Matcha"].Color,
-			},
-		},
-	},
-	Select = {
-		["Size"] = SIZE_SMALL_MEDIUM_LARGE,
-	},
-}
-
-FoodService["TopMenuSpecial"] = {
-	Title = "Featured",
-	Color = TOP_MENU_COLOR,
-	Items = {
-		["Matcha Tea Boba"] = featuredMatcha,
-	},
-}
+-- (Custom Boba below is the remaining ServeItem user; the standalone Matcha Tea
+-- Boba entry was removed — matcha is ordered as Custom Boba + Matcha syrup.)
 
 FoodService["FoodTable"] = {
 	["Boba Teas"] = {
@@ -296,7 +271,6 @@ FoodService["FoodTable"] = {
 					["Size"] = SIZE_SMALL_MEDIUM_LARGE,
 				},
 			},
-			["Matcha Tea Boba"] = featuredMatcha,
 			-- ['Pumpkin Spice Boba'] = {
 			-- 	ItemName = "Boba",
 			-- 	View = buildCupView("Boba", false),
@@ -669,7 +643,7 @@ FoodService["FoodTable"] = {
 -- Latte, Salted Hot Chocolate, the other pastries and the Cup are off until
 -- their recipes exist (Q19, Q22). The player UI can filter on IsLaunchItem.
 local LAUNCH_ITEMS = {
-	["Boba Teas"] = { "Custom Boba", "Matcha Tea Boba" },
+	["Boba Teas"] = { "Custom Boba" },
 	["Coffees"] = { "Regular", "Espresso", "Decaf", "Cappuccino", "Americano", "Cortado", "Koa Coffee" },
 	["Hot Cocoas"] = { "Classic", "Caramel", "Vanilla" },
 	["Pastries"] = { "Fudge Brownie" },

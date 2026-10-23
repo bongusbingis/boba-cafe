@@ -1,6 +1,7 @@
 --[[
-	Hud
-	Renders groups of Hud buttons used for opening/closing page components.
+	TopBar
+	Renders groups of Hud buttons used for opening/closing page components,
+	along with the integrated center Cafe Rating and Rush Event pod.
 	Props:
 	- CurrentPage: ModuleScript currently selected.
 	- SetCurrentPage: Callback to update the selected page (ModuleScript or nil).
@@ -24,19 +25,22 @@ local Pages = UI.Pages
 local Pane = require(UI.Components.Pane)
 local HudTabButton = require(UI.Components.Buttons.HudTabButton)
 local useQuestClaimable = require(UI.Hooks.useQuestClaimable)
+local CafeRating = require(UI.Components.Core.Hud.CafeRating)
 
 ---> private
 local c = React.createElement
 
 return function(props: {
-	CurrentPage: ModuleScript,
-	SetCurrentPage: (pageComponent: ModuleScript | nil, ...any) -> (),
+	CurrentPage: ModuleScript?,
+	SetCurrentPage: ((pageComponent: ModuleScript | nil, ...any) -> ())?,
 })
 	local questClaimable = useQuestClaimable()
 
 	local function setPage(page: ModuleScript)
 		return function()
-			props.SetCurrentPage(page)
+			if props.SetCurrentPage then
+				props.SetCurrentPage(page)
+			end
 		end
 	end
 
@@ -51,40 +55,7 @@ return function(props: {
 		},
 		AspectRatio = 6.5443,
 	}, {
-		Time = c(Pane, {
-			ClassName = "ImageLabel",
-			Native = {
-				AnchorPoint = Vector2.new(0.5, 0),
-				Image = "http://www.roblox.com/asset/?id=13407992271",
-				ImageColor3 = Styles.GREEN,
-				Position = UDim2.fromScale(0.5, 0.327),
-				Size = UDim2.fromScale(0.263667, 0.633103),
-			},
-		}, {
-			Border = c(Pane, {
-				ClassName = "ImageLabel",
-				Native = {
-					AnchorPoint = Vector2.new(0.5, 0.5),
-					Image = "http://www.roblox.com/asset/?id=13408001982",
-					ImageColor3 = Styles.OFFWHITE,
-					Position = UDim2.fromScale(0.5, 0.5),
-					Size = UDim2.new(1, 5, 1, 5),
-				},
-			}),
-
-			TextLabel = c(Pane, {
-				ClassName = "TextLabel",
-				Native = {
-					AnchorPoint = Vector2.new(0.5, 0.5),
-					FontFace = Styles.FONT_FREDOKA,
-					Position = UDim2.fromScale(0.5, 0.66),
-					Size = UDim2.fromScale(1, 0.364498),
-					Text = "12:34 PM",
-					TextColor3 = Color3.new(1, 1, 1),
-					TextScaled = true,
-				},
-			}),
-		}),
+		CafeRating = c(CafeRating, {}),
 
 		Base = c(Pane, {
 			ClassName = "ImageLabel",
@@ -96,6 +67,7 @@ return function(props: {
 				Position = UDim2.fromScale(0.5, 0),
 				ScaleType = Enum.ScaleType.Fit,
 				Size = UDim2.fromScale(0.982294, 0.558621),
+				ZIndex = 2,
 			},
 		}, {
 			Border = c(Pane, {
@@ -106,12 +78,14 @@ return function(props: {
 					ImageColor3 = Styles.OFFWHITE,
 					Position = UDim2.fromScale(0.5, 0.5),
 					Size = UDim2.fromScale(1.00668, 1.07692),
+					ZIndex = 2,
 				},
 			}),
 
 			Buttons = c(Pane, {
 				Native = {
 					Size = UDim2.fromScale(1, 1),
+					ZIndex = 3,
 				},
 				ListLayout = {
 					FillDirection = Enum.FillDirection.Horizontal,

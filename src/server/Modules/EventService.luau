@@ -107,7 +107,18 @@ function EventService:_endEvent(eventName: string, eventDef: EventConfig.EventDe
 	self._currentEventToken = nil
 	self._hostCooldownEnd = self:_now() + EventConfig.HOST_COOLDOWN_SECONDS
 
-	Workspace:SetAttribute(eventDef.Attribute, false)
+	if eventDef.Attribute == "RushHour" then
+		local ok, cafeRating = pcall(function()
+			return Knit.GetService("CafeRatingService")
+		end)
+		if ok and cafeRating ~= nil and typeof(cafeRating.RefreshRushHour) == "function" then
+			cafeRating:RefreshRushHour()
+		else
+			Workspace:SetAttribute(eventDef.Attribute, false)
+		end
+	else
+		Workspace:SetAttribute(eventDef.Attribute, false)
+	end
 
 	local endMessage = `{eventDef.Name} has ended!`
 	self:_broadcastNotification(eventDef.Name, endMessage)

@@ -157,6 +157,13 @@ Titles.MANUAL_TITLES = {
 		Description = "Stamp every regular on the Regulars page",
 		UnearnedDisplay = "Secret",
 	},
+	{
+		Id = "Season1", -- SEASON-PASS, PROPOSED (Jack)
+		Text = "Season 1",
+		Source = "Manual",
+		Description = "Season 1 pass holder",
+		UnearnedDisplay = "Secret",
+	},
 } :: { TitleDef }
 
 local byId: { [string]: TitleDef } = {}

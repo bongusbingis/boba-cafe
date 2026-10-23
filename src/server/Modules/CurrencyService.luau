@@ -19,6 +19,9 @@ local LEADERBOARD_EXCLUDED_REASONS: { [string]: boolean } = {
 	RobuxPack = true,
 	PromoCode = true,
 	ItemSell = true,
+	-- SEASON-PASS: Robux-paid BB must not buy leaderboard spots (DEC-035 Q8).
+	SeasonPass = true,
+	StarterBundle = true,
 }
 
 ---> module declaration
@@ -75,15 +78,10 @@ function CurrencyService:ApplyLoaded(
 			self:_getService("LeaderboardService"):IncrementStat(player, "MostBobaBucks", amount)
 		end)
 	end
-	if type == "BobaBucks" then
-		pcall(function()
-			local a = self:_getService("AnalyticsEvents")
-			a:Economy(player, amount > 0, amount, current + amount, reason or "Shop")
-			if amount > 0 then
-				a:Funnel(player, 5, "FirstPayout")
-			end
-		end)
-	end
+	pcall(function()
+		local a = self:_getService("AnalyticsEvents")
+		a:Economy(player, amount > 0, amount, current + amount, reason or "Gameplay", type)
+	end)
 end
 
 --- Atomically checks the balance and deducts `amount`. Yields while the player's data loads.
@@ -126,6 +124,11 @@ function CurrencyService:TrySpendAsync(
 	if currencyType == "BobaBucks" then
 		self:_getService("StatisticsService"):IncrementStat(player, "BobaBucksSpent", amount)
 	end
+
+	pcall(function()
+		local a = self:_getService("AnalyticsEvents")
+		a:Economy(player, false, amount, current - amount, "Shop", currencyType)
+	end)
 
 	return true
 end

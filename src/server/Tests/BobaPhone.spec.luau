@@ -46,7 +46,7 @@ return function()
 		it("keeps the launch categories and drops TopMenuSpecial", function()
 			local food = launchTable()
 			expect(food["Boba Teas"].Items["Custom Boba"]).to.be.ok()
-			expect(food["Boba Teas"].Items["Matcha Tea Boba"]).to.be.ok()
+			expect(food["Boba Teas"].Items["Matcha Tea Boba"]).to.equal(nil)
 			expect(food["TopMenuSpecial"]).to.equal(nil)
 		end)
 

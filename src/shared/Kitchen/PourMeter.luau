@@ -92,15 +92,19 @@ function PourMeter.ToView(window: Window): View
 	}
 end
 
--- The elapsed time the server grades: the client's claim, clamped to
--- [serverElapsed - allowance, serverElapsed]. A missing or invalid claim uses the
--- server's own time (the honest worst case: late by one ping).
+-- The elapsed time the server grades. The server's own clock is authoritative: a tap
+-- can only be reported late, so a claim is accepted only inside
+-- [serverElapsed - allowance, serverElapsed]. A missing, invalid or out-of-range claim
+-- (a client cherry-picking a perfect moment) is graded at the server's own time.
 function PourMeter.EffectiveElapsed(claimed: any, serverElapsed: number, allowance: number): number
 	local low = math.max(0, serverElapsed - allowance)
 	if typeof(claimed) ~= "number" or claimed ~= claimed or claimed == math.huge or claimed == -math.huge then
 		return serverElapsed
 	end
-	return math.clamp(claimed, low, math.max(low, serverElapsed))
+	if claimed < low or claimed > serverElapsed then
+		return serverElapsed
+	end
+	return claimed
 end
 
 -- Grades one tap. Returns (PourTier, reason): reason is "Ok", "Miss", "Expired" or "Early".

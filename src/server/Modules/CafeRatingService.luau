@@ -69,6 +69,14 @@ function CafeRatingService:_publish()
 	workspace:SetAttribute("RushHourBuyer", self._rushBuyer)
 end
 
+function CafeRatingService:IsRushActive(): boolean
+	return self._rush == true or self._partyActive == true
+end
+
+function CafeRatingService:RefreshRushHour()
+	self:_publish()
+end
+
 --- True while EventService's staff-hosted Rush Hour is running, so _publish does not clobber its attribute.
 function CafeRatingService:_eventRushActive(): boolean
 	local ok, active = pcall(function()
@@ -314,7 +322,10 @@ function CafeRatingService:KnitStart()
 	Knit.GetService("CustomerService").CustomerResolved:Connect(function(_player, result)
 		local ok, err = pcall(function()
 			if result.Kind == "Walkout" then
-				self:_change(RatingConfig.WALKOUT)
+				local mult = if typeof(result) == "table" and typeof(result.RatingMultiplier) == "number"
+					then result.RatingMultiplier
+					else 1
+				self:_change(RatingConfig.WALKOUT * mult)
 				return
 			end
 			local delta = if result.Grade == "Perfect" then RatingConfig.PERFECT else RatingConfig.CLOSE

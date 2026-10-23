@@ -448,8 +448,8 @@ return function()
 			expectFailure(spec, reason, "CustomInfo")
 		end)
 
-		it("extra: Matcha Tea Boba is served as Boba with the Matcha syrup", function()
-			local spec = OrderSpec.FromMenuItem(menuDef("Boba Teas", "Matcha Tea Boba"), {
+		it("extra: Custom Boba with Matcha syrup is served as Boba", function()
+			local spec = OrderSpec.FromMenuItem(menuDef("Boba Teas", "Custom Boba"), {
 				Size = "Small",
 				["Syrup Flavor"] = "Matcha",
 				["Tapioca Flavor"] = "Normal",
@@ -457,7 +457,7 @@ return function()
 			expect(spec).to.be.ok()
 			expect(spec.Item).to.equal("Boba")
 			expect(spec.Syrup).to.equal("Matcha")
-			expect(spec.Label).to.equal("Small Matcha Tea Boba")
+			expect(spec.Label).to.equal("Small Custom Boba")
 		end)
 
 		it("extra: the Cup is served as Clear Cup", function()
@@ -974,15 +974,13 @@ return function()
 	describe("Menu ServeItem data", function()
 		it("should set ServeItem on exactly the items whose tool is named differently", function()
 			expect(menuDef("Boba Teas", "Custom Boba").ServeItem).to.equal("Boba")
-			expect(menuDef("Boba Teas", "Matcha Tea Boba").ServeItem).to.equal("Boba")
 			expect(menuDef("Mochis", "Orange Cream").ServeItem).to.equal("Orange Mochi")
 			expect(menuDef("Others", "Cup").ServeItem).to.equal("Clear Cup")
 			expect(menuDef("Coffees", "Regular").ServeItem).to.equal(nil)
 		end)
 
-		it("should keep the Featured Matcha entry the same table as the Boba Teas one", function()
-			local matcha = menuDef("Boba Teas", "Matcha Tea Boba")
-			expect(Menu.TopMenuSpecial.Items["Matcha Tea Boba"]).to.equal(matcha)
+		it("should have no TopMenuSpecial now that the Featured Matcha entry is gone", function()
+			expect(Menu.TopMenuSpecial).to.equal(nil)
 		end)
 	end)
 end

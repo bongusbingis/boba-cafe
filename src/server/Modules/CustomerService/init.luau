@@ -40,6 +40,7 @@ local PhysicsService = game:GetService("PhysicsService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local SoundService = game:GetService("SoundService")
 local TweenService = game:GetService("TweenService")
 
 local Packages = ReplicatedStorage:WaitForChild("Packages")
@@ -196,6 +197,8 @@ local CustomerService = Knit.CreateService({
 		TicketChanged = Knit.CreateSignal(),
 		-- Fired to open the Ordering Tablet screen on the barista's client with NPC order data.
 		OpenOrderingTablet = Knit.CreateSignal(),
+		-- Fired to close the Ordering Tablet screen on the barista's client.
+		CloseOrderingTablet = Knit.CreateSignal(),
 	},
 
 	-- Server-side signal: fires (npc: Npc.Npc, reason: string) once per NPC when it stops waiting.
@@ -224,6 +227,7 @@ local CustomerService = Knit.CreateService({
 	-- AUDIT-FIX submit: NPC -> baristas who pressed its Take Order. Submit falls back to this when the
 	-- single binding above went stale, so a tablet for a still-waiting NPC never fails.
 	_orderTakers = setmetatable({}, { __mode = "k" }) :: { [Npc.Npc]: { [Player]: boolean } },
+	_rollingOrders = setmetatable({}, { __mode = "k" }) :: { [Npc.Npc]: boolean },
 	_baristas = 0, -- clocked-in players, refreshed every pacing tick
 	_emptySince = nil :: number?, -- os.clock() when the barista count last dropped to 0 (P2-3 dismiss)
 	_lastSpawnClock = 0,
@@ -354,10 +358,21 @@ function CustomerService:_watchPlayer(player: Player)
 
 	local function onCharacter(character: Model)
 		setCollisionGroup(character, PLAYER_COLLISION_GROUP)
+		-- Custom overheads come from PlayerOverheads.client; hide the default
+		-- Roblox name/health overhead on the player's own Humanoid.
+		local function hideDefaultOverhead(descendant: Instance)
+			if descendant:IsA("Humanoid") then
+				descendant.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+			end
+		end
+		for _, descendant in character:GetDescendants() do
+			hideDefaultOverhead(descendant)
+		end
 		character.DescendantAdded:Connect(function(descendant)
 			if descendant:IsA("BasePart") then
 				descendant.CollisionGroup = PLAYER_COLLISION_GROUP
 			end
+			hideDefaultOverhead(descendant)
 		end)
 	end
 
@@ -1150,13 +1165,18 @@ end
 -- The holder left or clocked out: hands an accepted order to the longest-idle clocked-in
 -- barista with a free slot. Nobody free: it stays unassigned (any barista can Rescue it
 -- below RESCUE_FRACTION) and walks out when its pickup patience runs out.
-function CustomerService:_handOff(npc: Npc.Npc, exclude: Player)
+function CustomerService:_handOff(npc: Npc.Npc, exclude: Player?)
 	if self._context == nil or npc.Left or npc.State == "AtCounter" then
 		return
 	end
 	local candidates: { Player } = {}
 	for _, player in Players:GetPlayers() do
-		if player ~= exclude and self._shift:IsClockedIn(player) and self:_hasFreeSlot(player) then
+		if
+			player ~= exclude
+			and self._shift:IsClockedIn(player)
+			and not self._shift:IsWrappingUp(player)
+			and self:_hasFreeSlot(player)
+		then
 			table.insert(candidates, player)
 		end
 	end
@@ -1166,6 +1186,18 @@ function CustomerService:_handOff(npc: Npc.Npc, exclude: Player)
 	end
 	npc:Reassign(player.UserId)
 	self:_issueTicket(player, npc)
+end
+
+-- Re-dispatches any unassigned NPCs waiting at pick-up to free baristas.
+function CustomerService:_dispatchUnassignedNpcs()
+	if self._context == nil then
+		return
+	end
+	for npc in self._npcs do
+		if not npc.Left and npc.State == "AtPickup" and self._assignee[npc] == nil then
+			self:_handOff(npc, nil)
+		end
+	end
 end
 
 -- Dedicated is the only mode (TAKEOVER-FIX 2): the barista who takes the order serves it.
@@ -1282,7 +1314,16 @@ function CustomerService:_onTakeOrderTriggered(npc: Npc.Npc, player: Player)
 	end
 	local character = player.Character
 	local primary = if character ~= nil then character.PrimaryPart else nil
-	if primary == nil or (primary.Position - npc.Root.Position).Magnitude > 12 then
+	-- Matches the prompt's MaxActivationDistance (15) so an offered Take Order
+	-- never fails silently just outside this check (same fix as Serve).
+	if primary == nil or (primary.Position - npc.Root.Position).Magnitude > 15 then
+		return
+	end
+	if self._shift:IsWrappingUp(player) then
+		self._dialog:Notify(
+			player,
+			{ Title = "Shift complete", Description = "Finish your open order to end the shift." }
+		)
 		return
 	end
 	if not self:_hasFreeSlot(player) then
@@ -1296,37 +1337,55 @@ function CustomerService:_onTakeOrderTriggered(npc: Npc.Npc, player: Player)
 	-- The order is rolled once per NPC (TAKEOVER-FIX 3): a re-press or a second barista
 	-- sees the same order, so an open tablet always still matches.
 	if not npc.OrderRolled then
-		local order, scripted = self:_pickOrderFor(player)
-		order = self:_regulars("OrderFor", npc, player, order, scripted) or order -- BIG-B5 hook: a regular's favourite
-		local spec, reason = OrderSpec.FromOrderItem(order)
-		if spec == nil then
-			warnOnce("order", `[CustomerService] Order rejected by OrderSpec ({reason}): {order.Category}/{order.Item}`)
-			return
-		end
-
-		self._npcSeq += 1
-		if npc.Model.Name == "Customer" then
-			npc.Model.Name = `Customer_{self._npcSeq}`
-		end
-		local orders: { Rules.OrderItem } = { order }
-		local specs: { OrderSpec.OrderSpec } = { spec }
-		if scripted then
-			npc:ClearVariant()
-		else
-			for _ = 2, Rules.ItemCountForLevel(self:_levelOf(player)) do
-				local extra = Rules.PickOrder(nil, nil, self:_levelOf(player))
-				local extraSpec = OrderSpec.FromOrderItem(extra)
-				if extraSpec ~= nil then
-					table.insert(orders, extra)
-					table.insert(specs, extraSpec)
-				end
+		if self._rollingOrders[npc] then
+			while self._rollingOrders[npc] and not npc.OrderRolled and not npc.Left do
+				task.wait()
 			end
 		end
-		npc:SetOrders(orders, specs)
-		npc.OrderRolled = true
-		npc.RolledScriptedFor = if scripted then player.UserId else nil
-		self._lastOrder[player] = order
-		npc.RequestedDrinkText = Rules.FormatOrderForNotepad(orders, specs)
+		if not npc.OrderRolled and not npc.Left then
+			self._rollingOrders[npc] = true
+			local okRoll, errRoll = pcall(function()
+				local order, scripted = self:_pickOrderFor(player)
+				order = self:_regulars("OrderFor", npc, player, order, scripted) or order -- BIG-B5 hook: a regular's favourite
+				local spec, reason = OrderSpec.FromOrderItem(order)
+				if spec == nil then
+					warnOnce(
+						"order",
+						`[CustomerService] Order rejected by OrderSpec ({reason}): {order.Category}/{order.Item}`
+					)
+					return
+				end
+
+				self._npcSeq += 1
+				if npc.Model.Name == "Customer" then
+					npc.Model.Name = `Customer_{self._npcSeq}`
+				end
+				local orders: { Rules.OrderItem } = { order }
+				local specs: { OrderSpec.OrderSpec } = { spec }
+				if scripted then
+					npc:ClearVariant()
+				else
+					for _ = 2, Rules.ItemCountForLevel(self:_levelOf(player)) do
+						local extra = Rules.PickOrder(nil, nil, self:_levelOf(player))
+						local extraSpec = OrderSpec.FromOrderItem(extra)
+						if extraSpec ~= nil then
+							table.insert(orders, extra)
+							table.insert(specs, extraSpec)
+						end
+					end
+				end
+				npc:SetOrders(orders, specs)
+				npc.OrderRolled = true
+				npc.RolledScriptedFor = if scripted then player.UserId else nil
+				self._lastOrder[player] = order
+				npc.RequestedDrinkText = Rules.FormatOrderForNotepad(orders, specs)
+			end)
+			self._rollingOrders[npc] = nil
+			if not okRoll then
+				warn(`[CustomerService] Order roll failed: {errRoll}`)
+				return
+			end
+		end
 	end
 	npc:ExtendRegisterPatience(CustomerConfig.REGISTER_TAKE_ORDER_GRACE_SECONDS)
 	self._activeOrderingNpc[player] = npc
@@ -1337,14 +1396,15 @@ function CustomerService:_onTakeOrderTriggered(npc: Npc.Npc, player: Player)
 	end
 	takers[player] = true
 
+	-- The NPC order always rides in the tablet notepad; the worker punches it
+	-- into the ordering pages. No prefill: the scripted first-session tablet
+	-- guides the worker through each step instead (Guided).
 	self.Client.OpenOrderingTablet:Fire(player, {
 		NpcId = npc.Id,
 		RequestedText = npc.RequestedDrinkText,
 		Orders = npc.Orders,
 		Specs = npc.Specs,
-		-- DEC-059: the tablet is filled in for the scripted first-session customer only
-		-- (the tutorial); every other order is typed from the notepad.
-		Prefill = npc.RolledScriptedFor == player.UserId,
+		Guided = npc.RolledScriptedFor == player.UserId,
 	})
 end
 
@@ -1381,6 +1441,9 @@ function CustomerService:_submitNpcOrder(
 		return { Success = false, Message = "Customer is no longer waiting at the counter." }
 	end
 	-- Re-checked at submit: another tablet may have filled the slot since Take Order.
+	if self._shift:IsWrappingUp(player) then
+		return { Success = false, Message = "Shift complete. Finish your open order to end it." }
+	end
 	if not self:_hasFreeSlot(player) then
 		return { Success = false, Message = "Your order slots are full. Serve a customer first!" }
 	end
@@ -1392,6 +1455,40 @@ function CustomerService:_submitNpcOrder(
 
 	local matches = Rules.ValidateSubmittedOrder(submittedOrderItems, npc.Orders)
 	if not matches then
+		local isOnboarding = (self:_readServedCount(player) < CustomerConfig.FIRST_SESSION_COUNT)
+			or (npc.RolledScriptedFor == player.UserId)
+
+		if isOnboarding then
+			return { Success = false, Message = "That doesn't match what the customer asked for!" }
+		end
+
+		self:_playAngrySound(npc)
+		self:_showAngryEffect(npc)
+
+		local isKaren = npc.Variant == "Karen"
+		local regularAttr = npc.Model:GetAttribute("RegularName")
+		local isRegular = (typeof(regularAttr) == "string" and #regularAttr > 0)
+
+		npc._wrongAttempts = (npc._wrongAttempts or 0) + 1
+		local maxAttempts = if isKaren then 1 else 2
+
+		if not isKaren then
+			local remaining = npc:ReduceRegisterPatience(0.25)
+			if remaining <= 0 then
+				npc._wrongAttempts = maxAttempts
+			end
+		end
+
+		if (npc._wrongAttempts :: number) >= maxAttempts then
+			if isRegular then
+				npc._walkoutRatingMult = 1.5
+			end
+			npc._lastTaker = player
+			npc:PlayConfused()
+			npc:Leave("WrongOrder")
+			return { Success = false, Message = "The customer was fed up and left!" }
+		end
+
 		return { Success = false, Message = "That doesn't match what the customer asked for!" }
 	end
 
@@ -1418,9 +1515,20 @@ function CustomerService:_submitNpcOrder(
 	for taker, ordering in self._activeOrderingNpc do
 		if ordering == npc then
 			self._activeOrderingNpc[taker] = nil
+			if taker ~= player then
+				self.Client.CloseOrderingTablet:Fire(taker)
+			end
 		end
 	end
-	self._orderTakers[npc] = nil
+	local takers = self._orderTakers[npc]
+	if takers ~= nil then
+		for taker in takers do
+			if taker ~= player then
+				self.Client.CloseOrderingTablet:Fire(taker)
+			end
+		end
+		self._orderTakers[npc] = nil
+	end
 	if pickupPos ~= nil then
 		npc:GoToPickup(pickupPos, pickupRot)
 	else
@@ -1451,10 +1559,11 @@ function CustomerService:_onServeTriggered(npc: Npc.Npc, player: Player)
 	if not self._shift:IsClockedIn(player) then
 		return
 	end
-	-- (2) close enough.
+	-- (2) close enough: matches the prompt's MaxActivationDistance (15) so an
+	-- offered Serve never fails silently just outside this check.
 	local character = player.Character
 	local primary = if character ~= nil then character.PrimaryPart else nil
-	if primary == nil or (primary.Position - npc.Root.Position).Magnitude > 10 then
+	if primary == nil or (primary.Position - npc.Root.Position).Magnitude > 15 then
 		return
 	end
 	-- (3) still waiting.
@@ -1554,9 +1663,18 @@ function CustomerService:_onServeTriggered(npc: Npc.Npc, player: Player)
 	self._currency:Modify(player, "BobaBucks", pay, "Gameplay")
 	pcall(function()
 		local a = Knit.GetService("AnalyticsEvents")
+		a:OnboardingFunnel(player, 4, "FirstOrderServed")
 		a:Funnel(player, 4, "FirstServe")
+
+		local servedBefore = self:_readServedCount(player)
+		if (servedBefore + 1) >= CustomerConfig.FIRST_SESSION_COUNT then
+			a:OnboardingFunnel(player, 5, "OnboardingCompleted")
+			a:Funnel(player, 5, "OnboardingCompleted")
+		end
+
 		a:Custom(player, "NpcServed", 1)
 		a:Custom(player, "ServeSeconds", (npc.Model:GetAttribute("PatienceTotal") or 0) * (1 - fractionLeft))
+		a:Custom(player, "PourAccuracy", if grade == "Perfect" then 3 elseif pourTip > 0 then 2 else 1)
 	end)
 	self._stats:IncrementStat(player, "CustomersServed")
 	pcall(function()
@@ -1866,10 +1984,13 @@ function CustomerService:_releaseCounterLock(customer: Player, reason: string?)
 	pcall(function()
 		state.Prompt:SetAttribute("TakerUserId", 0)
 	end)
-	if reason ~= nil and taker ~= nil and taker.Parent ~= nil then
-		pcall(function()
-			self._dialog:Notify(taker, { Title = "Order cancelled", Description = reason })
-		end)
+	if taker ~= nil and taker.Parent ~= nil then
+		self.Client.CloseOrderingTablet:Fire(taker)
+		if reason ~= nil then
+			pcall(function()
+				self._dialog:Notify(taker, { Title = "Order cancelled", Description = reason })
+			end)
+		end
 	end
 end
 
@@ -2014,6 +2135,13 @@ function CustomerService:_onCounterTakeOrder(customer: Player, barista: Player)
 		})
 		return
 	end
+	if self._shift:IsWrappingUp(barista) then
+		self._dialog:Notify(
+			barista,
+			{ Title = "Shift complete", Description = "Finish your open order to end the shift." }
+		)
+		return
+	end
 	if not self:_hasFreeSlot(barista) then
 		self._dialog:Notify(barista, {
 			Title = "Slots Full",
@@ -2153,6 +2281,65 @@ function CustomerService:_showServePay(npc: Npc.Npc, pay: number, grade: Rules.S
 	end)
 end
 
+function CustomerService:_playAngrySound(npc: Npc.Npc)
+	pcall(function()
+		local template = WorldPath.find(SoundService, { "SFX", "Angry" })
+		if template == nil or not template:IsA("Sound") then
+			return
+		end
+		local anchor = npc.Root
+			or (npc.Model and npc.Model:FindFirstChild("HumanoidRootPart"))
+			or (npc.Model and npc.Model:FindFirstChild("Head"))
+		if anchor == nil or not anchor:IsA("BasePart") then
+			return
+		end
+		local sound = template:Clone()
+		sound.Parent = anchor
+		sound:Play()
+		task.delay(math.max(sound.TimeLength, 3), function()
+			pcall(function()
+				sound:Destroy()
+			end)
+		end)
+	end)
+end
+
+function CustomerService:_showAngryEffect(npc: Npc.Npc)
+	pcall(function()
+		local head = npc.Model and npc.Model:FindFirstChild("Head")
+		local anchor = if head ~= nil and head:IsA("BasePart") then head else npc.Root
+		if anchor == nil then
+			return
+		end
+		local startOffset = Vector3.new(0, 3.5, 0)
+		local gui = Instance.new("BillboardGui")
+		gui.Name = "AngryEffect"
+		gui.Adornee = anchor
+		gui.Size = UDim2.fromOffset(60, 60)
+		gui.StudsOffset = startOffset
+		gui.AlwaysOnTop = true
+		gui.MaxDistance = 80
+
+		local label = Instance.new("TextLabel")
+		label.Size = UDim2.fromScale(1, 1)
+		label.BackgroundTransparency = 1
+		label.TextScaled = true
+		label.Text = "💢"
+		label.Parent = gui
+		gui.Parent = npc.Model
+
+		local rise = TweenInfo.new(1.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+		local fade = TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.In, 0, false, 1)
+		TweenService:Create(gui, rise, { StudsOffset = startOffset + Vector3.new(0, 1.5, 0) }):Play()
+		TweenService:Create(label, fade, { TextTransparency = 1 }):Play()
+		task.delay(1.5, function()
+			pcall(function()
+				gui:Destroy()
+			end)
+		end)
+	end)
+end
+
 -- Clears the ticket for the NPC's holder: fires nil, frees the slot and
 -- restarts the holder's idle clock. Idempotent.
 function CustomerService:_clearTicket(npc: Npc.Npc)
@@ -2166,9 +2353,16 @@ function CustomerService:_clearTicket(npc: Npc.Npc)
 		for slot, ticket in held do
 			if ticket.Id == npc.Model.Name then
 				held[slot] = nil
-				self._idleSince[holder] = os.clock()
+				if typeof(holder) ~= "Instance" or holder:IsDescendantOf(Players) then
+					self._idleSince[holder] = os.clock()
+				end
 				self:_fireTicket(holder, nil, slot)
 				self:_dispatchRealOrders() -- a waiting real order may take the freed slot
+				self:_dispatchUnassignedNpcs() -- an unassigned pickup NPC may take the freed slot
+				-- Deferred so the serve's CustomerResolved is recorded before a due shift ends.
+				task.defer(function()
+					pcall(self._shift.Recheck, self._shift, holder)
+				end)
 				break
 			end
 		end
@@ -2205,22 +2399,37 @@ function CustomerService:_onCustomerLeft(npc: Npc.Npc, reason: string)
 	if self._context ~= nil then
 		self._context.ReleasePickupSpot(npc)
 	end
-	if reason ~= "PatienceOut" then
+
+	-- Auto-close ordering UI for any barista currently serving this customer
+	for taker, ordering in self._activeOrderingNpc do
+		if ordering == npc then
+			self._activeOrderingNpc[taker] = nil
+			self.Client.CloseOrderingTablet:Fire(taker)
+		end
+	end
+	local takers = self._orderTakers[npc]
+	if takers ~= nil then
+		for taker in takers do
+			self.Client.CloseOrderingTablet:Fire(taker)
+		end
+		self._orderTakers[npc] = nil
+	end
+
+	if reason ~= "PatienceOut" and reason ~= "WrongOrder" then
 		self:_clearTicket(npc)
 		return
 	end
 	self:RecordTeamServe(nil) -- any walkout breaks the server-wide chain, assigned or not
-	for taker, ordering in self._activeOrderingNpc do
-		if ordering == npc then
-			self._activeOrderingNpc[taker] = nil
-		end
-	end
-	local holder = self._assignee[npc]
+	local holder = self._assignee[npc] or npc._lastTaker
 	self:_clearTicket(npc)
+	local ratingMult = npc._walkoutRatingMult or 1
 	if holder == nil then
 		-- Nobody held it (register walkout or orphan): the cafe rating still drops (TAKEOVER-FIX 2).
 		pcall(function()
-			self.CustomerResolved:Fire(nil, { Kind = "Walkout", Pay = 0, Fast = false, Combo = 0 })
+			self.CustomerResolved:Fire(
+				nil,
+				{ Kind = "Walkout", Pay = 0, Fast = false, Combo = 0, RatingMultiplier = ratingMult }
+			)
 		end)
 		return
 	end
@@ -2230,7 +2439,10 @@ function CustomerService:_onCustomerLeft(npc: Npc.Npc, reason: string)
 	end)
 	self._dialog:Notify(holder, { Title = "Customer left", Description = "Customer left. Combo lost." })
 	pcall(function()
-		self.CustomerResolved:Fire(holder, { Kind = "Walkout", Pay = 0, Fast = false, Combo = 0 })
+		self.CustomerResolved:Fire(
+			holder,
+			{ Kind = "Walkout", Pay = 0, Fast = false, Combo = 0, RatingMultiplier = ratingMult }
+		)
 	end)
 end
 
@@ -2304,6 +2516,7 @@ function CustomerService:KnitStart()
 			end
 			if clockedIn then
 				self._idleSince[player] = os.clock()
+				self:_dispatchUnassignedNpcs()
 			else
 				self:_releaseTicket(player)
 			end
@@ -2345,6 +2558,9 @@ function CustomerService:PlayerRemoving(player: Player)
 	self._activeOrderingNpc[player] = nil
 	self._firstServe[player] = nil
 	self._sessionShifts[player] = nil
+	self._idleSince[player] = nil
+	self._combo[player] = nil
+	self._lastOrder[player] = nil
 	local connection = self._characterConnections[player]
 	if connection ~= nil then
 		connection:Disconnect()
@@ -2358,6 +2574,7 @@ function CustomerService:PlayerRemoving(player: Player)
 	end
 	-- Real-order tickets are released by OrderService; drop whatever is left.
 	self._tickets[player] = nil
+	self._idleSince[player] = nil
 end
 
 return CustomerService

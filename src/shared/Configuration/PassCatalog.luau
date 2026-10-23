@@ -16,6 +16,8 @@
 	empty for display-only passes that grant nothing yet.
 ]]
 
+local ProductIds = require(script.Parent.ProductIds)
+
 export type PassEntry = {
 	Name: string,
 	Description: string?,
@@ -163,5 +165,16 @@ local PassCatalog: { [number]: PassEntry } = {
 		Legacy = false,
 	},
 }
+
+if ProductIds.PumpkinLauncherPass ~= nil then
+	PassCatalog[ProductIds.PumpkinLauncherPass] = {
+		Name = "Pumpkin Launcher",
+		Description = "Blast festive pumpkins at your friends with this time-limited Halloween launcher!",
+		Icon = "rbxassetid://16728123607",
+		Perks = { "PumpkinLauncher" },
+		Listed = true,
+		Legacy = false,
+	}
+end
 
 return PassCatalog

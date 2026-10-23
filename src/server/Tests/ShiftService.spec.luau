@@ -281,7 +281,7 @@ return function()
 			local fired = firedPaychecks[1]
 			expect(fired.Player).to.equal(player)
 			local paycheck = fired.Paycheck
-			expect(paycheck.Pay).to.equal(17)
+			expect(paycheck.Pay).to.equal(12)
 			expect(paycheck.Tips).to.equal(5)
 			expect(paycheck.Total).to.equal(paycheck.Pay + paycheck.Tips + paycheck.Bonus)
 			expect(paycheck.Served).to.equal(9)

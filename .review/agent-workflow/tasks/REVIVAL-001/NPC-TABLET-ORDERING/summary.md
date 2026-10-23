@@ -1,5 +1,9 @@
 # NPC-TABLET-ORDERING — Evidence & Summary (REVIVAL-001)
 
+> SUPERSEDED by DEC-059 (2026-10-21): the tablet no longer shows the NPC's order
+> text except for the scripted first-session customer. Do not re-add order text
+> to the tablet/notepad for regular NPCs; see decisions.md DEC-059.
+
 Implementation of Jack's approved gameplay flow for NPC customer ordering via the Ordering Tablet and pickup counter transition.
 
 ## Flow Implementation

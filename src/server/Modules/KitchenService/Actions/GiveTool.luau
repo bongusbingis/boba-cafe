@@ -10,10 +10,34 @@
     { "GiveTool", tool, { Item = "Cup", Size = "Small" } }
 --]]
 
+---> Requires
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Knit = require(ReplicatedStorage.Packages.Knit)
+local KitchenConfig = require(ReplicatedStorage.Shared.Configuration.KitchenConfig)
+
 ---> Helpers
 
 local function getHeldTool(player: Player): Tool?
 	return (player.Character and player.Character:FindFirstChildWhichIsA("Tool"))
+end
+
+-- Every Tool the player carries (backpack + equipped), kitchen or not.
+local function countTools(player: Player, character: Model): number
+	local count = 0
+	local backpack = if typeof(player.FindFirstChildOfClass) == "function"
+		then player:FindFirstChildOfClass("Backpack")
+		else (player :: any).Backpack
+	for _, container in { backpack, character } do
+		if container then
+			for _, child in container:GetChildren() do
+				if child:IsA("Tool") then
+					count += 1
+				end
+			end
+		end
+	end
+	return count
 end
 
 ---> Action
@@ -41,6 +65,18 @@ local function GiveTool(player: Player, _actionModel: Model, toolToClone: Tool, 
 				return false
 			end
 		end
+	end
+
+	-- Cap carried tools so repeated giver use cannot flood the backpack. Returning false
+	-- reports "GiveTool rejected" through the runner's InteractionFailed path.
+	if countTools(player, character) >= KitchenConfig.MAX_HELD_TOOLS then
+		pcall(function()
+			Knit.GetService("DialogService"):Notify(player, {
+				Title = "Hands full",
+				Description = "You're carrying too many items. Serve or throw some away first!",
+			})
+		end)
+		return false
 	end
 
 	local held = getHeldTool(player)
@@ -102,9 +138,9 @@ local function GiveTool(player: Player, _actionModel: Model, toolToClone: Tool, 
 
 	clone.Parent = character
 	pcall(function()
-		require(game:GetService("ReplicatedStorage").Packages.Knit)
-			.GetService("AnalyticsEvents")
-			:Funnel(player, 3, "FirstItemTaken")
+		local a = require(game:GetService("ReplicatedStorage").Packages.Knit).GetService("AnalyticsEvents")
+		a:OnboardingFunnel(player, 3, "FirstStationUse")
+		a:Funnel(player, 3, "FirstItemTaken")
 	end)
 	return true
 end

@@ -7,11 +7,13 @@ local UI = Shared:WaitForChild("UI")
 
 ---> dependencies
 local React = require(Packages.React)
+local Knit = require(Packages.Knit)
 
 ---> config
 local ProductIds = require(Shared.Configuration.ProductIds)
 local UIFlags = require(Shared.Configuration.UIFlags)
 local EventProducts = require(Shared.Utility.EventProducts)
+local NicknamePrompt = require(Shared.UI.Utility.NicknamePrompt)
 
 ---> styles
 local Styles = require(UI.Styles)
@@ -45,6 +47,7 @@ return function()
 	-- Live Robux prices keyed by pack Key. Empty while the stub is nil or unfetched,
 	-- in which case the row shows no price and its purchase path stays inert.
 	local prices, setPrices = React.useState({})
+	local nicknamePrice, setNicknamePrice = React.useState(nil)
 
 	React.useEffect(function()
 		local mounted = true
@@ -64,6 +67,16 @@ return function()
 			if mounted then
 				setPrices(fetched)
 			end
+
+			local nickId = ProductIds.ChangeNickname
+			if nickId ~= nil then
+				local ok, info = pcall(function()
+					return MarketplaceService:GetProductInfoAsync(nickId, Enum.InfoType.Product)
+				end)
+				if mounted and ok and typeof(info) == "table" and info.PriceInRobux ~= nil then
+					setNicknamePrice(tostring(info.PriceInRobux))
+				end
+			end
 		end)
 		return function()
 			mounted = false
@@ -73,6 +86,10 @@ return function()
 	-- Boba Party / Rush Hour developer products (live prices; party hidden on cooldown).
 	local eventPrices, setEventPrices = React.useState({})
 	local _eventTick, setEventTick = React.useState(0)
+	-- SEASON-PASS: live price for the Starter Bundle product and a flag that
+	-- hides the row once the one-time bundle is claimed.
+	local starterPrice, setStarterPrice = React.useState(nil)
+	local starterClaimed, setStarterClaimed = React.useState(false)
 
 	React.useEffect(function()
 		local mounted = true
@@ -119,11 +136,55 @@ return function()
 		end
 	end
 
+	-- SEASON-PASS: Starter Bundle — one-time Robux product, hidden once
+	-- claimed. Live price only (DEC-026).
+	React.useEffect(function()
+		local mounted = true
+		task.spawn(function()
+			local id = ProductIds.StarterBundle
+			if id ~= nil then
+				local ok, info = pcall(function()
+					return MarketplaceService:GetProductInfoAsync(id, Enum.InfoType.Product)
+				end)
+				if mounted and ok and typeof(info) == "table" and info.PriceInRobux ~= nil then
+					setStarterPrice(`\u{e002} {info.PriceInRobux}`)
+				end
+			end
+			local okC, dataController = pcall(function()
+				return Knit.GetController("DataController")
+			end)
+			if mounted and okC and dataController then
+				dataController
+					:GetDataAsync()
+					:andThen(function(data)
+						if mounted and typeof(data) == "table" and data.StarterBundleClaimed == true then
+							setStarterClaimed(true)
+						end
+					end)
+					:catch(function() end)
+			end
+		end)
+		return function()
+			mounted = false
+		end
+	end, {})
+
 	local function onPurchaseEvent(item)
 		if item.Product ~= nil then
 			EventProducts.prompt(item.Product)
 		end
 	end
+
+	local function onPurchaseStarter(_item)
+		local id = ProductIds.StarterBundle
+		if id ~= nil then
+			MarketplaceService:PromptProductPurchase(Players.LocalPlayer, id)
+		end
+	end
+
+	local starterItems = {
+		{ Label = "Starter Bundle · 300 BB + 2 capsules", Price = starterPrice },
+	}
 
 	local bucksItems = {}
 	for i, pack in BOBA_BUCKS_PACKS do
@@ -144,6 +205,14 @@ return function()
 			end
 		end
 	end
+
+	local function onPurchaseNickname(_item)
+		NicknamePrompt.Open()
+	end
+
+	local nicknameItems = {
+		{ Label = "Change Nickname", Price = nicknamePrice },
+	}
 
 	return c("Frame", {
 		BackgroundTransparency = 1,
@@ -176,6 +245,15 @@ return function()
 				SortOrder = Enum.SortOrder.LayoutOrder,
 			}),
 
+			StarterBundle = if ProductIds.StarterBundle ~= nil and not starterClaimed
+				then c(ShopCategory, {
+					Title = "Starter Bundle",
+					Items = starterItems,
+					LayoutOrder = -1,
+					OnPurchase = onPurchaseStarter,
+				})
+				else nil,
+
 			BobaBucks = c(ShopCategory, {
 				Title = "Boba Bucks",
 				Items = bucksItems,
@@ -189,6 +267,15 @@ return function()
 					Items = eventItems,
 					LayoutOrder = 2,
 					OnPurchase = onPurchaseEvent,
+				})
+				else nil,
+
+			Roleplay = if ProductIds.ChangeNickname ~= nil
+				then c(ShopCategory, {
+					Title = "Roleplay",
+					Items = nicknameItems,
+					LayoutOrder = 3,
+					OnPurchase = onPurchaseNickname,
 				})
 				else nil,
 

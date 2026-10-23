@@ -50,7 +50,7 @@ return function(props: {
 			SortOrder = Enum.SortOrder.LayoutOrder,
 		},
 		Native = {
-			AnchorPoint = Vector2.new(0, 0.5),
+			AnchorPoint = Vector2.new(0, 0),
 			AutomaticSize = Enum.AutomaticSize.Y,
 			BackgroundTransparency = 1,
 			LayoutOrder = props.LayoutOrder,
@@ -58,33 +58,52 @@ return function(props: {
 		},
 	}, {
 		NameRow = c(Pane, {
-			ClassName = "TextLabel",
+			ClassName = "Frame",
+			ListLayout = {
+				FillDirection = Enum.FillDirection.Horizontal,
+				VerticalAlignment = Enum.VerticalAlignment.Center,
+				Padding = UDim.new(0, px(6)),
+				SortOrder = Enum.SortOrder.LayoutOrder,
+			},
 			Native = {
-				AnchorPoint = Vector2.new(0.5, 0),
+				AutomaticSize = Enum.AutomaticSize.Y,
 				BackgroundTransparency = 1,
-				FontFace = Styles.FONT_FREDOKA,
 				LayoutOrder = 1,
-				Position = UDim2.fromScale(0.40495, 0),
-				Size = UDim2.new(0.809899, 0, 0, px(30)),
-				Text = props.Name,
-				TextColor3 = Color3.new(),
-				TextScaled = true,
-				TextXAlignment = Enum.TextXAlignment.Left,
+				Size = UDim2.fromScale(1, 0),
 			},
 		}, {
+			Name = c(Pane, {
+				ClassName = "TextLabel",
+				Native = {
+					AutomaticSize = Enum.AutomaticSize.XY,
+					BackgroundTransparency = 1,
+					FontFace = Styles.FONT_FREDOKA,
+					LayoutOrder = 1,
+					Size = UDim2.fromOffset(0, px(24)),
+					Text = props.Name,
+					TextColor3 = Color3.new(),
+					TextSize = px(18),
+					TextTruncate = Enum.TextTruncate.AtEnd,
+					TextXAlignment = Enum.TextXAlignment.Left,
+					TextYAlignment = Enum.TextYAlignment.Center,
+				},
+			}, {
+				UISizeConstraint = c("UISizeConstraint", {
+					MaxSize = Vector2.new(px(220), math.huge),
+				}),
+			}),
+
 			Remove = props.OnRemove and c(Pane, {
 				ClassName = "ImageButton",
 				OnClick = props.OnRemove,
-				AspectRatio = 1,
 				Native = {
-					AnchorPoint = Vector2.new(0, 0),
-					AutoButtonColor = false,
+					AutoButtonColor = true,
 					BackgroundTransparency = 1,
 					Image = REMOVE_ICON,
-					ImageColor3 = Styles.GRAY,
-					Position = UDim2.fromScale(0.95, 0.18),
+					ImageColor3 = Styles.RED,
+					LayoutOrder = 2,
 					ScaleType = Enum.ScaleType.Fit,
-					Size = UDim2.fromScale(0.45, 0.45),
+					Size = UDim2.fromOffset(px(16), px(16)),
 				},
 			}) or nil,
 		}),

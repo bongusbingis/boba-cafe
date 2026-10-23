@@ -2,7 +2,7 @@
 
 This is the replication spec for every player-facing UI in the Rojo tree. It is derived from source, not from screenshots. Its job: an agent that has never seen the game UI can build a page, dialog, HUD element, toast or billboard that matches the existing ones, using only what already exists.
 
-Citation format: `U:` means `src/shared/UI/`. `client/` and `server/` mean `src/client/` and `src/server/`. Every rule carries `file:line` so it can be re-checked. Line numbers are as of commit `cbf5271` plus the uncommitted M1.5cd edits in `KitchenController.luau`, `AppDialogs.luau` and `SettingsConfig.luau`. Anything not determinable from source is marked `UNVERIFIED (source only)`.
+Citation format: `U:` means `src/shared/UI/`. `client/` and `server/` mean `src/client/` and `src/server/`. Every rule carries `file:line` so it can be re-checked. Line numbers were taken at commit `cbf5271`. **Partial refresh 2026-10-22** (working tree on `uhweifh`): sections 2.4, 3.6, 3.9, 3.10, 4.3, 4.4, 6 and 8 were re-checked against the current HUD. `Styles.luau` is unchanged since `cbf5271`, so section 1 still holds. Other `file:line` citations (pages, shop, ordering, section 9) may have drifted with the ~16k lines of UI added since; re-check a citation before relying on it. Anything not determinable from source is marked `UNVERIFIED (source only)`.
 
 ## 0. The governing rule
 
@@ -27,7 +27,7 @@ Do-not-copy list (exists in source but is not a model): `U:Pages/MobileOrder/ini
 | `GREEN` | 143,169,127 | **Primary brand.** Page/tab titles (`U:Pages/Shop/Currency.luau:49`, 21 uses), menu title banner (`U:Components/Core/OpenableMenu.luau:122`), purchase button fill (`U:Components/Buttons/PurchaseButton.luau:59`), ShopCategory item rows default (`U:Pages/Shop/ShopCategory.luau:118`), dialog title banners (`U:Components/Dialogs/ButtonPrompt.luau:131`), HUD top bar fill (`U:Components/Core/Hud/TopBar.luau:105,141`), order-ticket header (`U:Components/Core/Hud/OrderTicket.luau:243`), "Equipped" banner (`U:Pages/Inventory/InventoryComponent.luau:101`), submit/confirm buttons (`TextInputPrompt.luau:56`, `InventoryComponent.luau:218`), NPC bubble stroke and patience-full fill (`server/Modules/CustomerService/Npc.luau:159,187`). |
 | `GREEN_MID` | 138,173,125 | Clock In button when clocked out (`U:Components/Core/Hud/BottomLeft.luau:331`), promo Submit button (`U:Pages/Menu/PromoCodes.luau:18`). |
 | `GREEN_DEEP` | 99,129,91 | Selected-tab outline (`U:Components/Buttons/HudTabButton.luau:71`), order-ticket item name (`OrderTicket.luau:120`), promo body text (`PromoCodes.luau:16`), PromptSelection sub-text (`U:Components/Dialogs/PromptSelection.luau:421`), NPC bubble text (`Npc.luau:168`). |
-| `GREEN_LIGHT` | 150,189,136 | **Secondary brand.** Dialog description text (`ButtonPrompt.luau:93`), panel border tint (`OpenableMenu.luau:146`, `ButtonPrompt.luau:123`), inactive side-tab text (`OpenableMenu.luau:89`), SideButtons panel tint (`U:Components/SideButtons.luau:26`), Bucks button (`BottomLeft.luau:364`), settings category tint (`U:Pages/Menu/Settings.luau:29`), shop row header default (`ShopCategory.luau:135`), ShopItem default (`U:Components/Buttons/ShopItem.luau:32`), queue status text (`U:Components/Core/Hud/OrderQueue.luau:129`). |
+| `GREEN_LIGHT` | 150,189,136 | **Secondary brand.** Dialog description text (`ButtonPrompt.luau:93`), panel border tint (`OpenableMenu.luau:146`, `ButtonPrompt.luau:123`), inactive side-tab text (`OpenableMenu.luau:89`), SideButtons panel tint (`U:Components/SideButtons.luau:26`), Bucks button (`BottomLeft.luau:364`), settings category tint (`U:Pages/Menu/Settings.luau:29`), shop row header default (`ShopCategory.luau:135`), ShopItem default (`U:Components/Buttons/ShopItem.luau:32`), queue status text (`U:Components/Core/Hud/OrderQueue.luau:129` (deleted)). |
 | `GREEN_DIM` | 136,170,122 | Default `PromptButton` fill (`U:Components/Buttons/PromptButton.luau:21`), ActionPrompt stroke (`ActionPrompt.luau:134`), PromptSelection stroke and default choice fill (`PromptSelection.luau:19,376`), ordering Submit button (`U:Pages/Ordering/RightPanel.luau:193`), order-ticket outline (`OrderTicket.luau:231`). |
 | `GREEN_TEXT` | 159,189,140 | Defined (comment "topbar text labels") but **unused anywhere**. Do not use. |
 | `GREEN_BADGE` | 72,199,116 | "Best Value" banner (`U:Pages/Shop/RandomCosmeticsPurchase.luau:96`), promo success text (`PromoCodes.luau:122`). |
@@ -40,7 +40,7 @@ Do-not-copy list (exists in source but is not a model): `U:Pages/MobileOrder/ini
 | `GOLD_DEEP` | 188,132,0 | Celebrity tab text (`Shop/init.luau:38`), highlight outline (`KitchenController.luau:171`). |
 | `GOLD_BADGE` | 232,234,121 | Selected required-selection card outline (`U:Pages/Ordering/RequiredSelectionPage.luau:44`). |
 | `RED` | 255,87,90 | Close-button disc (`U:Components/Buttons/CloseButton.luau:68`), cancel/negative buttons (`InventoryComponent.luau:219`, `SizeOptionsPage.luau:282`), error text (`PromoCodes.luau:122`), NPC patience "Red" (`Npc.luau:202`). |
-| `CORAL` | 255,107,107 | Dismiss/leave buttons (`ActionPrompt.luau:92`, `OrderQueue.luau:138`), Points button (`BottomLeft.luau:352`), `NormalButton` border fallback (`NormalButton.luau:62`). |
+| `CORAL` | 255,107,107 | Dismiss/leave buttons (`ActionPrompt.luau:92`, `OrderQueue.luau:138` (deleted)), Points button (`BottomLeft.luau:352`), `NormalButton` border fallback (`NormalButton.luau:62`). |
 | `CREAM` | 253,240,190 | Only use: NPC order bubble background (`Npc.luau:150`). |
 | `GRAY` | 180,180,180 | Muted text (hints `Pets.luau:119`, empty states `Purchases.luau:88`, `PlayerSelectPage.luau:32`), separators (`OrderTicket.luau:186`), disabled button fill (`PromoCodes.luau:19`), text-input field fill (`TextInputPrompt.luau:41`), NPC patience track (`Npc.luau:177`). |
 | `OFFWHITE` | 250,250,250 | Light surfaces and stroke: dialog panels (`ActionPrompt.luau:140`, `PromptSelection.luau:381`), Staff Guide stroke (`Recipes/init.luau:71`), `NormalButton` stroke (`NormalButton.luau:46`), HUD label text (section 1.4). |
@@ -90,7 +90,7 @@ Text is `TextScaled = true` almost everywhere. Control the maximum with `Pane`'s
 | 20 | FlavorCard default (`FlavorCard.luau:58`), PlayerCard name (`PlayerCard.luau:121`) |
 | 24 | PromptButton label (`PromptButton.luau:74`), PromptSelection choice label (`PromptSelection.luau:212`) |
 | 25 | search box (`PlayerSelectPage.luau:88`), notepad (`Ordering/init.luau:409`), order description (`OrderItem.luau:110`) |
-| 26 | OrderQueue status (`OrderQueue.luau:120`) |
+| 26 | (was OrderQueue status; component deleted) |
 | 28 | ActionPrompt description (`ActionPrompt.luau:164`) |
 | 30 | ButtonPrompt and TextInputPrompt description (`ButtonPrompt.luau:85`, `TextInputPrompt.luau:105`) |
 | `px(18)` | ShopCategory sub-row text (`ShopCategory.luau:76`) |
@@ -163,7 +163,7 @@ There is no drop-shadow component. The only shadow is a duplicated, offset text 
 
 - App `ScreenGui`: `ZIndexBehavior = Sibling`, `ResetOnSpawn = false`, `IgnoreGuiInset = true`, default `DisplayOrder` (`client/Modules/App/AppEntry.luau:22-26`).
 - Dialog `ScreenGui` "Priority": `DisplayOrder = 100`, `ResetOnSpawn = false`; it sets neither `IgnoreGuiInset` nor `ZIndexBehavior` (`AppDialogs.luau:251-257`). Its holder frame has `ZIndex = math.huge` (`AppDialogs.luau:203`).
-- ZIndex values seen: 2 (14 uses, the default for label-over-fill, for example `ActionButton.luau:57`), 3, 4, 5 (close button, `CloseButton.luau:59`), 6, 10 (HUD ticket and queue, `OrderTicket.luau:227`, `OrderQueue.luau:83`; banner, `Banner.luau:28`), 11, and the PromptSelection block 50 (overlay), 60 (panel), 61-63 (content). Banner back image is `-2`, Darken overlay `-1`, shop image `0`.
+- ZIndex values seen: 2 (14 uses, the default for label-over-fill, for example `ActionButton.luau:57`), 3, 4, 5 (close button, `CloseButton.luau:59`), 6, 10 (HUD ticket and queue, `OrderTicket.luau:227`, `OrderQueue.luau:83` (deleted); banner, `Banner.luau:28`), 11, and the PromptSelection block 50 (overlay), 60 (panel), 61-63 (content). Banner back image is `-2`, Darken overlay `-1`, shop image `0`.
 - Rule: chrome behind content = 0 or negative; content = 2+; HUD overlays = 10; modal block = 50-63 inside the Priority gui.
 
 ### 1.11 Image assets (all `http://www.roblox.com/asset/?id=` unless noted)
@@ -200,8 +200,8 @@ Use `http://www.roblox.com/asset/?id=` for the existing chrome IDs (41 uses) and
 
 - **Scale first.** Size and position with `UDim2.fromScale` and `AspectRatio`, so a component keeps proportions at any resolution. Offsets are used only for fixed hairlines (`UDim2.new(1,0,0,1)` dividers, `OrderTicket.luau:188`), HUD fixed sizes (`BottomLeft.luau:258` button row 60 px high, `OrderTicket.luau:226` 190 px wide) and text insets.
 - **`UIScale` for animation, `Pane`'s `Scale` prop** (`Pane.luau:137-139`). Hover/press and open/close animate `UIScale`, not `Size`.
-- **`AspectRatio`** on the outer frame of anything with a fixed look: pages `OpenableMenu` 1.347 (`OpenableMenu.luau:111`), order queue and button prompt 2.23008 (`OrderQueue.luau:77`, `ButtonPrompt.luau:49`), action prompt 0.937 (`ActionPrompt.luau:110`), staff guide 0.75 (`Recipes/init.luau:68`), ordering terminal 1.53648 (`Ordering/init.luau:432`), NormalButton wrapper 7 (`NormalButton.luau:32`), HUD top bar 6.5443 and 11.5077 (`TopBar.luau:98,137`), all round things 1.
-- **`UISizeConstraint`** for HUD/dialog min and max pixel sizes: top bar 390-590 wide (`TopBar.luau:188-191`), order queue 210-330 x 105-165 (`OrderQueue.luau:86-89`), button/text prompt 200-440 wide, min height 122 (`ButtonPrompt.luau:57-60`), action prompt 200-380 wide, min height 180 (`ActionPrompt.luau:118-121`).
+- **`AspectRatio`** on the outer frame of anything with a fixed look: pages `OpenableMenu` 1.347 (`OpenableMenu.luau:111`), button prompt 2.23008 (`ButtonPrompt.luau:49`), cafe rating 5 (`CafeRating.luau:235`), shift card 1.2 (`ShiftCard.luau:238`), action prompt 0.937 (`ActionPrompt.luau:110`), staff guide 0.75 (`Recipes/init.luau:68`), ordering terminal 1.53648 (`Ordering/init.luau:432`), NormalButton wrapper 7 (`NormalButton.luau:32`), HUD top bar 6.5443 and 11.5077 (`TopBar.luau:98,137`), all round things 1.
+- **`UISizeConstraint`** for HUD/dialog min and max pixel sizes: top bar 390-590 wide (`TopBar.luau:188-191`), cafe rating 260-440 x 38-60 (`CafeRating.luau:245-247`), button/text prompt 200-440 wide, min height 122 (`ButtonPrompt.luau:57-60`), action prompt 200-380 wide, min height 180 (`ActionPrompt.luau:118-121`).
 - **`usePx`** (`U:Hooks/usePx.luau`) for pixel values that must grow with the screen. Reference resolution 1280x832 (`usePx.luau:7`), scale = geometric mean of both axes (`DOMINANT_AXIS 0.5`, line 35), floored at `MIN_SCALE 0.75` (line 34), debounced 0.2 s on viewport change (lines 64-67). API: `px(n)` rounds, `px.even`, `px.floor`, `px.ceil`, `px.scale` (lines 74-93). Use it for pixel-based heights and gaps, as `ActionPrompt.luau:80` (`px(BUTTON_HEIGHT)`, `BUTTON_HEIGHT = 50`), `Settings.luau:36-40`, `ShopCategory.luau:36`, `Ordering/init.luau:298` (`usePx()(125)` card size).
 
 ### 2.2 Device handling
@@ -223,11 +223,13 @@ Use `http://www.roblox.com/asset/?id=` for the existing chrome IDs (41 uses) and
 | Page (and Page-wrapped dialogs) | anchor (0.5,0.5), pos (0.5,0.5) | Frame `fromScale(0.8,0.8)` with `UIScale 0.8` at rest (effective 0.64 of the screen, derived) | `Page.luau:70-77`, `Page.luau:24-27` |
 | HUD root | anchor (0.5,0.5) | (1,1) | `Hud/init.luau:24-29` |
 | Top bar | anchor (0.5,0), pos (0.5,-0.001) | (0.377911,0.106612), aspect 6.5443, 390-590 px | `TopBar.luau:92-98,188-191` |
-| Bottom left stack | anchor (0,1), pos (10 px, 0.985) | width 0.3, auto height | `BottomLeft.luau:224-232` |
-| Bottom right | anchor (1,1), pos (0.981,0.981) | (0.175,0.3); currently empty | `BottomRight.luau:40-45` |
-| Order ticket | anchor (1,1), pos (0.99,0.92) | 190 px wide, auto height | `OrderTicket.luau:219-228` |
-| Order queue | anchor (0.5,1), pos (0.5,0.92) | (0.265,0.175), aspect 2.23008 | `OrderQueue.luau:75-84` |
-| Toast | inside bottom-left currency column, LayoutOrder -6 | full column width, height springs 0 to 135 px | `SmallNotification.luau:184-194`, `BottomLeft.luau:306-319` |
+| Cafe rating meter | anchor (0.5,0), pos (0.5,0.108) under the top bar | (0.3,0.08), aspect 5, 260-440 x 38-60 px | `CafeRating.luau:235-247` |
+| Bottom left stack | anchor (0,1), pos (10 px, 0.985) | width 0.3, auto height | `BottomLeft.luau:318-319` |
+| Bottom right (Quests button) | anchor (1,1), pos (0.981 - 196 px, 0.981); the 196 px clears the mobile jump button | aspect 7 | `BottomRight.luau:34,99-107` |
+| Ticket column (OrderTicket x2) | anchor (1,1), pos (0.99,0.65); grows upward | 190 px x `px.scale`, auto height, ZIndex 10 | `Hud/init.luau:24,74-110` |
+| Shift card | anchor (1,0), pos (0.99,0.14) | aspect 1.2 | `ShiftCard.luau:238-249` |
+| Toast | inside the bottom-left column (`Notification`, above the buttons) | full column width | `BottomLeft.luau:410` |
+| Quest card, level-up, paycheck, event intro | centred overlays (quest card ZIndex 20, last sibling) | see 3.6 | `Hud/init.luau:111-125` |
 | Dialogs (button/text) | pos (0.5 + OffsetX, 0.5) | (0.6,0.4), aspect 2.23 | `ButtonPrompt.luau:47-55` |
 | Dialog (action) | pos (0.5 + OffsetX, 0.5 - yOffset/1000) | (0.65,0.65), aspect 0.937 | `ActionPrompt.luau:106-116` |
 
@@ -403,14 +405,19 @@ Queue behaviour: one dialog on screen at a time, FIFO (`AppDialogs.luau:171-199`
 
 ### 3.6 HUD pieces (`U:Components/Core/Hud/`)
 
-Section 6 lists the composition; summary:
+Mounted by `Hud/init.luau` in this order: `TopBar`, `BottomLeft`, ticket column, `ShiftCard`, `CafeRating`, `EventIntro`, `QuestCard` (only while open), `LevelUpCelebration`, `PaycheckCard`. `OrderQueue` was **deleted**; do not model on it.
 
-- **`TopBar`**: time pod (shows literal "12:34 PM", `TopBar.luau:128`; `UNVERIFIED (source only)` whether the time updates, no code updates it) plus three `HudTabButton`s Shop, Menu, Inventory in a `GREEN` base with `OFFWHITE` border (lines 100-185). Also creates the register `ProximityPrompt`s (`ObjectText "Register"`, `ActionText "Use Ordering System"`, `UIOffset (0,25)`, `HoldDuration 0`, lines 66-82).
-- **`BottomLeft`**: bottom-aligned column; `CurrencyPanel` with `NormalButton`s in LayoutOrder: shift timer (admins) 0, Clock In/Out 1, Staff Guide 2, Points 3, Bucks 4, with the toast above (lines 306-371). Optional capsule hatch image button with a countdown (lines 269-304).
-- **`BottomRight`**: empty container, reserved.
-- **`OrderQueue`**: panel + border + `Banner` "Order Queue" + status line + `PromptButton` "Leave Queue" (`CORAL`).
-- **`OrderTicket`**: prototype, see 6.6.
-- **`SmallNotification`**: toast, see 7.
+- **`TopBar`**: time pod (literal "12:34 PM", `TopBar.luau:82`, still static) plus `HudTabButton`s Shop 0, Menu 1, Inventory 2 (lines 120-137). The register `ProximityPrompt` code is no longer here.
+- **`CafeRating`**: meter under the top bar; reads the `CafeRating` and `RushHour` workspace attributes; hidden until clocked in. Tapping it (or its plus badge) opens the event-choice dialog with live prices. Track / Fill / Banner look.
+- **`LevelBar`**: level/XP pill at the top of the bottom-left stack (LayoutOrder -1); copies CafeRating's Track / Fill / Banner look. `LevelBar.Flash()` flashes it; it plays the level-up sound.
+- **`BottomLeft`**: bottom-aligned column: `LevelBar`, toast, then `NormalButton`s Shift `n/target` (when clocked in), Clock In / Clock Out (Clock Out confirms with a `GOLD_MID` "Clock Out" and `RED` "Cancel", lines 176-177), Recipe Book, Invite Friends, Boba Bucks, and a "Show More" / "Show Less" collapse toggle. Capsule hatch button with countdown remains.
+- **`BottomRight`**: a `NormalButton` "Quests" with the claim dot (`useQuestClaimable`), offset left of the jump button (DEC-057).
+- **`OrderTicket`** x2 stacked in a `Pane` with `Scale = px.scale`: see 6.6. Hosts **`RecipeCard`** (step list: done/current/pending rows, Wrong and Close problem states, cup viewport, patience bar, "Shift n" prefix).
+- **`ShiftCard`**: end-of-shift summary card, top right; appears on `ShiftService.ShiftEnded`, removes itself after `summary.Seconds`. No overlay, no buttons, never takes input.
+- **`PaycheckCard`**: centred paycheck popup (ported art, `PaycheckArt`); queues `ShiftService.Paycheck` payloads; never blocks input.
+- **`QuestCard`**: daily/weekly quests on a centred Page-like card: progress bars, reward pills, Claim and Reroll buttons, its own X.
+- **`LevelUpCelebration`** / **`EventIntro`**: the celebration pattern: rotating `GOLD` spotlight, big `Banner` ("LEVEL UP!" / event name) pops in under the top bar, confetti burst, pops away on its own. Nothing to dismiss, so play never stops. Reuse this for any new celebration; do not invent another.
+- **`SmallNotification`**: toast, see 4.4.
 
 ### 3.7 Decoration
 
@@ -430,16 +437,21 @@ Section 6 lists the composition; summary:
 
 ### 3.9 Hooks and utilities
 
-`usePx` (2.1), `useCamera` (current camera), `useEventListener(event, listener, options)`, `usePrevious`, `useLatest`, `Hooks/useClock` (a React **binding** that advances each `PostSimulation`; use with `:map`, as `BackgroundSpotlight.luau:33-47`), `Utility/useClock` (returns a number and re-renders every Heartbeat; used only by `ItemCard.luau:331` and the unreferenced `_Featured`), `joinDicts`, `nextOrderFunctionFactory`, `sizeFromAutomaticSize`, `getScrollVisibleRange`, `mapItemDefsToInventory` (story/preview data).
+`usePx` (2.1), `useCamera` (current camera), `useEventListener(event, listener, options)`, `usePrevious`, `useLatest`, `Hooks/useClock` (a React **binding** that advances each `PostSimulation`; use with `:map`, as `BackgroundSpotlight.luau:33-47`), `Utility/useClock` (returns a number and re-renders every Heartbeat; used only by `ItemCard.luau:331` and the unreferenced `_Featured`), `joinDicts`, `nextOrderFunctionFactory`, `sizeFromAutomaticSize`, `getScrollVisibleRange`, `mapItemDefsToInventory` (story/preview data), `useQuestClaimable` (true while a quest is claimable; drives claim dots).
+
+Upsell utilities (`U:Utility/`) are the only sanctioned purchase entry points outside the shop pages. A purchase prompt only ever opens from a visible, labelled button the player pressed:
+- `BobaBucksShortfall`: the "you cannot afford that" dead end. Shows a `ButtonPrompt` whose "Get Boba Bucks" button opens Shop > Currency.
+- `PassUpsell`: contextual gamepass offers; if the price cannot be fetched the offer is not shown. Ownership resolves through `Configuration/PassCatalog` + `GamepassUtil`.
 
 ### 3.10 Sounds
 
-UI sounds come from instances authored in the place (not in Rojo): `SoundService.SFX.UI.<name>` else `SoundService.UISounds.<name>`; a missing sound is skipped silently (`AppDialogs.luau:34-42`, `ActionPrompt.luau:22-30`).
+UI sounds are instances authored in the place (not in Rojo). Play them through **`U:Utility/UiSfx.luau`**: it looks up `SoundService.SFX.UI.<Name>` else `SoundService.UISounds.<Name>`, plays a clone so cues overlap, rate-limits repeats, and skips silently (one warn per name) when missing. It never creates sound assets.
 
-- `Pop1` plays when a dialog is fired/rendered (`AppDialogs.luau:217`; also `ActionPrompt.luau:71`, once per render).
-- `Pop2` plays when a dialog resolves (`AppDialogs.luau:222`, `ActionPrompt.luau:67`).
-- Nothing else makes a sound: buttons, pages and toasts are silent. The page "woosh" and toast sound are commented out (`Page.luau:55`, `SmallNotification.luau:138-143`). `Notification.SoundEnabled` is accepted but unused.
-- Spill sounds use `SoundService.SFX.<name>` (`client/Modules/SpillController.lua:50-56`).
+- Known cues (`UiSfx.luau` `VOLUME` table): `Serve`, `StepDone` and `StepDone_Pour/_Scoop/_Machine/_Blender/_Grab`, `Rush`, `SuperSuccess`, `LevelUp`, `Success`, `Pop1`. Step cues pitch up per combo step (1.0 to 1.25 in 0.05 steps); combo milestones at 3, 5, 10.
+- Dialogs still play `Pop1` on fire and `Pop2` on resolve (`AppDialogs.luau`, `ActionPrompt.luau`).
+- Toast sounds are picked per toast (`SmallNotification.soundFor`); the level-up card is silent because `LevelBar` plays the sound.
+- Music and fanfares belong to `client/Modules/MusicController.luau`, not UI components.
+- A new cue name needs the sound authored in the place (Rigger lease) and Jack's approval.
 
 ---
 
@@ -470,14 +482,14 @@ To add a dialog type (needs approval for any new look): copy `ButtonPrompt.luau`
 
 Panel bodies: description `GREEN_LIGHT`, scaled, RichText, max 28-30; buttons `PromptButton`; title `Banner` in `GREEN`.
 
-### 4.3 A HUD element (model: OrderQueue; layout rules from TopBar/BottomLeft)
+### 4.3 A HUD element (model: ShiftCard / CafeRating; layout rules from TopBar/BottomLeft)
 
 1. File in `U:Components/Core/Hud/<Name>.luau`, function component, header comment, `--!nonstrict` if it talks to Knit.
-2. Subscribe in `React.useEffect` guarded by `RunService:IsRunning()` so stories render; snapshot current controller state on mount, connect signals, disconnect in the cleanup (`OrderQueue.luau:51-66`).
-3. Return `nil` when there is nothing to show (`OrderQueue.luau:68-71`).
-4. Anchor to an edge and size by scale + `AspectRatio` + `UISizeConstraint` (`OrderQueue.luau:75-89`). `ZIndex = 10` for overlay-style pieces.
-5. Build the surface with the 9-slice panel + border + `Banner` title when it is a titled card (`OrderQueue.luau:91-165`), or a `NormalButton` row when it is a button.
-6. Mount it as a child of `Hud/init.luau` (`Hud/init.luau:46-47`).
+2. Subscribe in `React.useEffect` guarded by `RunService:IsRunning()` so stories render; snapshot current controller state on mount, connect signals, disconnect in the cleanup (`ShiftCard.luau`, `CafeRating.luau`).
+3. Return `nil` when there is nothing to show.
+4. Anchor to an edge and size by scale + `AspectRatio` + `UISizeConstraint` (`CafeRating.luau:235-247`). `ZIndex = 10` for overlay-style pieces.
+5. Build the surface with the 9-slice panel + border + `Banner` title when it is a titled card, or a `NormalButton` row when it is a button.
+6. Mount it as a child of `Hud/init.luau` (`Hud/init.luau:61-126`). Payload-driven overlays stay always mounted and render nothing when idle (`LevelUp`, `Paycheck`, `EventIntro`).
 7. Do not occupy a corner another piece already uses (2.4); stop and ask if there is no free zone.
 
 ### 4.4 A toast / notification
@@ -488,7 +500,9 @@ Push with the existing API only (no new toast visual):
 - Direct: `SmallNotification.Push({ Text = "...", Image = "rbxassetid://..."? })` (`SmallNotification.luau:76-78`).
 - From server: `DialogService:Notify(player, notification)` forwards to the same `Push`.
 
-Behaviour: panel springs open from 0 to 135 px with `{mass 1, tension 280, friction 35}`, waits 0.8 s, fades text in, holds 5 s, fades out, waits 0.35 s, closes, waits 0.9 s; a new push while a toast shows is queued (cap 3, oldest hint dropped first) and shown next; the hold is 2 s while others are waiting; hints skip their turn while a toast is active/queued or within 20 s of a gameplay toast (`SmallNotification.luau`, `HOLD_BUSY`, `HINT_QUIET_SECONDS`). Panel is the 9-slice image, inner tinted border `Color3.fromRGB(124,103,89)`, icon `Fit` aspect 1 size (0.55,0.55), centred `OFFWHITE` Fredoka text (lines 197-246). Rotating hint toasts post every 60 s (lines 99-113).
+Behaviour (current; the `SmallNotification.luau` header is the authority): toasts slide in, fade content in, hold 5 s, slide out. Optional `Priority` (1 high .. 5 low, else inferred from text); queue ordered by tier, FIFO within a tier, max 3; when full the oldest lowest-tier toast drops; tier 1 (level up, quest complete/claimed, first order) never drops. Duplicate text is ignored, a new "Order served!" replaces a queued one, and corrective toasts (wrong drink, wrong station, Clock In, or `Corrective = true`) replace the active one at once. Hints never interrupt gameplay toasts.
+
+Older notes (may be stale): panel springs open from 0 to 135 px with `{mass 1, tension 280, friction 35}`, waits 0.8 s, fades text in, holds 5 s, fades out, waits 0.35 s, closes, waits 0.9 s; a new push while a toast shows is queued (cap 3, oldest hint dropped first) and shown next; the hold is 2 s while others are waiting; hints skip their turn while a toast is active/queued or within 20 s of a gameplay toast (`SmallNotification.luau`, `HOLD_BUSY`, `HINT_QUIET_SECONDS`). Panel is the 9-slice image, inner tinted border `Color3.fromRGB(124,103,89)`, icon `Fit` aspect 1 size (0.55,0.55), centred `OFFWHITE` Fredoka text (lines 197-246). Rotating hint toasts post every 60 s (lines 99-113).
 
 **Payload (now normalised):** `Push` builds `Text` from `Title`/`Description` when `Text` is missing (joined with a space after `! ? . :`, else `": "`). The component renders only `Text` (and optional `Image`). Callers that send `Title` and `Description` (`Ordering/init.luau:284-287`, `server/Scripts/PromoCodes.server.luau:172`, `server/Modules/SpillService/Spill.luau:244-247`) produce an empty label. Send `Text`. See 9.8.
 
@@ -540,16 +554,16 @@ Press feedback (scale, the pair is press / hover): see the table in 9.5. Rules f
 ## 6. HUD composition (what exists today, for the coming UI)
 
 ### 6.1 Zones in use
-Top centre: time pod and tabs. Bottom left: currency/shift/guide stack and the toast above it. Right-centre-low: order ticket (pos (0.99,0.92), anchored bottom-right). Bottom centre (y 0.92): order queue. Bottom right: reserved, empty. The earlier design target "ticket and card top-left, toasts top-centre" (`.review/.../M1.2/design.md:153`) is a plan, not the code; the code puts toasts at bottom-left and the ticket on the right. Any new element in a different zone needs approval.
+Top centre: time pod and tabs, cafe rating meter under them; event intro and level-up banners pop under the top bar. Bottom left: level bar, toast and button stack. Right: shift card top-right (0.99,0.14), ticket column middle-right (bottom edge at y 0.65). Bottom right: Quests button, kept 196 px clear of the jump button. Centre: quest card and paycheck popups. Bottom centre is free (order queue removed). The earlier design target "ticket and card top-left, toasts top-centre" (`.review/.../M1.2/design.md:153`) is a plan, not the code; the code puts toasts at bottom-left and the ticket on the right. Any new element in a different zone needs approval.
 
-### 6.2 Top bar, 6.3 bottom-left, 6.4 queue
+### 6.2 Top bar, 6.3 bottom-left, 6.4 bottom-right
 See 3.6 and the line ranges there.
 
 ### 6.5 Toast
 See 4.4.
 
 ### 6.6 Order ticket (`U:Components/Core/Hud/OrderTicket.luau`)
-Declared "Prototype HUD overlay ... Intentionally unstyled — use plain colours only so this can be skinned later" (header, line 6). It is the one HUD piece built from raw `Frame`/`TextLabel` instances with pixel sizes and fixed `TextSize`, not `Pane`. Structure as it stands:
+Now two stacked tickets (`slot` 1 and 2) in the `Hud/init` ticket column, scaled with `px.scale`, hosting `RecipeCard`. The file was largely rewritten, so the line numbers below are stale; the primitives rule still applies. Declared "Prototype HUD overlay ... Intentionally unstyled — use plain colours only so this can be skinned later" (header, line 6). It is the one HUD piece built from raw `Frame`/`TextLabel` instances with pixel sizes and fixed `TextSize`, not `Pane`. Structure as it stands:
 
 - Card: anchor (1,1), pos (0.99,0.92), width 190 px, `AutomaticSize Y`, `BackgroundColor3 Color3.fromRGB(245,245,245)`, radius 6 px, `GREEN_DIM` stroke 1, ZIndex 10, vertical list (lines 219-238).
 - Header: height 28, `GREEN` fill, radius 6 with a 6 px bottom blocker to square the bottom, text "Order Ticket" `OFFWHITE` `TextSize 15` (lines 241-264).
@@ -563,7 +577,7 @@ Declared "Prototype HUD overlay ... Intentionally unstyled — use plain colours
 
 ## 7. Copy
 
-- **Casing.** Titles, buttons, tabs, banners and prompt text are Title Case: "Order Ticket", "Order Queue", "Staff Guide", "Clock In", "Clock Out", "Leave Queue", "Add to Order", "Promo Codes", "Food Menu", "Server Info" (`BottomLeft.luau:332,339`, `OrderQueue.luau:137`, `SizeOptionsPage.luau:260`, `Menu/init.luau:32-81`). Status and hint lines are sentence case: "You're next!", "Order full (3/3)", "No purchases found.", "Loading purchases..." (`OrderQueue.luau:40`, `SizeOptionsPage.luau:274`, `Purchases.luau:88,98`).
+- **Casing.** Titles, buttons, tabs, banners and prompt text are Title Case: "Order Ticket", "Order Queue", "Staff Guide", "Clock In", "Clock Out", "Leave Queue", "Add to Order", "Promo Codes", "Food Menu", "Server Info" (`BottomLeft.luau:332,339`, `OrderQueue.luau:137` (deleted), `SizeOptionsPage.luau:260`, `Menu/init.luau:32-81`). Status and hint lines are sentence case: "You're next!", "Order full (3/3)", "No purchases found.", "Loading purchases..." (`OrderQueue.luau:40` (deleted), `SizeOptionsPage.luau:274`, `Purchases.luau:88,98`).
 - **Button verbs.** Plain action verbs: Submit, Cancel, Close, Sell, Rename, Equip, Unequip, Hatch, Open, Yes, No. Cancel/negative on the right and red or coral. Confirm buttons say the action ("Sell"), not "OK".
 - **Tone.** Short, friendly, functional. Hints end with a period or exclamation (`Pets.luau:118`, `SmallNotification.luau:42-60`). Errors say what to do next: "Please wait before placing another order.", "You already have an order in progress." (`OrderService.luau:816,847`). Capsule hint: "Your capsule is ready to be hatched!\nClick to open." (`CapsuleOpening.luau:208`).
 - **Sentence templates.** Rename help: "Enter a new name. Leave blank to reset. Max %d characters." (`InventoryComponent.luau:236-239`). Confirm: "Sell |name| for [N Boba Bucks]?" (line 216).
@@ -636,7 +650,7 @@ Counts are from the whole `src` tree as of the commit above. "Replicate" names t
 - Scroll area geometry: `(0,0.112)/(1,0.888)` list pages (`Currency:58-62`, `Purchases:132-136`); `(0,0.112)/(1.02,0.888)` grid pages (6 files); `(0,0.148)/(1,0.852)` `FoodMenu:160-164`; `(0,0.1)/(1,0.9)` `PromoCodes`, `Settings:526-540`; whole-page scroller `Pets`, `RandomCosmeticsPurchase`. Replicate by page type: list = first, grid = second.
 - Close button: component `CloseButton` (pos (0.98077,0.147523), animated) used by `OpenableMenu`; inline re-implementation with a different position (0.936353,-0.0389084), size (0.094,0.144) and no animation at `Ordering/init.luau:569-608`. Replicate the component.
 - Dialog chrome: image panel (`ButtonPrompt`, `TextInputPrompt`, `OrderQueue`, 3) vs plain `OFFWHITE` frame with stroke (`ActionPrompt` stroke 5, `PromptSelection` stroke 4, 2). Replicate: image panel for confirm/text prompts and titled cards, plain frame for action lists and pickers.
-- Banner size in panels: height 0.371931 (`ButtonPrompt:132`, `OrderQueue:163`), 0.35 (`TextInputPrompt:151`), 0.15 (`ActionPrompt:127`). Replicate per parent.
+- Banner size in panels: height 0.371931 (`ButtonPrompt:132`, `OrderQueue:163` (deleted)), 0.35 (`TextInputPrompt:151`), 0.15 (`ActionPrompt:127`). Replicate per parent.
 - Spinner and `easeInOutBack`: duplicated in `InventoryComponent:329-343` and `Settings:25-47`.
 - Unique customisation line helper duplicated 5 times (`OrderTicket:50`, `Ordering/init:52`, `MobileOrder:54`, `Stories/Ordering:40`, `OrderItem` consumer).
 

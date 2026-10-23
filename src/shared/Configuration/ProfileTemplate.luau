@@ -54,6 +54,15 @@ export type DailyRewardData = {
 	LastClaimTime: number,
 }
 
+-- Active kitchen/clock-in timeout from the timeout moderation command.
+-- false = none (kept non-nil so Reconcile fills it on old profiles).
+export type TimeoutData = {
+	Reason: string,
+	IssuedBy: string,
+	IssuedAt: number, -- os.time() when issued
+	ExpiresAt: number, -- os.time() when it lifts
+}
+
 export type QuestEntry = {
 	Id: string,
 	Type: string,
@@ -80,6 +89,21 @@ export type WeeklyQuestData = {
 export type RegularsData = {
 	Visits: { [string]: number },
 	RewardClaimed: boolean,
+}
+
+-- SEASON-PASS: per-season pass state. Reset (forfeited) on season rollover.
+export type SeasonPassData = {
+	SeasonId: number,
+	Xp: number,
+	Premium: boolean,
+	ClaimedTiers: { [number]: boolean | string },
+}
+
+export type ModerationAction = {
+	Timestamp: number,
+	Reason: string,
+	IssuedBy: string,
+	Type: string,
 }
 
 export type ProfileTemplate = {
@@ -130,6 +154,12 @@ export type ProfileTemplate = {
 	-- BIG-B5: serves per regular id (RegularsConfig.ROSTER); a key present = stamped.
 	-- RewardClaimed is set once when every regular is stamped. Written only by RegularsService.
 	Regulars: RegularsData,
+	ActionLog: { ModerationAction },
+	-- Active timeout record, or false when the player has none.
+	Timeout: TimeoutData | false,
+	-- SEASON-PASS (additive; reconcile fills old profiles).
+	SeasonPass: SeasonPassData,
+	StarterBundleClaimed: boolean,
 }
 
 return {
@@ -211,4 +241,13 @@ return {
 		Visits = {},
 		RewardClaimed = false,
 	},
+	ActionLog = {},
+	Timeout = false,
+	SeasonPass = {
+		SeasonId = 0,
+		Xp = 0,
+		Premium = false,
+		ClaimedTiers = {},
+	},
+	StarterBundleClaimed = false,
 }

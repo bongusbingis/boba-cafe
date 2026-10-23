@@ -291,7 +291,13 @@ Knit.OnStart():andThen(function()
 	local CosmeticsService = Knit.GetService("CosmeticsService")
 
 	CosmeticsService:GetAllPlayerCosmeticsAsync():andThen(function(snapshot)
-		cosmetics = snapshot
+		cosmetics = {}
+		if typeof(snapshot) == "table" then
+			for rawId, data in snapshot do
+				local id = tonumber(rawId) or rawId
+				cosmetics[id] = data
+			end
+		end
 
 		for _, player in Players:GetPlayers() do
 			playerAdded(player)

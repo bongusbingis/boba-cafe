@@ -221,9 +221,24 @@ function ShiftService:_checkEnd(player: Player, state: ShiftState)
 	end
 	local customers = self._customers
 	if customers ~= nil and customers:HasTicket(player) then
-		return -- wait: the next CustomerResolved re-checks
+		return -- wait: the next CustomerResolved or ticket clear (Recheck) re-checks
 	end
 	self:_endShift(player, state)
+end
+
+-- True once the shift hit its target and is only waiting for open tickets to drain.
+-- CustomerService stops handing such a barista new NPC orders so the shift can end.
+function ShiftService:IsWrappingUp(player: Player): boolean
+	local state = self._states[player]
+	return state ~= nil and state.Loaded and state.Resolved >= state.Target
+end
+
+-- CustomerService calls this (deferred) after a ticket clears; ends a due shift.
+function ShiftService:Recheck(player: Player)
+	local state = self._states[player]
+	if state ~= nil then
+		self:_checkEnd(player, state)
+	end
 end
 
 function ShiftService:_endShift(player: Player, state: ShiftState)
@@ -286,7 +301,7 @@ function ShiftService:_endShift(player: Player, state: ShiftState)
 	local streak = if state.Served > 0 then (self._streaks[player] or 0) + 1 else 0
 	self._streaks[player] = streak
 	local streakBonus = 0
-	if streak % ShiftConfig.STREAK_LENGTH == 0 then
+	if streak > 0 and streak % ShiftConfig.STREAK_LENGTH == 0 then
 		streakBonus = ShiftConfig.STREAK_BONUS_BB
 	end
 	summary.ShiftStreak = streak
@@ -298,6 +313,13 @@ function ShiftService:_endShift(player: Player, state: ShiftState)
 	end
 	pcall(function()
 		Knit.GetService("StatisticsService"):IncrementStat(player, "ShiftsCompleted")
+		local a = Knit.GetService("AnalyticsEvents")
+		if first then
+			a:OnboardingFunnel(player, 6, "FirstShiftCompleted")
+			a:Funnel(player, 6, "FirstShiftCompleted")
+		end
+		a:ProgressionComplete(player, "Shift", state.Completed + 1, `Shift {state.Completed + 1}`)
+		a:Custom(player, "ShiftCompleted", state.Served)
 	end)
 	-- Spawned: AdvanceQuest awaits the profile (and a pass lookup on rollover); the card must not wait.
 	task.spawn(function()
@@ -423,6 +445,7 @@ function ShiftService:SetClockedIn(player: Player, clockedIn: boolean)
 			-- Resume where the barista left off (progress, stars and bests intact).
 			self._states[player] = paused
 			self:_publish(player, paused)
+			self:_checkEnd(player, paused)
 		else
 			self:_beginShift(player)
 		end
@@ -435,7 +458,11 @@ function ShiftService:SetClockedIn(player: Player, clockedIn: boolean)
 	self.ClockedInChanged:Fire(player, clockedIn)
 	if clockedIn then
 		pcall(function()
-			Knit.GetService("AnalyticsEvents"):Funnel(player, 2, "ClockedIn")
+			local a = Knit.GetService("AnalyticsEvents")
+			a:OnboardingFunnel(player, 2, "ClockedIn")
+			a:Funnel(player, 2, "ClockedIn")
+			local shiftNum = if self._states[player] then self._states[player].Completed + 1 else 1
+			a:ProgressionStart(player, "Shift", shiftNum, `Shift {shiftNum}`)
 		end)
 	end
 end
@@ -479,6 +506,21 @@ end
 function ShiftService.Client:SetClockedIn(player: Player, clockedIn: any): SetClockedInResult
 	if typeof(clockedIn) ~= "boolean" then
 		return { Success = false, Message = "Invalid request." }
+	end
+
+	-- Timed-out players stay clocked out (moderation timeout command). The whole
+	-- lookup is guarded: clock-in must fail open, never hard-fail.
+	if clockedIn then
+		local ok, timedOut, message = pcall(function()
+			local moderationService = Knit.GetService("ModerationService")
+			if moderationService == nil then
+				return false
+			end
+			return moderationService:IsTimedOut(player)
+		end)
+		if ok and timedOut then
+			return { Success = false, Message = message or "You are timed out." }
+		end
 	end
 
 	local server = self.Server

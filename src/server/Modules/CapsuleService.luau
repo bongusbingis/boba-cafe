@@ -12,6 +12,7 @@ local Knit = require(Packages.Knit)
 local CapsuleConfig = require(Shared.Configuration.CapsuleConfig)
 local CapsuleUtil = require(Shared.Inventory.CapsuleUtil)
 local InventoryItemDefinitions = require(Shared.Configuration.InventoryItemDefinitions)
+local SeasonConfig = require(Shared.Configuration.SeasonConfig)
 
 local HATCH_DURATION = CapsuleConfig.PET_HATCH_DURATION
 local DEFAULT_CAPSULE_IMAGE = "rbxassetid://6073658218"
@@ -305,6 +306,10 @@ function CapsuleService:PurchaseNametagCapsules(player: Player, packSize: number
 			local refunded = refundBobaBucks(player, pack.Cost)
 			return false, if refunded then "GrantFailed" else "RefundPending"
 		end
+		pcall(function()
+			local a = Knit.GetService("AnalyticsEvents")
+			a:Custom(player, "CapsulePurchased", pack.Count)
+		end)
 		return true
 	end)
 end
@@ -363,6 +368,10 @@ function CapsuleService:PurchasePetCapsule(player: Player, capsuleName: string):
 			local refunded = refundBobaBucks(player, price)
 			return false, if refunded then "GrantFailed" else "RefundPending"
 		end
+		pcall(function()
+			local a = Knit.GetService("AnalyticsEvents")
+			a:Custom(player, "CapsulePurchased", 1)
+		end)
 		return true
 	end)
 end
@@ -496,6 +505,10 @@ function CapsuleService:PurchaseParticle(player: Player, particleName: string): 
 			local refunded = refundBobaBucks(player, price)
 			return false, if refunded then "GrantFailed" else "RefundPending"
 		end
+		pcall(function()
+			local a = Knit.GetService("AnalyticsEvents")
+			a:Custom(player, "CapsulePurchased", 1)
+		end)
 		return true
 	end)
 end
@@ -516,10 +529,28 @@ local function resolveCapsuleMinTier(capsuleName: string, capsuleDef: any): stri
 	return nil
 end
 
--- Seconds this player has been online in the current session.
+-- SEASON-PASS: HatchSpeed perk multiplier (sync cache read, fails closed to
+-- 1). Scales session seconds at read/write time; stored TimeAccumulated
+-- stays in raw seconds plus boosted session deltas.
+local function hatchMultiplier(player: Player): number
+	local ok, result = pcall(function()
+		local season = Knit.GetService("SeasonPassService")
+		if season and season.HasPerk and season:HasPerk(player, "HatchSpeed") == true then
+			return SeasonConfig.HATCH_SPEED_MULT
+		end
+		return 1
+	end)
+	if ok and typeof(result) == "number" then
+		return result
+	end
+	return 1
+end
+
+-- Seconds this player has been online in the current session (HatchSpeed-scaled).
 local function currentSessionElapsed(player: Player): number
 	local start = sessionStarts[player.UserId]
-	return start and (os.time() - start) or 0
+	local raw = start and (os.time() - start) or 0
+	return raw * hatchMultiplier(player)
 end
 
 -- Checks all pending hatches for the player and completes any whose total
@@ -649,6 +680,10 @@ local function completePendingHatches(player: Player, extraElapsed: number): (bo
 		local reward = { Name = rewardItem.Name, Tier = rewardItem.Tier }
 
 		playerDataAny:SetValue({ "HatchingPet" }, false)
+		pcall(function()
+			local a = Knit.GetService("AnalyticsEvents")
+			a:Custom(player, "CapsuleHatched", 1)
+		end)
 		local payload = {
 			CapsuleImage = capsuleDef and capsuleDef.Image or DEFAULT_CAPSULE_IMAGE,
 			Reward = reward,

@@ -84,9 +84,14 @@ return function()
 			expect(PourMeter.EffectiveElapsed(1.0, 1.2, 0.3)).to.equal(1.0)
 		end)
 
-		it("clamps a stale claim up to the latency floor", function()
-			local elapsed = PourMeter.EffectiveElapsed(0.1, 1.2, 0.3)
-			expect(math.abs(elapsed - 0.9) < 0.0001).to.equal(true)
+		it("grades a claim earlier than the latency floor at the server time", function()
+			expect(PourMeter.EffectiveElapsed(0.1, 1.2, 0.3)).to.equal(1.2)
+			expect(PourMeter.EffectiveElapsed(-5, 1.2, 0.3)).to.equal(1.2)
+		end)
+
+		it("accepts the edges of the latency window", function()
+			expect(PourMeter.EffectiveElapsed(1.2, 1.2, 0.3)).to.equal(1.2)
+			expect(math.abs(PourMeter.EffectiveElapsed(0.9, 1.2, 0.3) - 0.9) < 0.0001).to.equal(true)
 		end)
 
 		it("never grades later than the server clock", function()
@@ -132,6 +137,14 @@ return function()
 			local window = windowAt(0.62)
 			local tier, _ = PourMeter.Resolve(window, 0.496, 100.696, 0.3)
 			expect(tier).to.equal("Perfect")
+		end)
+
+		it("does not let a far-off claim pick a perfect moment", function()
+			-- Server is at 0.1 (marker 0.125, a miss); a claim of 0.496 is in the future.
+			local window = windowAt(0.62)
+			local tier, reason = PourMeter.Resolve(window, 0.496, 100.1, 0.3)
+			expect(reason).to.equal("Miss")
+			expect(tier).to.equal("Good")
 		end)
 
 		it("expires a tap past the window plus allowance as good expired", function()

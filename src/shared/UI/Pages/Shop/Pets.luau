@@ -153,6 +153,7 @@ return function()
 			ImageSize = UDim2.fromScale(1, 1),
 			Size = isMiddle and UDim2.fromScale(1, 1) or UDim2.fromScale(0.875, 0.875),
 			LayoutOrder = k,
+			ShowPrice = true,
 			OnClick = if policyState == "allowed"
 				then function()
 					promptPetPurchase(capsule.Name, `{capsule.Price} Boba Bucks`)
@@ -174,13 +175,13 @@ return function()
 		ListLayout = c("UIListLayout", {
 			FillDirection = Enum.FillDirection.Vertical,
 			HorizontalAlignment = Enum.HorizontalAlignment.Center,
-			Padding = UDim.new(0, 14),
+			Padding = UDim.new(0, 10),
 			SortOrder = Enum.SortOrder.LayoutOrder,
 		}),
 
 		Padding = c("UIPadding", {
-			PaddingTop = UDim.new(0, 8),
-			PaddingBottom = UDim.new(0, 24),
+			PaddingTop = UDim.new(0, 4),
+			PaddingBottom = UDim.new(0, 16),
 			PaddingLeft = UDim.new(0.02, 0),
 			PaddingRight = UDim.new(0.02, 0),
 		}),
@@ -189,7 +190,7 @@ return function()
 			BackgroundTransparency = 1,
 			FontFace = Styles.FONT_FREDOKA,
 			LayoutOrder = 1,
-			Size = UDim2.new(0.94, 0, 0, 38),
+			Size = UDim2.new(0.94, 0, 0, 32),
 			Text = "Pets",
 			TextColor3 = Styles.GREEN,
 			TextScaled = true,
@@ -199,7 +200,7 @@ return function()
 			BackgroundTransparency = 1,
 			FontFace = Styles.FONT_FREDOKA,
 			LayoutOrder = 2,
-			Size = UDim2.new(0.94, 0, 0, 24),
+			Size = UDim2.new(0.94, 0, 0, 20),
 			Text = if policyState == "restricted"
 				then "Random capsule purchases are unavailable for this account."
 				else "Open capsules to hatch your own pets. Each capsule contains a random pet!",
@@ -211,7 +212,7 @@ return function()
 			then c("Frame", {
 				BackgroundTransparency = 1,
 				LayoutOrder = 3,
-				Size = UDim2.new(0.85, 0, 0, 140),
+				Size = UDim2.new(0.85, 0, 0, 120),
 			}, capsuleChildren)
 			else nil,
 

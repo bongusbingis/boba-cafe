@@ -190,7 +190,7 @@ function Rules.Payout(
 		end
 	end
 
-	local speed = if scripted or fractionLeft >= c.FAST_FRACTION then c.FAST_MULT else 1
+	local speed = if (scripted and not rescue) or fractionLeft >= c.FAST_FRACTION then c.FAST_MULT else 1
 	local combo = 1 + math.min(comboCount * c.COMBO_STEP, c.COMBO_CAP)
 	local source = if rescue then c.RESCUE_MULT else 1
 	return math.max(c.MIN_PAY, math.round(base * (c.GRADE_MULT[grade] or 1) * speed * combo * source))
@@ -358,11 +358,14 @@ end
 
 -- True when two order items ask for the same category, item and options.
 function Rules.ItemsMatch(a: OrderItem, b: OrderItem): boolean
+	if typeof(a) ~= "table" or typeof(b) ~= "table" then
+		return false
+	end
 	if a.Category ~= b.Category or a.Item ~= b.Item then
 		return false
 	end
-	local aInfo = a.CustomInfo or {}
-	local bInfo = b.CustomInfo or {}
+	local aInfo = if typeof(a.CustomInfo) == "table" then a.CustomInfo else {}
+	local bInfo = if typeof(b.CustomInfo) == "table" then b.CustomInfo else {}
 	if aInfo.Size ~= bInfo.Size then
 		return false
 	end
@@ -387,6 +390,9 @@ end
 
 -- Validates that the submitted list of items matches what the customer asked for (order-independent).
 function Rules.ValidateSubmittedOrder(submittedList: { OrderItem }, expectedList: { OrderItem }): boolean
+	if typeof(submittedList) ~= "table" or typeof(expectedList) ~= "table" then
+		return false
+	end
 	if #submittedList ~= #expectedList then
 		return false
 	end

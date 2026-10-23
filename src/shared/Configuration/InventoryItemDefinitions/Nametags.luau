@@ -114,6 +114,22 @@ return setmetatable({
 			},
 		},
 	},
+	-- SEASON-PASS, PROPOSED (Jack): granted by the Season 1 premium track,
+	-- never shop-sold (OffSale; price is inert).
+	["Sunrise"] = {
+		Tier = "Uncommon",
+		Color = Color3.fromRGB(255, 170, 60),
+		Price = " 150",
+		CanBeSold = true,
+		OffSale = true,
+		Animation = {
+			Frames = {
+				{ Color = Color3.fromRGB(255, 150, 60), Transparency = 0, Hold = 0.3, Transition = 0.7 },
+				{ Color = Color3.fromRGB(255, 120, 130), Transparency = 0, Hold = 0.3, Transition = 0.7 },
+				{ Color = Color3.fromRGB(255, 210, 90), Transparency = 0, Hold = 0.3, Transition = 0.7 },
+			},
+		},
+	},
 
 	---> rare
 	["Sunset"] = {

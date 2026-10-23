@@ -15,6 +15,11 @@ PassTools.PassToolAttribute = "PassTool"
 PassTools.MopWhackPerk = "MopWhack"
 PassTools.FlyingMopPerk = "FlyingMop"
 PassTools.EmotePackPerk = "EmotePack"
+PassTools.PumpkinLauncherPerk = "PumpkinLauncher"
+
+PassTools.PumpkinLauncher = {
+	ToolName = "Pumpkin Launcher",
+}
 
 PassTools.MopWhack = {
 	ToolName = "Mop Whack",

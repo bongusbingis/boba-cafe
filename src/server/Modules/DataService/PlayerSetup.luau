@@ -74,6 +74,10 @@ return {
 					if nickname == "" then
 						-- Skip: keep DisplayName and never ask again
 						proxy:SetValue({ "NicknameSkipped" }, true)
+						pcall(function()
+							Knit.GetService("AnalyticsEvents"):OnboardingFunnel(player, 7, "FirstNicknameSet")
+							Knit.GetService("AnalyticsEvents"):Funnel(player, 7, "FirstNicknameSet")
+						end)
 						player:SetAttribute("NicknamePending", nil)
 						cleanup()
 						return
@@ -103,13 +107,23 @@ return {
 
 					local filterResult = getFilterResult(nickname, player.UserId)
 					if filterResult then
-						local filteredNickname = filterResult:GetNonChatStringForBroadcastAsync()
+						local broadcastOk, filteredNickname = pcall(function()
+							return filterResult:GetNonChatStringForBroadcastAsync()
+						end)
+						if not broadcastOk or typeof(filteredNickname) ~= "string" then
+							chooseNicknameRecursive("|Filtering error. Please try again.|")
+							return
+						end
 						if filteredNickname ~= nickname then
 							chooseNicknameRecursive("|Nickname contains filtered content. Please try again.|")
 							return
 						end
-						proxy:SetValue({ "Nickname" }, nickname)
-						Knit.GetService("CosmeticsService"):NotifyNicknameChanged(player, nickname)
+						proxy:SetValue({ "Nickname" }, filteredNickname)
+						pcall(function()
+							Knit.GetService("AnalyticsEvents"):OnboardingFunnel(player, 7, "FirstNicknameSet")
+							Knit.GetService("AnalyticsEvents"):Funnel(player, 7, "FirstNicknameSet")
+						end)
+						Knit.GetService("CosmeticsService"):NotifyNicknameChanged(player, filteredNickname)
 						player:SetAttribute("NicknamePending", nil)
 						cleanup()
 					else

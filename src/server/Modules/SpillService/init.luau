@@ -141,6 +141,7 @@ function SpillService:SpillCleaned(Spill: { Type: string, Region: BasePart })
 	if cleaner then
 		pcall(function()
 			Knit.GetService("QuestService"):AdvanceQuest(cleaner, "SpillsCleaned", 1)
+			Knit.GetService("AnalyticsEvents"):Custom(cleaner, "SpillCleaned", 1)
 		end)
 	end
 
@@ -216,13 +217,7 @@ function SpillService:KnitStart()
 		end
 	end
 
-	for _, Region in TableUtil.Shuffle(self:_GetRegions()) do
-		if not self.Enabled or CountSpills(self.Spills.Mopping) >= Config.MaxSpawned then
-			break
-		end
-		TrySpawn(Region)
-	end
-
+	-- No boot pre-fill: spills appear only through the SpawnInterval loop below, one at a time.
 	local Interval = if typeof(Config.SpawnInterval) == "number" and Config.SpawnInterval > 0
 		then Config.SpawnInterval
 		else DEFAULT_SPAWN_INTERVAL_SECONDS

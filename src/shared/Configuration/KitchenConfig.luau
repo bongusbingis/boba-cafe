@@ -11,6 +11,7 @@ KitchenConfig.PROMPT_DISTANCE = 6
 KitchenConfig.INTERACTION_COOLDOWN = 0.5
 KitchenConfig.ANIMATION_MARKER_NAME = "NextAction"
 KitchenConfig.MAX_INTERACTION_DISTANCE = 10
+KitchenConfig.MAX_HELD_TOOLS = 10 -- TUNING: GiveTool refuses at this many Tools (backpack + equipped)
 
 -- Station skill moment (BIG-B7). After a pour station (recipes with SkillMoment = true)
 -- an optional meter appears; a tap in the zone marks the drink for a flat tip at serve.
@@ -23,7 +24,7 @@ KitchenConfig.POUR_METER = {
 	PERFECT_WIDTH = 0.18, -- TUNING (was 0.10): Inner / Perfect sweet spot width, significantly wider
 	ZONE_CENTER_MIN = 0.45, -- DEC-058 Opus-set, Jack to tune
 	ZONE_CENTER_MAX = 0.8, -- DEC-058 Opus-set, Jack to tune
-	LATENCY_ALLOWANCE_SECONDS = 0.3, -- DEC-058 Opus-set, Jack to tune: max ping credit
+	LATENCY_ALLOWANCE_SECONDS = 0.1, -- TUNING (was 0.3): tightened so latency allowance does not exceed sweet spot width
 	TIP_PER_PERFECT = 5, -- TUNING (was 2): BB per perfect pour, paid at NPC serve (was 1; AUDIT-FIX D2.1)
 	MAX_PERFECT_PER_DRINK = 2, -- DEC-058 Opus-set, Jack to tune
 	MIN_CUSTOMERS_SERVED = 1, -- DEC-058 Opus-set, Jack to tune: hidden until the first serve

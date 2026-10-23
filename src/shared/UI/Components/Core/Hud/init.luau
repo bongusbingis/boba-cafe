@@ -13,11 +13,11 @@ local TopBar = require(script.TopBar)
 local BottomLeft = require(script.BottomLeft)
 local OrderTicket = require(script.OrderTicket)
 local ShiftCard = require(script.ShiftCard)
-local CafeRating = require(script.CafeRating)
 local QuestCard = require(script.QuestCard)
 local LevelUpCelebration = require(script.LevelUpCelebration)
 local PaycheckCard = require(script.PaycheckCard)
 local EventIntro = require(script.EventIntro)
+
 ---> private
 local c = React.createElement
 
@@ -110,7 +110,6 @@ return function(props: {
 			}),
 		}),
 		ShiftCard = c(ShiftCard, {}),
-		CafeRating = c(CafeRating, { CurrentPage = props.CurrentPage }),
 
 		-- Always mounted; renders only while a Rush Hour / Boba Party intro plays (EVENT-FX).
 		EventIntro = c(EventIntro, {}),

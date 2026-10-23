@@ -17,7 +17,7 @@ local WorldPath = require(Shared.Utility.WorldPath)
 
 local c = React.createElement
 
-local BUTTON_HEIGHT = 50
+local BUTTON_HEIGHT = 46
 
 -- UI sounds are authored in the place (SoundService.SFX.UI, else SoundService.UISounds).
 -- A missing sound is skipped.
@@ -72,37 +72,37 @@ return function(props: {
 
 	local buttonElements = {}
 	for i, buttonDef in ipairs(props.Buttons) do
-		table.insert(buttonElements, c(PromptButton, {
-			Text = buttonDef.Text,
-			Color = buttonDef.Color or Styles.GREEN_DIM,
-			Disabled = buttonDef.Disabled,
-			LayoutOrder = i,
-			Size = UDim2.new(1, 0, 0, px(BUTTON_HEIGHT)),
-			OnClick = function()
-				if buttonDef.Disabled then
-					return
-				end
-				resolve(buttonDef.Text)
-			end,
-		}))
+		table.insert(
+			buttonElements,
+			c(PromptButton, {
+				Text = buttonDef.Text,
+				Color = buttonDef.Color or Styles.GREEN_DIM,
+				Disabled = buttonDef.Disabled,
+				LayoutOrder = i,
+				Size = UDim2.new(1, 0, 0, px(BUTTON_HEIGHT)),
+				OnClick = function()
+					if buttonDef.Disabled then
+						return
+					end
+					resolve(buttonDef.Text)
+				end,
+			})
+		)
 	end
 
 	local actionCount = #buttonElements
-	table.insert(buttonElements, c(PromptButton, {
-		Text = props.CloseText or "Close",
-		Color = Styles.CORAL,
-		LayoutOrder = actionCount + 1,
-		Size = UDim2.new(1, 0, 0, px(BUTTON_HEIGHT)),
-		OnClick = function()
-			resolve(props.CloseText or "Close")
-		end,
-	}))
-
-	table.insert(buttonElements, c("Frame", {
-		LayoutOrder = actionCount + 2,
-		Size = UDim2.new(1, 0, 0, px(5)),
-		BackgroundTransparency = 1,
-	}))
+	table.insert(
+		buttonElements,
+		c(PromptButton, {
+			Text = props.CloseText or "Close",
+			Color = Styles.CORAL,
+			LayoutOrder = actionCount + 1,
+			Size = UDim2.new(1, 0, 0, px(BUTTON_HEIGHT)),
+			OnClick = function()
+				resolve(props.CloseText or "Close")
+			end,
+		})
+	)
 
 	-- Content-driven height, always centered: the dialog grows with its
 	-- buttons instead of overflowing the viewport on short screens.
@@ -117,15 +117,8 @@ return function(props: {
 		},
 	}, {
 		UISizeConstraint = c("UISizeConstraint", {
-			MaxSize = Vector2.new(380, math.huge),
-			MinSize = Vector2.new(200, 180),
-		}),
-
-		Title = c(Banner, {
-			Text = props.Title or "Notification",
-			Color = Styles.GREEN,
-			Position = UDim2.fromScale(0.5, 0.2),
-			Size = UDim2.fromScale(1.21645, 0.15),
+			MaxSize = Vector2.new(350, math.huge),
+			MinSize = Vector2.new(240, 180),
 		}),
 
 		Base = c(Pane, {
@@ -139,11 +132,18 @@ return function(props: {
 				AnchorPoint = Vector2.new(0.5, 0),
 				BackgroundTransparency = 0,
 				BackgroundColor3 = Styles.OFFWHITE,
-				Position = UDim2.fromScale(0.5, 0.1),
+				Position = UDim2.new(0.5, 0, 0, px(18)),
 				Size = UDim2.fromScale(1, 0),
 				AutomaticSize = Enum.AutomaticSize.Y,
 			},
 		}, {
+			Padding = c("UIPadding", {
+				PaddingTop = UDim.new(0, px(38)),
+				PaddingBottom = UDim.new(0, px(16)),
+				PaddingLeft = UDim.new(0, px(18)),
+				PaddingRight = UDim.new(0, px(18)),
+			}),
+
 			Container = c(Pane, {
 				ClassName = "Frame",
 				ListLayout = {
@@ -153,27 +153,25 @@ return function(props: {
 					Padding = UDim.new(0, px(10)),
 				},
 				Native = {
-					AnchorPoint = Vector2.new(0.5, 0),
 					BackgroundTransparency = 1,
-					Position = UDim2.fromScale(0.5, 0.3),
-					Size = UDim2.fromScale(0.88, 0),
+					Size = UDim2.fromScale(1, 0),
 					AutomaticSize = Enum.AutomaticSize.Y,
 				},
 			}, {
 				Description = c(Pane, {
 					ClassName = "TextLabel",
-					MaxTextSize = 28,
+					MaxTextSize = 26,
 					LayoutOrder = 1,
 					Native = {
 						AnchorPoint = Vector2.new(0.5, 0),
 						BackgroundTransparency = 1,
 						FontFace = Styles.FONT_FREDOKA,
 						Position = UDim2.fromScale(0.5, 0),
-						Size = UDim2.fromScale(0.95, 0),
+						Size = UDim2.fromScale(1, 0),
 						Text = props.Text,
 						TextColor3 = Styles.GREEN_LIGHT,
-						TextYAlignment = Enum.TextYAlignment.Top,
-						TextSize = px(26),
+						TextYAlignment = Enum.TextYAlignment.Center,
+						TextSize = px(22),
 						TextWrapped = true,
 						RichText = true,
 						AutomaticSize = Enum.AutomaticSize.Y,
@@ -190,14 +188,19 @@ return function(props: {
 						Padding = UDim.new(0, px(8)),
 					},
 					Native = {
-						AnchorPoint = Vector2.new(0.5, 0),
 						BackgroundTransparency = 1,
-						Position = UDim2.fromScale(0.5, 0.46),
-						Size = UDim2.fromScale(0.9, 0),
+						Size = UDim2.fromScale(1, 0),
 						AutomaticSize = Enum.AutomaticSize.Y,
 					},
 				}, buttonElements) or nil,
 			}),
+		}),
+
+		Title = c(Banner, {
+			Text = props.Title or "Notification",
+			Color = Styles.GREEN,
+			Position = UDim2.new(0.5, 0, 0, px(18)),
+			Size = UDim2.new(1.18, 0, 0, px(62)),
 		}),
 	})
 

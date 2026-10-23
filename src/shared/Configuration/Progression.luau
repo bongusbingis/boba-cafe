@@ -61,17 +61,17 @@ Progression.TICKET_SLOTS = { [1] = 1, [5] = 2 } :: { [number]: number }
 
 -- Title text from each level up (every 5 levels). Names PROPOSED (Jack).
 Progression.TITLES = {
-	[1] = "Trainee",
-	[5] = "Barista",
-	[10] = "Senior Barista",
-	[15] = "Head Barista",
-	[20] = "Boba Expert",
-	[25] = "Boba Specialist",
-	[30] = "Boba Master",
-	[35] = "Boba Maestro",
-	[40] = "Boba Champion",
-	[45] = "Boba Hero",
-	[50] = "Boba Legend",
+	[1] = "New Hire",
+	[5] = "Rookie",
+	[10] = "Barista",
+	[15] = "Craftsman",
+	[20] = "Brewmaster",
+	[25] = "Prodigy",
+	[30] = "Artisan",
+	[35] = "Legend",
+	[40] = "Icon",
+	[45] = "Celebrity",
+	[50] = "Royalty",
 } :: { [number]: string }
 
 -- Nametags in Nametags.luau file order (first ten entries). PROPOSED (Jack)

@@ -23,6 +23,9 @@ export type ProductIds = {
 	Donations: { DonationProduct },
 	BobaParty: number?,
 	RushHour: number?,
+	-- SEASON-PASS: nil until Jack pastes the Creator Hub IDs (nil = inert).
+	SeasonPass: number?,
+	StarterBundle: number?,
 	BobaBucks: {
 		Pack50: number?,
 		Pack150: number?,
@@ -35,6 +38,9 @@ export type ProductIds = {
 		NametagCapsule10: number?,
 		NametagCapsule50: number?,
 	},
+	ChangeNickname: number?,
+	-- Limited-time Halloween Gamepass (STUB: Jack to provide Game Pass ID).
+	PumpkinLauncherPass: number?,
 }
 
 local ProductIds: ProductIds = {
@@ -59,6 +65,11 @@ local ProductIds: ProductIds = {
 	BobaParty = 3300909405,
 	RushHour = 3318558073, -- 2-minute server Rush; a purchase during a Rush/Party adds 2 minutes
 
+	-- SEASON-PASS (Jack: paste Creator Hub developer-product IDs here).
+	-- Season Pass 299 R$; Starter Bundle ~99 R$ PROPOSED. nil = offer hidden/inert.
+	SeasonPass = 3721438870,
+	StarterBundle = 3721439110,
+
 	BobaBucks = {
 		Pack50 = 1780164398,
 		Pack150 = 1780164611,
@@ -70,10 +81,12 @@ local ProductIds: ProductIds = {
 		-- JACK: paste Creator Hub developer-product IDs for Robux capsule offers here
 		-- (nil = offer hidden/inert). No capsule Robux offers exist yet; these keys
 		-- mirror the BobaBucks nametag-capsule pack sizes as placeholders.
-		NametagCapsule1 = nil,
-		NametagCapsule10 = nil,
-		NametagCapsule50 = nil,
+		NametagCapsule1 = 3721439802,
+		NametagCapsule10 = 3721439931,
+		NametagCapsule50 = 3721439975,
 	},
+	ChangeNickname = 1152995517,
+	PumpkinLauncherPass = nil, -- STUB: Jack to provide Game Pass ID
 }
 
 return ProductIds

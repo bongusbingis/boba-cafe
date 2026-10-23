@@ -55,6 +55,10 @@ local function buildEquippedSnapshot(proxy: any): { EquippedPetSnapshot }
 		return a.ItemId < b.ItemId
 	end)
 
+	if #equipped > 1 then
+		return { equipped[1] }
+	end
+
 	return equipped
 end
 
@@ -150,6 +154,38 @@ function PetService:GetBestTipBonus(player: Player): number
 		end
 	end
 	return best
+end
+
+-- Moderation: clears custom pet names on the owner's pets. When `petIdentifier`
+-- is nil every renamed pet is reset; otherwise only the pet whose ItemId or
+-- current display name matches (case-insensitive). Returns (resetCount, oldNames).
+-- The inventory change signal updates equipped overheads live.
+function PetService:ResetPetNames(owner: Player, petIdentifier: any): (number, { string })
+	if typeof(owner) ~= "Instance" or not owner:IsA("Player") then
+		return 0, {}
+	end
+	local ok, inventory = pcall(function()
+		return InventoryServer:GetPlayerInventoryAsync(owner, "Pets"):await()
+	end)
+	if not ok or inventory == nil then
+		return 0, {}
+	end
+	local want = if typeof(petIdentifier) == "string" and petIdentifier ~= "" then string.lower(petIdentifier) else nil
+	local resetNames = {}
+	for _, item in inventory.Inventory do
+		if item:GetType() == "Pets" then
+			local current = item:GetProperty(PetConfig.RENAME_PROPERTY_KEY)
+			if typeof(current) == "string" and PetShared.TrimName(current) ~= "" then
+				local display = item:GetDisplayName()
+				local matches = want == nil or string.lower(item:GetId()) == want or string.lower(display) == want
+				if matches then
+					item:ClearProperty(PetConfig.RENAME_PROPERTY_KEY)
+					table.insert(resetNames, display)
+				end
+			end
+		end
+	end
+	return #resetNames, resetNames
 end
 
 function PetService:PlayerRemoving(player: Player)

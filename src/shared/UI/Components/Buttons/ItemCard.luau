@@ -111,6 +111,7 @@ export type Props = {
 	Equipped: boolean?,
 	OffSale: boolean?,
 	Owned: boolean?,
+	ShowPrice: boolean?, -- keep the price label visible without hover (featured offers)
 
 	-- layout
 	ZIndex: number?,
@@ -263,15 +264,15 @@ local function buildViewport(model: Instance?)
 	})
 end
 
-local function buildNameLabel(text: string, _, size: UDim2, strokeThickness: number)
+local function buildNameLabel(text: string, position: UDim2, size: UDim2, strokeThickness: number)
 	return c(Pane, {
 		ClassName = "TextLabel",
 		Stroke = { Thickness = strokeThickness },
 		Native = {
-			AnchorPoint = Vector2.new(0.5, 0.65),
+			AnchorPoint = Vector2.new(0.5, 0.5),
 			BackgroundTransparency = 1,
 			FontFace = Styles.FONT_FREDOKA,
-			Position = UDim2.fromScale(0.5, 0.625),
+			Position = position or UDim2.fromScale(0.5, 0.625),
 			Size = size,
 			Text = text,
 			TextColor3 = Color3.new(1, 1, 1),
@@ -332,7 +333,7 @@ return function(props: Props)
 	local isPet, isShop = resolveVariant(props)
 	local isActive = not props.OffSale
 	local isInteractive = isActive and props.OnClick ~= nil
-	local priceVisible = isActive and (IS_MOBILE or isHovering)
+	local priceVisible = isActive and (IS_MOBILE or isHovering or props.ShowPrice == true)
 
 	local tierColor = props.Tier and TIER_COLORS[props.Tier].Color or nil
 

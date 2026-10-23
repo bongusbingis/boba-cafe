@@ -810,6 +810,78 @@ return function()
 		end)
 	end)
 
+	describe("NPC tablet notepad", function()
+		local function takeOrderSetup(scriptedForUserId: number?)
+			local firedPayload: any = nil
+			local svc = fakeService()
+			svc._context = {}
+			svc._activeOrderingNpc = {}
+			svc._orderTakers = {}
+			svc._npcs = {}
+			svc._shift = {
+				IsWrappingUp = function()
+					return false
+				end,
+			}
+			function svc:_ensureClockedIn()
+				return true
+			end
+			function svc:_hasFreeSlot()
+				return true
+			end
+			svc._onTakeOrderTriggered = CustomerService._onTakeOrderTriggered
+			svc.Client = {
+				OpenOrderingTablet = {
+					Fire = function(_, _, payload)
+						firedPayload = payload
+					end,
+				},
+			}
+			local origin = Vector3.new(0, 0, 0)
+			local player = {
+				UserId = 1,
+				Character = { PrimaryPart = { Position = origin } },
+			}
+			local npc = {
+				Id = "npc-1",
+				Left = false,
+				State = "AtCounter",
+				Root = { Position = origin },
+				OrderRolled = true,
+				RolledScriptedFor = scriptedForUserId,
+				RequestedDrinkText = "1x Classic Milk Tea",
+				Orders = { { Category = "Boba Teas", Item = "Custom Boba", CustomInfo = {} } },
+				Specs = {},
+			}
+			function npc:ExtendRegisterPatience() end
+			svc._npcs[npc] = true
+			return svc, npc, player, function()
+				return firedPayload
+			end
+		end
+
+		it("should put a non-scripted NPC order in the notepad with no prefill", function()
+			local svc, npc, player, payloadOf = takeOrderSetup(nil)
+			CustomerService._onTakeOrderTriggered(svc, npc, player)
+			local payload = payloadOf()
+			expect(payload).to.never.equal(nil)
+			expect(payload.NpcId).to.equal("npc-1")
+			expect(payload.RequestedText).to.equal("1x Classic Milk Tea")
+			expect(payload.Prefill).to.equal(nil)
+			expect(payload.Guided).to.equal(false)
+		end)
+
+		it("should put a scripted first-session order in the notepad with no prefill", function()
+			local svc, npc, player, payloadOf = takeOrderSetup(1)
+			CustomerService._onTakeOrderTriggered(svc, npc, player)
+			local payload = payloadOf()
+			expect(payload).to.never.equal(nil)
+			expect(payload.RequestedText).to.equal("1x Classic Milk Tea")
+			expect(payload.Prefill).to.equal(nil)
+			expect(payload.Guided).to.equal(true)
+		end)
+	end)
+
 	describe("Real-order tickets", function()
 		local order = {
 			Id = "R-1",
@@ -855,6 +927,202 @@ return function()
 			expect(svc.unwatched).to.equal(1)
 			CustomerService.ClearRealTicket(svc, barista, "R-1")
 			expect(svc._idleSince[barista]).to.be.ok()
+		end)
+	end)
+
+	describe("Wrong order submission rules", function()
+		local function setupSubmit(servedCount, variant, isRegular)
+			local closedTablets = {}
+			local leftReasons = {}
+			local playedAngry = 0
+			local showedAngry = 0
+			local reducedPatience = {}
+
+			local model = Instance.new("Model")
+			if isRegular then
+				model:SetAttribute("RegularName", "Alex")
+			end
+
+			local npc = {
+				Id = "npc-test",
+				Left = false,
+				State = "AtCounter",
+				Variant = variant,
+				Model = model,
+				Root = { Position = Vector3.new(0, 0, 0) },
+				Orders = {
+					{
+						Category = "Boba Teas",
+						Item = "Classic Milk Tea",
+						CustomInfo = { Size = "Medium" },
+					},
+				},
+				_wrongAttempts = 0,
+			}
+
+			function npc:PlayConfused() end
+			function npc:Leave(reason)
+				self.Left = true
+				table.insert(leftReasons, reason)
+			end
+			function npc:ReduceRegisterPatience(factor)
+				table.insert(reducedPatience, factor)
+				return 10 -- remaining
+			end
+
+			local player = {
+				UserId = 42,
+				Character = {
+					PrimaryPart = { Position = Vector3.new(0, 0, 0) },
+				},
+			}
+
+			local svc = {
+				Enabled = true,
+				_context = {
+					ClaimPickupSpot = function()
+						return Vector3.new(0, 0, 0), CFrame.new()
+					end,
+					ReleaseCounter = function() end,
+				},
+				_shift = {
+					IsClockedIn = function()
+						return true
+					end,
+					IsWrappingUp = function()
+						return false
+					end,
+				},
+				_npcs = { [npc] = true },
+				_activeOrderingNpc = { [player] = npc },
+				_orderTakers = { [npc] = { [player] = true } },
+				_readServedCount = function()
+					return servedCount
+				end,
+				_hasFreeSlot = function()
+					return true
+				end,
+				_playAngrySound = function()
+					playedAngry += 1
+				end,
+				_showAngryEffect = function()
+					showedAngry += 1
+				end,
+				_sessionShiftOf = function()
+					return nil
+				end,
+				_issueTicket = function() end,
+				Client = {
+					CloseOrderingTablet = {
+						Fire = function(_, p)
+							table.insert(closedTablets, p)
+						end,
+					},
+				},
+			}
+
+			local wrongOrder = {
+				{
+					Category = "Boba Teas",
+					Item = "Classic Milk Tea",
+					CustomInfo = { Size = "Large" }, -- Wrong size!
+				},
+			}
+
+			return {
+				svc = svc,
+				npc = npc,
+				player = player,
+				wrongOrder = wrongOrder,
+				closedTablets = closedTablets,
+				leftReasons = leftReasons,
+				reducedPatience = reducedPatience,
+				getPlayedAngry = function()
+					return playedAngry
+				end,
+				getShowedAngry = function()
+					return showedAngry
+				end,
+			}
+		end
+
+		it("should not penalize an onboarding player when order is wrong", function()
+			local env = setupSubmit(0, nil, false)
+			local res = CustomerService._submitNpcOrder(env.svc, env.player, env.npc.Id, env.wrongOrder)
+			expect(res.Success).to.equal(false)
+			expect(env.npc.Left).to.equal(false)
+			expect(#env.leftReasons).to.equal(0)
+			expect(#env.reducedPatience).to.equal(0)
+			expect(env.getPlayedAngry()).to.equal(0)
+		end)
+
+		it("should make Karen leave immediately on 1st wrong attempt for experienced player", function()
+			local env = setupSubmit(10, "Karen", false)
+			local res = CustomerService._submitNpcOrder(env.svc, env.player, env.npc.Id, env.wrongOrder)
+			expect(res.Success).to.equal(false)
+			expect(env.npc.Left).to.equal(true)
+			expect(env.leftReasons[1]).to.equal("WrongOrder")
+			expect(env.getPlayedAngry()).to.equal(1)
+			expect(env.getShowedAngry()).to.equal(1)
+		end)
+
+		it("should allow normal customer 1 retry with 25% patience reduction, leaving on 2nd", function()
+			local env = setupSubmit(10, nil, false)
+			local res1 = CustomerService._submitNpcOrder(env.svc, env.player, env.npc.Id, env.wrongOrder)
+			expect(res1.Success).to.equal(false)
+			expect(env.npc.Left).to.equal(false)
+			expect(#env.reducedPatience).to.equal(1)
+			expect(env.reducedPatience[1]).to.equal(0.25)
+			expect(env.getPlayedAngry()).to.equal(1)
+
+			local res2 = CustomerService._submitNpcOrder(env.svc, env.player, env.npc.Id, env.wrongOrder)
+			expect(res2.Success).to.equal(false)
+			expect(env.npc.Left).to.equal(true)
+			expect(env.leftReasons[1]).to.equal("WrongOrder")
+			expect(env.getPlayedAngry()).to.equal(2)
+		end)
+
+		it("should set walkout rating multiplier 1.5 when regular customer leaves on 2nd wrong attempt", function()
+			local env = setupSubmit(10, nil, true)
+			CustomerService._submitNpcOrder(env.svc, env.player, env.npc.Id, env.wrongOrder)
+			expect(env.npc.Left).to.equal(false)
+			CustomerService._submitNpcOrder(env.svc, env.player, env.npc.Id, env.wrongOrder)
+			expect(env.npc.Left).to.equal(true)
+			expect(env.npc._walkoutRatingMult).to.equal(1.5)
+		end)
+
+		it("should close ordering tablet when customer leaves", function()
+			local closed = {}
+			local fakeSvc = {
+				_order = nil,
+				_context = nil,
+				_activeOrderingNpc = {},
+				_orderTakers = {},
+				_assignee = {},
+				_tickets = {},
+				_combo = {},
+				RecordTeamServe = function() end,
+				_clearTicket = function() end,
+				CustomerResolved = {
+					Fire = function() end,
+				},
+				Client = {
+					CloseOrderingTablet = {
+						Fire = function(_, p)
+							table.insert(closed, p)
+						end,
+					},
+				},
+			}
+			local player = { UserId = 99 }
+			local npc = { Id = "test-npc" }
+			fakeSvc._activeOrderingNpc[player] = npc
+			fakeSvc._orderTakers[npc] = { [player] = true }
+
+			CustomerService._onCustomerLeft(fakeSvc, npc, "WrongOrder")
+			expect(#closed >= 1).to.equal(true)
+			expect(closed[1]).to.equal(player)
+			expect(fakeSvc._activeOrderingNpc[player]).to.equal(nil)
 		end)
 	end)
 end

@@ -184,7 +184,7 @@ local function PaycheckBody(props: {
 		Image = CHECK_IMAGE,
 		Position = UDim2.fromScale(0.5, 0.5),
 		ScaleType = Enum.ScaleType.Fit,
-		Size = UDim2.fromScale(0.7, 0.28),
+		Size = UDim2.fromScale(0.88, 0.35),
 	}, {
 		uIAspectRatioConstraint = c("UIAspectRatioConstraint", {
 			AspectRatio = 2.5,

@@ -1,3 +1,4 @@
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local SoundService = game:GetService("SoundService")
 export type Setting = {
 	Key: string,
@@ -88,6 +89,22 @@ local config: { Category } = {
 				Default = true,
 				ClientCallback = function(isEnabled)
 					setGroupVolume("UISounds", isEnabled)
+				end,
+			},
+		},
+	},
+	{
+		Category = "Roleplay",
+		Settings = {
+			{
+				Key = "ChangeNickname",
+				Label = "Roleplay Nickname",
+				Type = "Action",
+				ButtonLabel = "CHANGE",
+				ClientCallback = function()
+					local Shared = ReplicatedStorage:WaitForChild("Shared")
+					local NicknamePrompt = require(Shared.UI.Utility.NicknamePrompt)
+					NicknamePrompt.Open()
 				end,
 			},
 		},

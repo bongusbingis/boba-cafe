@@ -63,6 +63,9 @@ return function()
 	local totalWeight = 0
 	local tierCounts = {}
 	for _, entry in pairs(nametagColors) do
+		if entry.OffSale then
+			continue -- matches the roll pool: OffSale items are display-only
+		end
 		local tier = TIER_COLORS[entry.Tier]
 		if tier and tier.Weight > 0 then
 			totalWeight += tier.Weight
@@ -153,6 +156,7 @@ return function()
 				Size = UDim2.fromScale(1.05, 0.28),
 			} or nil,
 			LayoutOrder = k,
+			ShowPrice = true,
 			OnClick = policyState == "allowed"
 					and function()
 						local Controller = require(Packages.Knit).GetController("DialogController")

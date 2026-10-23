@@ -10,6 +10,7 @@
 	- Icon: Optional asset URL displayed above the label.
 	- MaxTextSize: Max text size. Defaults to 18.
 	- LayoutOrder: Layout ordering.
+	- Highlighted: Gold outline marking the guided next step.
 	- OnClick: Selection callback.
 ]]
 
@@ -42,6 +43,7 @@ return function(props: {
 	Size: UDim2?,
 	MaxTextSize: number?,
 	LayoutOrder: number?,
+	Highlighted: boolean?,
 	OnClick: (() -> ())?,
 })
 	local isHovering, setIsHovering = React.useState(false)
@@ -51,8 +53,19 @@ return function(props: {
 		config = SPRING_CONFIG,
 	})
 
+	local isLightColor = props.Color and (0.299 * props.Color.R + 0.587 * props.Color.G + 0.114 * props.Color.B) > 0.75
+	local textColor = if isLightColor then Color3.fromRGB(40, 40, 40) else Color3.new(1, 1, 1)
+	local textStrokeTransparency = if isLightColor then 1 else 0.55
+
 	return c(Pane, {
 		ClassName = "TextButton",
+		Stroke = if props.Highlighted
+			then {
+				Color = Styles.GOLD_BADGE,
+				Thickness = 3,
+				ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+			}
+			else nil,
 		OnClick = props.OnClick,
 		OnPress = props.OnClick and function()
 			setIsPressing(true)
@@ -85,7 +98,7 @@ return function(props: {
 				BackgroundTransparency = 0,
 				Size = UDim2.fromScale(1, 1),
 				AnchorPoint = Vector2.new(0.5, 0.5),
-				Position = UDim2.fromScale(0.5, 0.5)
+				Position = UDim2.fromScale(0.5, 0.5),
 			},
 		}, {
 			Icon = props.Icon and c(Pane, {
@@ -110,9 +123,9 @@ return function(props: {
 					Position = props.Icon and UDim2.fromScale(0.5, 0.97) or UDim2.fromScale(0.5, 0.75),
 					Size = UDim2.fromScale(0.9, if props.Icon then 0.28 else 0.52),
 					Text = props.Text,
-					TextColor3 = Color3.new(1, 1, 1),
+					TextColor3 = textColor,
 					TextScaled = true,
-					TextStrokeTransparency = 0.55,
+					TextStrokeTransparency = textStrokeTransparency,
 					TextWrapped = true,
 				},
 			}),

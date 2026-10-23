@@ -27,3 +27,22 @@ TextChatService.OnIncomingMessage = function(message: TextChatMessage): TextChat
 	properties.Text = PassCosmetics.ColorizeChatText(message.Text, PassCosmetics.VIP_CHAT_COLOR)
 	return properties
 end
+
+-- Roleplay nickname chat commands (/nickname, /nick)
+local function setupNicknameChatCommand()
+	local cmd = Instance.new("TextChatCommand")
+	cmd.Name = "NicknameCommand"
+	cmd.PrimaryAlias = "/nickname"
+	cmd.SecondaryAlias = "/nick"
+	cmd.Triggered:Connect(function(_source, message)
+		local NicknamePrompt = require(Shared.UI.Utility.NicknamePrompt)
+		local arg = string.match(message, "^/%w+%s*(.-)%s*$")
+		if arg and arg ~= "" then
+			NicknamePrompt.Submit(arg)
+		else
+			NicknamePrompt.Open()
+		end
+	end)
+	cmd.Parent = TextChatService
+end
+pcall(setupNicknameChatCommand)

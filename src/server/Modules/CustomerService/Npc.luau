@@ -113,10 +113,16 @@ type NpcFields = {
 	_nametag: BillboardGui?,
 	_patienceEnd: number,
 	_registerEnd: number, -- os.clock() deadline at the register (0 = not at the register)
+	_registerTotal: number,
+	_wrongAttempts: number?,
+	_walkoutRatingMult: number?,
+	_lastTaker: Player?,
 	_fallbacks: number, -- PivotTo fallbacks in a row
 	_destroyed: boolean,
 	_tracks: { [string]: AnimationTrack },
 	_speechToken: number,
+	_orphanedAt: number?,
+	_moveCount: number,
 }
 
 ---> constants
@@ -135,19 +141,21 @@ local PATHFINDING_OPTIONS = {
 	WaypointSpacing = 4,
 }
 -- UI-REVISION: the gui is tall enough for the speech card over the order card; the
--- order card keeps its 200 x 64 footprint at the bottom.
-local BUBBLE_CARD_H = 64
-local BUBBLE_SPEECH_H = 34
-local BUBBLE_SIZE = UDim2.fromOffset(200, BUBBLE_CARD_H + BUBBLE_SPEECH_H + 6)
-local BUBBLE_PAD = 8
-local BUBBLE_TOP = 6
-local BUBBLE_CHIP = 12
-local BUBBLE_TITLE_H = 22
-local BUBBLE_DETAIL_H = 16
-local BUBBLE_TRACK_H = 6
-local BUBBLE_OFFSET = Vector3.new(0, 3.5, 0) -- above the head
+-- order card keeps a compact footprint at the bottom, scaled down slightly for better proportions.
+local BUBBLE_GAP = 5
+local BUBBLE_CARD_H = 52
+local BUBBLE_SPEECH_H = 28
+local BUBBLE_SIZE = UDim2.fromOffset(165, BUBBLE_CARD_H + BUBBLE_SPEECH_H + BUBBLE_GAP)
+local BUBBLE_PAD = 7
+local BUBBLE_TOP = 5
+local BUBBLE_CHIP = 10
+local BUBBLE_TITLE_H = 18
+local BUBBLE_DETAIL_H = 13
+local BUBBLE_TRACK_H = 5
+local BUBBLE_OFFSET = Vector3.new(0, 3.2, 0) -- above the head
 -- Lifts the gui so the order card's centre (not the gui's) sits on BUBBLE_OFFSET.
-local BUBBLE_SIZE_OFFSET = Vector2.new(0, (BUBBLE_SPEECH_H + 6) / 2 / (BUBBLE_CARD_H + BUBBLE_SPEECH_H + 6))
+local BUBBLE_SIZE_OFFSET =
+	Vector2.new(0, (BUBBLE_SPEECH_H + BUBBLE_GAP) / 2 / (BUBBLE_CARD_H + BUBBLE_SPEECH_H + BUBBLE_GAP))
 local BUBBLE_MAX_DISTANCE_STUDS = 80
 local NAMETAG_SIZE = UDim2.fromScale(4, 2.5)
 local NAMETAG_SIZE_OFFSET = Vector2.new(0, 1.125)
@@ -163,7 +171,7 @@ local registerPatienceWarned = false
 
 local SPEECH_SECONDS = 3
 local ASSET_TIMEOUT_SECONDS = 5
-local ANIMATION_NAMES = { "Wave", "Confused", "Idle" }
+local ANIMATION_NAMES = { "Wave", "Confused", "Idle", "Run" }
 
 local buildWarned = false
 local descriptions: { HumanoidDescription }? = nil -- SharedStorage.NPCs.Characters, resolved once
@@ -364,9 +372,9 @@ end
 
 -- UI-REVISION: places the bubble's pieces for what it is showing. `chip` = a syrup
 -- chip leads the title; `detail` = a flavour line sits under the title. Pixel layout
--- in a 200 x 64 card (billboards are offset-sized, STYLE 4.5).
+-- in a compact card (billboards are offset-sized, STYLE 4.5).
 local function layoutBubble(bubble: BubbleUI, chip: boolean, detail: boolean)
-	local left = if chip then BUBBLE_PAD + BUBBLE_CHIP + 6 else BUBBLE_PAD
+	local left = if chip then BUBBLE_PAD + BUBBLE_CHIP + 5 else BUBBLE_PAD
 	local titleHeight = if detail then BUBBLE_TITLE_H else BUBBLE_TITLE_H + BUBBLE_DETAIL_H
 	bubble.Chip.Visible = chip
 	bubble.Chip.Position = UDim2.fromOffset(BUBBLE_PAD, BUBBLE_TOP + (titleHeight - BUBBLE_CHIP) // 2)
@@ -435,7 +443,7 @@ local function buildBubble(model: Model, specs: { OrderSpec.OrderSpec }, variant
 	label.TextWrapped = true
 	label.Text = title
 	label.Parent = card
-	addTextLimit(label, 9, 20)
+	addTextLimit(label, 8, 17)
 
 	-- The flavour line lives one level down so the title stays Card's only TextLabel.
 	local detailHolder = Instance.new("Frame")
@@ -455,11 +463,11 @@ local function buildBubble(model: Model, specs: { OrderSpec.OrderSpec }, variant
 	detail.TextXAlignment = Enum.TextXAlignment.Left
 	detail.Text = detailText
 	detail.Parent = detailHolder
-	addTextLimit(detail, 8, 13)
+	addTextLimit(detail, 7, 11)
 
 	local track = Instance.new("Frame")
 	track.Name = "Patience"
-	track.Position = UDim2.new(0, BUBBLE_PAD, 1, -(BUBBLE_TRACK_H + 6))
+	track.Position = UDim2.new(0, BUBBLE_PAD, 1, -(BUBBLE_TRACK_H + 5))
 	track.Size = UDim2.new(1, -2 * BUBBLE_PAD, 0, BUBBLE_TRACK_H)
 	track.BackgroundColor3 = Styles.GRAY
 	track.BorderSizePixel = 0
@@ -479,8 +487,8 @@ local function buildBubble(model: Model, specs: { OrderSpec.OrderSpec }, variant
 	speech.Name = "Speech"
 	speech.Visible = false
 	speech.AnchorPoint = Vector2.new(0.5, 1)
-	speech.Position = UDim2.new(0.5, 0, 1, -(BUBBLE_CARD_H + 6))
-	speech.Size = UDim2.new(1, -16, 0, BUBBLE_SPEECH_H)
+	speech.Position = UDim2.new(0.5, 0, 1, -(BUBBLE_CARD_H + BUBBLE_GAP))
+	speech.Size = UDim2.new(1, -12, 0, BUBBLE_SPEECH_H)
 	speech.BackgroundColor3 = Styles.CREAM
 	speech.BorderSizePixel = 0
 	speech.FontFace = Styles.FONT_FREDOKA
@@ -490,7 +498,7 @@ local function buildBubble(model: Model, specs: { OrderSpec.OrderSpec }, variant
 	speech.Text = ""
 	speech.Parent = gui
 	addCorner(speech, Styles.CORNER_BUTTON)
-	addTextLimit(speech, 9, 15)
+	addTextLimit(speech, 8, 13)
 
 	local speechStroke = Instance.new("UIStroke")
 	speechStroke.Color = Styles.GREEN
@@ -499,10 +507,10 @@ local function buildBubble(model: Model, specs: { OrderSpec.OrderSpec }, variant
 	speechStroke.Parent = speech
 
 	local speechPadding = Instance.new("UIPadding")
-	speechPadding.PaddingLeft = UDim.new(0, 6)
-	speechPadding.PaddingRight = UDim.new(0, 6)
-	speechPadding.PaddingTop = UDim.new(0, 3)
-	speechPadding.PaddingBottom = UDim.new(0, 3)
+	speechPadding.PaddingLeft = UDim.new(0, 5)
+	speechPadding.PaddingRight = UDim.new(0, 5)
+	speechPadding.PaddingTop = UDim.new(0, 2)
+	speechPadding.PaddingBottom = UDim.new(0, 2)
 	speechPadding.Parent = speech
 
 	local bubble: BubbleUI = {
@@ -682,10 +690,12 @@ function Npc.new(
 		_nametag = nametag,
 		_patienceEnd = 0,
 		_registerEnd = 0,
+		_registerTotal = 1,
 		_fallbacks = 0,
 		_destroyed = false,
 		_tracks = {},
 		_speechToken = 0,
+		_moveCount = 0,
 	}
 	return setmetatable(fields, Npc)
 end
@@ -754,6 +764,8 @@ function Npc.Destroy(self: Npc)
 	end
 	self:Leave("Despawned")
 	self._destroyed = true
+	self:_stopTrack("Run")
+	self:_stopTrack("Idle")
 	for _, child in self.Model:GetChildren() do
 		if child:IsA("Tool") then
 			child:Destroy()
@@ -808,6 +820,19 @@ function Npc.ExtendRegisterPatience(self: Npc, seconds: number)
 		return
 	end
 	self._registerEnd = math.max(self._registerEnd, os.clock() + seconds)
+end
+
+-- Lowers remaining register patience by a factor (e.g. 0.25 for 25%). Returns new remaining seconds.
+function Npc.ReduceRegisterPatience(self: Npc, factor: number): number
+	if self.State ~= "AtCounter" or self._registerEnd <= 0 then
+		return 0
+	end
+	local now = os.clock()
+	local remaining = math.max(0, self._registerEnd - now)
+	local newRemaining = remaining * math.max(0, 1 - factor)
+	self._registerEnd = now + newRemaining
+	self:_setPatienceBar(newRemaining / math.max(1, self._registerTotal))
+	return newRemaining
 end
 
 function Npc.ShowOrderBubble(self: Npc)
@@ -897,7 +922,9 @@ function Npc._playTrack(self: Npc, name: string, looped: boolean, priority: Enum
 			track.Priority = priority
 			self._tracks[name] = track
 		end
-		(track :: AnimationTrack):Play()
+		if not (track :: AnimationTrack).IsPlaying or not looped then
+			(track :: AnimationTrack):Play()
+		end
 	end)
 end
 
@@ -908,6 +935,24 @@ function Npc._stopTrack(self: Npc, name: string)
 			track:Stop()
 		end
 	end)
+end
+
+function Npc._startMoving(self: Npc)
+	self._moveCount = (self._moveCount or 0) + 1
+	if self._moveCount == 1 then
+		self:_stopTrack("Idle")
+		self:_playTrack("Run", true, Enum.AnimationPriority.Movement)
+	end
+end
+
+function Npc._stopMoving(self: Npc)
+	local count = (self._moveCount or 1) - 1
+	if count <= 0 then
+		self._moveCount = 0
+		self:_stopTrack("Run")
+	else
+		self._moveCount = count
+	end
 end
 
 -- Called by CustomerService on a Wrong serve.
@@ -956,6 +1001,7 @@ end
 -- straight there with PivotTo; MAX_FALLBACKS_IN_A_ROW of those in a row is an error
 -- (Start despawns the NPC).
 function Npc._walkTo(self: Npc, target: BasePart | Vector3)
+	self:_startMoving()
 	local goal = if typeof(target) == "Vector3" then target else target.Position
 	local finished = false
 	local reached = false
@@ -970,6 +1016,7 @@ function Npc._walkTo(self: Npc, target: BasePart | Vector3)
 		task.wait(WALK_POLL_SECONDS)
 	end
 	connection:Disconnect()
+	self:_stopMoving()
 	if self._destroyed then
 		return
 	end
@@ -1043,6 +1090,8 @@ function Npc._pathfindTo(self: Npc, target: BasePart | Vector3, abortOnLeft: boo
 		return true
 	end
 
+	self:_startMoving()
+
 	local path = PathfindingService:CreatePath(PATHFINDING_OPTIONS)
 	local okCompute = pcall(function()
 		path:ComputeAsync(start, goal)
@@ -1050,20 +1099,24 @@ function Npc._pathfindTo(self: Npc, target: BasePart | Vector3, abortOnLeft: boo
 
 	if not okCompute or path.Status ~= Enum.PathStatus.Success then
 		self:_walkTo(goal)
+		self:_stopMoving()
 		return false
 	end
 
 	local waypoints = path:GetWaypoints()
 	if #waypoints <= 1 then
 		self:_walkTo(goal)
+		self:_stopMoving()
 		return true
 	end
 
 	for i = 2, #waypoints do
 		if self._destroyed then
+			self:_stopMoving()
 			return false
 		end
 		if abortOnLeft and self.Left then
+			self:_stopMoving()
 			return false
 		end
 
@@ -1100,10 +1153,12 @@ function Npc._pathfindTo(self: Npc, target: BasePart | Vector3, abortOnLeft: boo
 	local finalOffset = (self.Root.Position - goal) * Vector3.new(1, 0, 1)
 	if finalOffset.Magnitude <= ARRIVE_RADIUS_STUDS then
 		self._fallbacks = 0
+		self:_stopMoving()
 		return true
 	end
 
 	self:_walkTo(goal)
+	self:_stopMoving()
 	return true
 end
 
@@ -1126,7 +1181,18 @@ function Npc._waitOutPatience(self: Npc)
 		end
 		last = now
 
-		if self.Scripted or self._patienceEnd <= 0 then
+		if self.Scripted then
+			if self.AssignedUserId == nil then
+				if self._orphanedAt == nil then
+					self._orphanedAt = now
+				elseif now - self._orphanedAt >= 60 then
+					return
+				end
+			else
+				self._orphanedAt = nil
+			end
+			self:_setPatienceBar(1)
+		elseif self._patienceEnd <= 0 then
 			self:_setPatienceBar(1)
 		else
 			local remaining = self._patienceEnd - workspace:GetServerTimeNow()
@@ -1154,9 +1220,11 @@ function Npc._run(self: Npc)
 		self.Root:SetNetworkOwner(nil) -- server owns the physics
 	end)
 
+	self:_startMoving()
 	for _, node in nodes.Path do
 		self:_walkTo(node)
 	end
+	self:_stopMoving()
 
 	-- Wait in line at their chosen register. The front NPC takes the counter spot; everyone else
 	-- waits behind them in line like in a real cafe.
@@ -1234,6 +1302,7 @@ function Npc._run(self: Npc)
 		warn(`[CustomerService] RegisterPatience failed; using the base patience: {seconds}`)
 	end
 	registerTotal = math.max(1, registerTotal)
+	self._registerTotal = registerTotal
 	self._registerEnd = os.clock() + registerTotal
 	local registerLast = os.clock()
 	while self.State == "AtCounter" and not self._destroyed and not self.Left do

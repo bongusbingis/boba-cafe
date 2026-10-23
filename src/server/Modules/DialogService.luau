@@ -116,6 +116,9 @@ function DialogService:KnitInit()
 end
 
 function DialogService:Resolve(player: Player, data: OnResolution)
+	if typeof(data) ~= "table" or typeof(data.id) ~= "string" then
+		return
+	end
 	local pending = pendingDialogs[data.id]
 	if pending and pending.Player == player then
 		pending.Resolve(data.value)

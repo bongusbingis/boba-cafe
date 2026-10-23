@@ -9,6 +9,8 @@
 	  (heavier during a party, plus gold sparkles).
 	- A quick camera FOV punch when an event starts or a party is extended.
 	The HUD intro (Hud/EventIntro) and MusicController's fanfare play alongside.
+	A level-up (ProgressionService.LeveledUp) gets the same burst and punch, with no
+	grade; Hud/LevelUpCelebration is its HUD side.
 ]]
 
 ---> Services
@@ -323,7 +325,28 @@ local function apply(state: CafeEvent.State, intro: CafeEvent.Intro?)
 	end
 end
 
+-- Level-up: one burst around the character and a punch. Emitted pieces stay where
+-- they fell, so the rig only needs to follow long enough to place the burst.
+local function celebrateLevelUp()
+	ensureRig()
+	startFollow()
+	task.delay(0.05, burst)
+	task.spawn(punchFov)
+	task.delay(6, function()
+		if CafeEvent.read().Mode == nil then
+			stopFollow()
+		end
+	end)
+end
+
 function EventFxController:KnitStart()
+	local ok, progression = pcall(function()
+		return Knit.GetService("ProgressionService")
+	end)
+	if ok and progression then
+		progression.LeveledUp:Connect(celebrateLevelUp)
+	end
+
 	local last = CafeEvent.read()
 	-- Joining mid-event: settle into the look, no burst or punch.
 	if last.Mode ~= nil then

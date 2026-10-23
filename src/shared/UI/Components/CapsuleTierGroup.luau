@@ -23,7 +23,7 @@ local BORDER_PADDING = UDim.new(0.05, 0)
 export type Props = {
 	Tier: string,
 	LayoutOrder: number,
-	Items: { [ any ]: any },
+	Items: { [any]: any },
 }
 
 return function(props: Props)
@@ -31,16 +31,10 @@ return function(props: Props)
 
 	local weightText
 	if tier.Weight > 0 then
-		weightText = " " .. props.Tier .. "  —  " .. math.floor(tier.Weight * 100) .. "%"
+		weightText = `{props.Tier}  •  {math.floor(tier.Weight * 100)}% DROP CHANCE`
 	else
-		weightText = " " .. props.Tier .. "  —  Event Only"
+		weightText = `{props.Tier}  •  EVENT ONLY`
 	end
-
-	table.insert(props.Items, c("Frame", {
-		Size = UDim2.fromScale(1, 0.175),
-		BackgroundTransparency = 1,
-		LayoutOrder = math.huge
-	}))
 
 	return c(Pane, {
 		ClassName = "Frame",
@@ -54,56 +48,67 @@ return function(props: Props)
 			FillDirection = Enum.FillDirection.Vertical,
 			HorizontalAlignment = Enum.HorizontalAlignment.Left,
 			VerticalAlignment = Enum.VerticalAlignment.Top,
-			Padding = UDim.new(0.0375, 0),
+			Padding = UDim.new(0, 8),
 		},
 		Padding = {
 			PaddingLeft = BORDER_PADDING,
 			PaddingRight = BORDER_PADDING,
 		},
 	}, {
-		Label = c("TextLabel", {
-			AnchorPoint = Vector2.new(0, 0),
-			BackgroundTransparency = 1,
-			FontFace = Styles.FONT_FREDOKA,
-			Position = UDim2.fromScale(0, 0),
-			Size = UDim2.fromScale(0.9, 0),
-			AutomaticSize = Enum.AutomaticSize.Y,
-			Text = weightText,
-			TextColor3 = Color3.new(1, 1, 1),
-			TextScaled = false,
-			TextSize = 18,
-			TextXAlignment = Enum.TextXAlignment.Left,
-			LayoutOrder = 1,
+		Badge = c(Pane, {
+			ClassName = "Frame",
+			CornerRadius = 1,
+			Padding = {
+				PaddingTop = UDim.new(0, 4),
+				PaddingBottom = UDim.new(0, 4),
+				PaddingLeft = UDim.new(0, 14),
+				PaddingRight = UDim.new(0, 14),
+			},
+			Native = {
+				AutomaticSize = Enum.AutomaticSize.XY,
+				BackgroundColor3 = tier.Color,
+				BackgroundTransparency = 0,
+				LayoutOrder = 1,
+			},
 		}, {
-			UIStroke = c("UIStroke", {
-				Color = tier.Color:Lerp(Color3.new(0, 0, 0), 0.5),
-				Thickness = 2,
+			Label = c("TextLabel", {
+				AutomaticSize = Enum.AutomaticSize.XY,
+				BackgroundTransparency = 1,
+				FontFace = Styles.FONT_FREDOKA,
+				Text = weightText,
+				TextColor3 = Color3.new(1, 1, 1),
+				TextSize = 15,
+			}, {
+				UIStroke = c("UIStroke", {
+					Color = tier.Color:Lerp(Color3.new(0, 0, 0), 0.4),
+					Thickness = 1.5,
+				}),
 			}),
 		}),
 
 		Inner = c(Pane, {
-			ClassName = "ImageButton",
-			CornerRadius = UDim.new(0.06, 0),
-			Stroke = { Color = tier.Color, Thickness = 3 },
+			ClassName = "Frame",
+			CornerRadius = Styles.CORNER_CARD,
+			Stroke = { Color = tier.Color, Thickness = 2 },
 			ListLayout = {
 				SortOrder = Enum.SortOrder.LayoutOrder,
 				HorizontalAlignment = Enum.HorizontalAlignment.Left,
 				FillDirection = Enum.FillDirection.Horizontal,
-				Padding = UDim.new(0.05, 0),
+				Padding = UDim.new(0, 10),
 				Wraps = true,
 				HorizontalFlex = Enum.UIFlexAlignment.SpaceEvenly,
 			},
 			Padding = {
-				PaddingLeft = UDim.new(0.0275, 0),
-				PaddingTop = UDim.new(0.125, 0),
-				PaddingBottom = UDim.new(0.05, 0),
+				PaddingLeft = UDim.new(0, 10),
+				PaddingRight = UDim.new(0, 10),
+				PaddingTop = UDim.new(0, 12),
+				PaddingBottom = UDim.new(0, 12),
 			},
 			Native = {
-				AutoButtonColor = false,
 				AutomaticSize = Enum.AutomaticSize.Y,
-				Size = UDim2.fromScale(0.95, 0.5),
-				Position = UDim2.fromScale(0.5, 0),
-				AnchorPoint = Vector2.new(0.5, 0),
+				BackgroundColor3 = Styles.OFFWHITE,
+				BackgroundTransparency = 0,
+				Size = UDim2.fromScale(1, 0),
 				LayoutOrder = 2,
 			},
 		}, props.Items),

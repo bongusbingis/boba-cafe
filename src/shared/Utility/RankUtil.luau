@@ -220,7 +220,6 @@ end)
 --- Yields until rank and role are available. Near-instant if cache is warm.
 function RankUtil:GetRankAndRoleAsync(player: Player): RankAndRole
 	local _, result = ensureCached(player, BOBA_CONFIG, true):await()
-	print("RANK AND ROLE RESULT", result)
 	return result :: RankAndRole
 end
 

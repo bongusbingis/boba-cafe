@@ -165,6 +165,36 @@ local function refreshCounterPrompt(prompt: Instance)
 		and (takerId == nil or takerId == 0 or takerId == LocalPlayer.UserId)
 end
 
+-- Real-order handoff prompts ride the ordering customer's own root part. The
+-- customer can never trigger their own handoff (the server requires the
+-- preparing barista), so hide it on their own screen. Presentation only.
+local HANDOFF_PROMPT_NAME = "RealOrderHandoff"
+
+local function hideOwnHandoffPrompt(prompt: Instance)
+	if not prompt:IsA("ProximityPrompt") then
+		return
+	end
+	prompt.Enabled = false
+	prompt:GetPropertyChangedSignal("Enabled"):Connect(function()
+		if (prompt :: ProximityPrompt).Enabled then
+			(prompt :: ProximityPrompt).Enabled = false
+		end
+	end)
+end
+
+local function watchOwnHandoffPrompts(character: Model)
+	for _, descendant in character:GetDescendants() do
+		if descendant.Name == HANDOFF_PROMPT_NAME then
+			hideOwnHandoffPrompt(descendant)
+		end
+	end
+	character.DescendantAdded:Connect(function(descendant: Instance)
+		if descendant.Name == HANDOFF_PROMPT_NAME then
+			hideOwnHandoffPrompt(descendant)
+		end
+	end)
+end
+
 local function watchCounterPrompts()
 	local function onAdded(prompt: Instance)
 		refreshCounterPrompt(prompt)
@@ -188,6 +218,10 @@ function OrderController:KnitStart()
 	local OrderService = Knit.GetService("OrderService")
 
 	watchCounterPrompts()
+	if LocalPlayer.Character then
+		watchOwnHandoffPrompts(LocalPlayer.Character)
+	end
+	LocalPlayer.CharacterAdded:Connect(watchOwnHandoffPrompts)
 
 	Knit.GetService("CustomerService").TicketChanged:Connect(function(ticket, slot)
 		local byId = self._ticketsById
@@ -314,6 +348,11 @@ function OrderController:KnitStart()
 	if customerService.OpenOrderingTablet ~= nil then
 		customerService.OpenOrderingTablet:Connect(function(data)
 			self:OpenOrdering(data)
+		end)
+	end
+	if customerService.CloseOrderingTablet ~= nil then
+		customerService.CloseOrderingTablet:Connect(function()
+			self:CloseOrdering()
 		end)
 	end
 end

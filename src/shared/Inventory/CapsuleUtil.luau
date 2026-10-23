@@ -33,6 +33,9 @@ local function pickWeightedRandom(itemType: string, minTier: string?): Reward?
 	local totalWeight = 0
 
 	for itemName, itemDef in definitions do
+		if itemDef.OffSale then
+			continue -- exclusive via other grants (e.g. Season Pass nametag), never rolled
+		end
 		local tierDef = TIER_WEIGHTS[itemDef.Tier]
 		if not tierDef then
 			continue

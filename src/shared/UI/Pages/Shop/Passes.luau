@@ -11,6 +11,7 @@ local React = require(Packages.React)
 ---> configuration
 local PassCatalog = require(Shared.Configuration.PassCatalog)
 local GamepassUtil = require(Shared.Utility.GamepassUtil)
+local ProductIds = require(Shared.Configuration.ProductIds)
 
 ---> styles
 local Styles = require(UI.Styles)
@@ -127,6 +128,18 @@ return function()
 		})
 	end
 
+	-- Limited-time Halloween Pumpkin Launcher stub while Gamepass ID is nil
+	if ProductIds.PumpkinLauncherPass == nil then
+		table.insert(passList, {
+			PassId = -999,
+			Name = "Pumpkin Launcher",
+			Image = "rbxassetid://16728123607",
+			Price = "Coming Soon",
+			OffSale = true,
+			IsOwned = false,
+		})
+	end
+
 	-- Sorting rules:
 	-- 1. Unowned and on-sale passes appear first
 	-- 2. Off-sale unowned passes
@@ -156,12 +169,20 @@ return function()
 	}
 
 	for index, pass in ipairs(passList) do
+		local isPumpkin = pass.Name == "Pumpkin Launcher"
+			or (ProductIds.PumpkinLauncherPass ~= nil and pass.PassId == ProductIds.PumpkinLauncherPass)
 		-- Display pricing and ownership in the ribbon banner so it never overlaps the pass name
 		local topBanner = nil
 		if pass.IsOwned then
 			topBanner = {
 				Color = Styles.GREEN_BADGE,
 				Text = "Owned",
+				Size = UDim2.fromScale(1.05, 0.28),
+			}
+		elseif isPumpkin then
+			topBanner = {
+				Color = Color3.fromRGB(240, 110, 25),
+				Text = "Halloween",
 				Size = UDim2.fromScale(1.05, 0.28),
 			}
 		elseif pass.OffSale then
@@ -182,13 +203,13 @@ return function()
 			Name = pass.Name,
 			Image = pass.Image,
 			ImageSize = UDim2.fromScale(1, 1),
-			OffSale = pass.OffSale,
+			OffSale = pass.OffSale and not isPumpkin,
 			Owned = pass.IsOwned,
 			TopBanner = topBanner,
 			LayoutOrder = index,
 			OnClick = function()
 				local localPlayer = Players.LocalPlayer
-				if localPlayer then
+				if localPlayer and pass.PassId > 0 then
 					MarketplaceService:PromptGamePassPurchase(localPlayer, pass.PassId)
 				end
 			end,

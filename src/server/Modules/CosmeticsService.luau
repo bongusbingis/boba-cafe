@@ -1,5 +1,7 @@
 ---> services
+local MarketplaceService = game:GetService("MarketplaceService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TextService = game:GetService("TextService")
 
 ---> dependencies
 local Packages = ReplicatedStorage:WaitForChild("Packages")
@@ -8,6 +10,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Knit = require(Packages.Knit)
 local InventoryServer = require(Shared.Inventory.InventoryServer)
 local InventoryItemDefinitions = require(Shared.Configuration.InventoryItemDefinitions)
+local ProductIds = require(Shared.Configuration.ProductIds)
 
 ---> types
 export type PlayerCosmetics = {
@@ -17,6 +20,7 @@ export type PlayerCosmetics = {
 
 ---> globals
 local cosmeticsCache: { [number]: PlayerCosmetics } = {}
+local pendingNicknames: { [number]: { Nickname: string, CreatedAt: number } } = {}
 local characterConnections: { [number]: RBXScriptConnection } = {}
 local inventoryConnections: { [number]: RBXScriptConnection } = {}
 
@@ -179,6 +183,100 @@ function CosmeticsService:PlayerRemoving(player: Player)
 		inventoryConn:Disconnect()
 		inventoryConnections[player.UserId] = nil
 	end
+end
+
+function CosmeticsService:GetPendingNickname(player: Player): string?
+	local pending = pendingNicknames[player.UserId]
+	if pending == nil then
+		return nil
+	end
+	if os.clock() - pending.CreatedAt > 3600 then
+		pendingNicknames[player.UserId] = nil
+		return nil
+	end
+	return pending.Nickname
+end
+
+function CosmeticsService:SetPendingNickname(player: Player, nickname: string)
+	pendingNicknames[player.UserId] = {
+		Nickname = nickname,
+		CreatedAt = os.clock(),
+	}
+end
+
+function CosmeticsService:ClearPendingNickname(player: Player)
+	pendingNicknames[player.UserId] = nil
+end
+
+function CosmeticsService:RequestNicknameChange(
+	player: Player,
+	nickname: any
+): { Success: boolean, Error: string?, Free: boolean? }
+	if typeof(nickname) ~= "string" then
+		return { Success = false, Error = "Invalid nickname input." }
+	end
+
+	local trimmed = string.match(nickname, "^%s*(.-)%s*$") or ""
+	if #trimmed == 0 then
+		return { Success = false, Error = "Nickname cannot be empty." }
+	end
+
+	if #trimmed > 15 then
+		return { Success = false, Error = "Nickname must be 15 characters or less." }
+	end
+
+	local cached = cosmeticsCache[player.UserId]
+	if cached ~= nil and cached.Nickname == trimmed then
+		return { Success = false, Error = "That is already your current nickname." }
+	end
+
+	local okFilter, filterResult = pcall(function()
+		return TextService:FilterStringAsync(trimmed, player.UserId)
+	end)
+	if not okFilter or filterResult == nil then
+		return { Success = false, Error = "Unable to verify nickname at this time. Please try again." }
+	end
+
+	local okBroadcast, filtered = pcall(function()
+		return filterResult:GetNonChatStringForBroadcastAsync()
+	end)
+	if not okBroadcast or typeof(filtered) ~= "string" or filtered ~= trimmed then
+		return { Success = false, Error = "Nickname contains filtered content. Please choose another." }
+	end
+
+	local dataService = Knit.GetService("DataService")
+	local dataOk, playerData = dataService:GetDataAsync(player):await()
+	local currentNick = if playerData and playerData.Data
+		then playerData.Data.Nickname
+		elseif playerData then playerData.Nickname
+		else nil
+	local currentSkipped = if playerData and playerData.Data
+		then playerData.Data.NicknameSkipped
+		elseif playerData then playerData.NicknameSkipped
+		else nil
+	local isFirstFree = dataOk and playerData and (currentNick == "" and currentSkipped ~= true)
+
+	if isFirstFree then
+		playerData:SetValue({ "Nickname" }, filtered)
+		self:NotifyNicknameChanged(player, filtered)
+		player:SetAttribute("NicknamePending", nil)
+		return { Success = true, Free = true }
+	end
+
+	self:SetPendingNickname(player, filtered)
+
+	local productId = ProductIds.ChangeNickname
+	if productId ~= nil then
+		pcall(function()
+			MarketplaceService:PromptProductPurchase(player, productId)
+		end)
+	end
+
+	return { Success = true, Free = false }
+end
+
+function CosmeticsService.Client:RequestNicknameChange(player: Player, nickname: any)
+	return self.Server:RequestNicknameChange(player, nickname)
 end
 
 return CosmeticsService

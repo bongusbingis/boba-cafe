@@ -31,6 +31,27 @@ local function getHeldTool(player: Player): Tool?
 	return player.Character and player.Character:FindFirstChildWhichIsA("Tool")
 end
 
+local function isClockedIn(player: Player): boolean
+	local ok, shiftService = pcall(function()
+		return Knit.GetService("ShiftService")
+	end)
+	if ok and shiftService ~= nil and typeof(shiftService.IsClockedIn) == "function" then
+		return shiftService:IsClockedIn(player) == true
+	end
+	return true
+end
+
+local function isWithinDistance(player: Player, model: Model): boolean
+	local character = player.Character
+	local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+	local primaryPart = model and (model.PrimaryPart or model:FindFirstChildWhichIsA("BasePart"))
+	if rootPart and primaryPart then
+		local distance = (rootPart.Position - primaryPart.Position).Magnitude
+		return distance <= KitchenConfig.MAX_INTERACTION_DISTANCE
+	end
+	return true
+end
+
 ---> Types
 
 type ActionData = KitchenTypes.ActionData
@@ -176,6 +197,14 @@ function InteractionRunner:_runSelectFrom(
 		return { Success = false, Error = "SelectFrom: held tool changed" }
 	end
 
+	if not isClockedIn(player) then
+		return { Success = false, Error = "SelectFrom: barista clocked out" }
+	end
+
+	if not isWithinDistance(player, model) then
+		return { Success = false, Error = "SelectFrom: player walked away" }
+	end
+
 	local branch = branchMap[choice]
 	if not branch then
 		warn(string.format("[InteractionRunner] SelectFrom: no branch for choice '%s'", tostring(choice)))
@@ -223,6 +252,12 @@ function InteractionRunner:_runSequence(
 				end
 				if pourGatedTool ~= nil and getHeldTool(player) ~= pourGatedTool then
 					return { Success = false, Error = "Pour: held tool changed" }
+				end
+				if not isClockedIn(player) then
+					return { Success = false, Error = "Pour: barista clocked out" }
+				end
+				if not isWithinDistance(player, model) then
+					return { Success = false, Error = "Pour: player walked away" }
 				end
 				seqState.PourTier = tier
 			end

@@ -21,6 +21,9 @@ local ItemFader = require(Utility.ItemFader)
 
 local ANIMATION_LOAD_TIMEOUT_SECONDS = 3
 
+-- Templates already warned about for a missing SignStartPosition, so the warning fires once per template.
+local WarnedMissingSign: { [string]: boolean } = {}
+
 -- Services are looked up on use. SpillService:KnitStart can build spills before
 -- Knit.OnStart resolves, so module locals assigned there would still be nil.
 local function Service(Name: string): any
@@ -263,13 +266,24 @@ function Spill:_RunCleaning(Player: Player)
 	self.Janitor:Add(RightTool)
 	self.Janitor:Add(LeftTool)
 
+	local rightOffset = RightTool:FindFirstChild("Offset")
+	local rightC0 = if rightOffset and rightOffset:IsA("CFrameValue") then rightOffset.Value else CFrame.identity
+	if self.Type == "Mopping" then
+		-- The mop mesh handle (+Y) was oriented upside-down (+Z in RightHand space, pointing at the floor during MoppingAnim).
+		-- Rotate 180 degrees around local X to invert Y and point the handle up and mop head down.
+		rightC0 = rightC0 * CFrame.Angles(math.rad(180), 0, 0)
+	end
+
+	local leftOffset = LeftTool:FindFirstChild("Offset")
+	local leftC0 = if leftOffset and leftOffset:IsA("CFrameValue") then leftOffset.Value else CFrame.identity
+
 	AnimationTrack:AddItems(Player, {
 		{
 			Model = RightTool,
 			Motor = {
 				Part0 = RightTool,
 				Part1 = Player.Character.RightHand,
-				C0 = RightTool.Offset.Value,
+				C0 = rightC0,
 			},
 		},
 		{
@@ -277,7 +291,7 @@ function Spill:_RunCleaning(Player: Player)
 			Motor = {
 				Part0 = LeftTool,
 				Part1 = if self.Type == "Mopping" then Player.Character.LeftFoot else Player.Character.LeftHand,
-				C0 = LeftTool.Offset.Value,
+				C0 = leftC0,
 			},
 		},
 	})
@@ -408,23 +422,26 @@ function Spill:_Build()
 	self:_FindLocationWithinRegion()
 
 	if self.Type == "Mopping" then
-		if not self.Object:FindFirstChild("SignStartPosition") then
-			warn("Missing SignStartPosition for spill in region " .. self.Region.Name)
-			return
-		end
 		self.Object:ScaleTo(1)
-		self.SignPrompt = Instance.new("ProximityPrompt")
-		self.SignPrompt.Parent = self.Object.SignStartPosition
-		self.SignPrompt.RequiresLineOfSight = false
-		self.SignPrompt.ObjectText = "Sign"
-		self.SignPrompt.ActionText = "Fix"
-		self.SignPrompt.Name = "FixSpillSignPrompt"
-		self.SignPrompt.Enabled = false
 
-		self.Object.SignStartPosition.Transparency = 0
+		-- Templates without a sign (e.g. MeltedPopsicle, Donut) still spill and clean normally; only the sign and its trip zone are skipped.
+		if self.Object:FindFirstChild("SignStartPosition") then
+			self.SignPrompt = Instance.new("ProximityPrompt")
+			self.SignPrompt.Parent = self.Object.SignStartPosition
+			self.SignPrompt.RequiresLineOfSight = false
+			self.SignPrompt.ObjectText = "Sign"
+			self.SignPrompt.ActionText = "Fix"
+			self.SignPrompt.Name = "FixSpillSignPrompt"
+			self.SignPrompt.Enabled = false
 
-		self.Janitor:Add(self:_ListenToSignPrompt())
-		self.Janitor:Add(self:_ListenToPlayerTrip())
+			self.Object.SignStartPosition.Transparency = 0
+
+			self.Janitor:Add(self:_ListenToSignPrompt())
+			self.Janitor:Add(self:_ListenToPlayerTrip())
+		elseif not WarnedMissingSign[self._Object] then
+			WarnedMissingSign[self._Object] = true
+			warn(`[Spill] Template {self._Object} has no SignStartPosition; spawning without a sign.`)
+		end
 	end
 end
 

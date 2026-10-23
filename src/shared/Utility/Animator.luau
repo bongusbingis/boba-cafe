@@ -53,7 +53,6 @@ function AnimationManager.Prototype:ClearAssociatedItems(player)
 end
 
 function AnimationManager:LoadAnimation(animationBase: (Model | Humanoid | Animator)?, animationForCharacter: Animation)
-	print(animationBase, animationForCharacter)
 	local animatorForCharacter: Animator = self:_resolveAnimationBase(animationBase)
 	assert(animatorForCharacter, "Animation base input must be a character, humanoid, or animator")
 

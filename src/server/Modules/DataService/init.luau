@@ -115,10 +115,10 @@ local function playerAdded(player: Player)
 end
 
 ---> service declaration
-local DataService = Knit.CreateService {
+local DataService = Knit.CreateService({
 	Name = "DataService",
 	Client = {},
-}
+})
 
 function DataService:GetDataAsync(player: Player)
 	return Promise.new(function(resolve)
@@ -131,6 +131,21 @@ function DataService:GetDataAsync(player: Player)
 		end
 		resolve(playerData)
 	end)
+end
+
+function DataService:ViewProfileAsync(userId: number)
+	local profile = ProfileObjects[userId]
+	if profile then
+		return profile.Data
+	end
+	local playerKey = `Profile_{userId}`
+	local ok, loadedProfile = pcall(function()
+		return PlayerStore:GetAsync(playerKey)
+	end)
+	if ok and loadedProfile and loadedProfile.Data then
+		return loadedProfile.Data
+	end
+	return nil
 end
 
 --[=[

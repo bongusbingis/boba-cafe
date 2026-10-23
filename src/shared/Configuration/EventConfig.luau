@@ -20,7 +20,7 @@ export type EventConfigType = {
 
 local EventConfig: EventConfigType = {
 	EVENT_DURATION_SECONDS = 600,
-	HOST_COOLDOWN_SECONDS = 1800,
+	HOST_COOLDOWN_SECONDS = 0,--1800,
 	AUTO_EVENT_INTERVAL_SECONDS = 3600,
 	MIN_STAFF_RANK = 10,
 

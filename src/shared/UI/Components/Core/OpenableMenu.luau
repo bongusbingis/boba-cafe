@@ -75,9 +75,7 @@ export type Props = {
 
 ---> public
 return function(props: Props)
-	local defaultKey = props.DefaultPage
-		or (props.Pages and props.Pages[1] and props.Pages[1].Key)
-		or nil
+	local defaultKey = props.DefaultPage or (props.Pages and props.Pages[1] and props.Pages[1].Key) or nil
 
 	local currentPage, setCurrentPage = React.useState(defaultKey)
 
@@ -85,17 +83,20 @@ return function(props: Props)
 	if props.Pages then
 		for i, page in ipairs(props.Pages) do
 			local key = page.Key
+			local isSelected = currentPage == key
 			sideButtonChildren[key] = c(HudTabButton, {
 				Text = page.Label,
 				LayoutOrder = page.LayoutOrder or i,
 				Size = UDim2.fromScale(0.85, props.TabHeight or 0.095),
 				ShowDot = page.ShowDot,
-				BackgroundColor = page.ButtonColor or Styles.OFFWHITE,
-				TextColor3 = page.ButtonTextColor or Styles.GREEN_LIGHT,
+				BackgroundColor = if isSelected and page.ButtonColor then page.ButtonColor else Styles.OFFWHITE,
+				TextColor3 = if isSelected
+					then (page.ButtonTextColor or Styles.GREEN_DEEP)
+					else (if page.ButtonColor then page.ButtonTextColor or Styles.ROSE_DEEP else Styles.GREEN_LIGHT),
 				OnClick = function()
 					setCurrentPage(key)
 				end,
-				Selected = currentPage == key,
+				Selected = isSelected,
 			})
 		end
 	end
@@ -164,17 +165,19 @@ return function(props: Props)
 					Size = UDim2.fromScale(0.949833, 0.923274),
 				},
 			}, {
-				Pattern = if props.HidePattern then nil else c(Pane, {
-					ClassName = "ImageLabel",
-					Native = {
-						AnchorPoint = Vector2.new(0, 0.5),
-						BackgroundTransparency = 1,
-						Image = "http://www.roblox.com/asset/?id=13438518368",
-						ImageTransparency = 0.9,
-						Position = UDim2.fromScale(0, 0.5),
-						Size = UDim2.fromScale(1, 1.01108),
-					},
-				}),
+				Pattern = if props.HidePattern
+					then nil
+					else c(Pane, {
+						ClassName = "ImageLabel",
+						Native = {
+							AnchorPoint = Vector2.new(0, 0.5),
+							BackgroundTransparency = 1,
+							Image = "http://www.roblox.com/asset/?id=13438518368",
+							ImageTransparency = 0.9,
+							Position = UDim2.fromScale(0, 0.5),
+							Size = UDim2.fromScale(1, 1.01108),
+						},
+					}),
 
 				Frames = c(Pane, {
 					ClassName = "Frame",

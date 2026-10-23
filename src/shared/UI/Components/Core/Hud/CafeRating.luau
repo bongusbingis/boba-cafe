@@ -1,8 +1,11 @@
 --[[
     Component: CafeRating
-    Description: Server-wide Cafe Rating meter (REVIVAL-001 M2-RATING, DEC-021). Sits top
-                 centre directly under the TopBar time pod. Reads the CafeRating and
-                 RushHour workspace attributes; hidden until the player is clocked in.
+    Description: Server-wide Cafe Rating meter & Rush Event entry point (REVIVAL-001 M2-RATING, DEC-021),
+                 restyled to Jack's Studio design (2026-10-23): slice-scaled pod hanging under the TopBar
+                 base, "Cafe Rating" label above a light track, green fill + percent, and a GOLD_MID
+                 "+ Rush" / "+ Time" button on the right. Reads CafeRating, RushHour, BobaParty workspace
+                 attributes. During Rush Hour / Boba Party the label becomes the event banner + countdown,
+                 the fill recolors (GOLD_MID / ROSE_MID) and shows "x2 pay", and the button becomes "+ Time".
 --]]
 
 --!nonstrict
@@ -25,9 +28,7 @@ local React = require(Packages.React)
 
 local Styles = require(UI.Styles)
 local RatingConfig = require(Shared.Configuration.RatingConfig)
-local Banner = require(UI.Components.Buttons.Banner)
 local Pane = require(UI.Components.Pane)
-local PromptButton = require(UI.Components.Buttons.PromptButton)
 local UiSfx = require(UI.Utility.UiSfx)
 local EventProducts = require(Shared.Utility.EventProducts)
 
@@ -36,11 +37,15 @@ local EventProducts = require(Shared.Utility.EventProducts)
 local c = React.createElement
 
 local MAX_NAME_CHARS = 8
--- EVENT-FX: the banner bounces on the swing theme's beat while a Rush runs.
+-- EVENT-FX: the buy button pulses on the swing theme's beat while a Rush runs.
 local PULSE = TweenInfo.new(0.35, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true)
 local PULSE_SCALE = 1.08
 
--- D8: buyer name unchanged when 8 chars or fewer, else first 8 chars + "..".
+-- Jack's Studio design colors: the track is a light gray, not a Styles token
+-- (approved by Jack in the provided design). The button gold is Styles.GOLD_MID.
+local TRACK_GRAY = Color3.fromRGB(225, 225, 225)
+
+-- Buyer name truncated with ".." if longer than MAX_NAME_CHARS.
 local function shortName(name: string): string
 	local len = utf8.len(name)
 	if len ~= nil and len <= MAX_NAME_CHARS then
@@ -55,10 +60,9 @@ end
 
 ---> Component
 
-return function(props: { CurrentPage: ModuleScript? })
+return function()
 	local rating, setRating = React.useState(50)
 	local rush, setRush = React.useState(false)
-	local clockedIn, setClockedIn = React.useState(true)
 	local endsAt, setEndsAt = React.useState(nil)
 	local party, setParty = React.useState(false)
 	local buyer, setBuyer = React.useState(nil)
@@ -66,67 +70,68 @@ return function(props: { CurrentPage: ModuleScript? })
 	local pulseRef = React.useRef(nil)
 	local openingRef = React.useRef(false)
 
-	if RunService:IsRunning() then
-		React.useEffect(function()
-			local player = Players.LocalPlayer
-			local lastRush = workspace:GetAttribute("RushHour") == true
-			local function refresh()
-				local rushNow = workspace:GetAttribute("RushHour") == true
-				if rushNow and not lastRush and player:GetAttribute("ClockedIn") ~= false then
-					UiSfx.Play("Rush")
-				end
-				lastRush = rushNow
-				local value = workspace:GetAttribute("CafeRating")
-				setRating(if typeof(value) == "number" then value else 50)
-				setRush(workspace:GetAttribute("RushHour") == true)
-				local ends = workspace:GetAttribute("RushEndsAt")
-				setEndsAt(if typeof(ends) == "number" then ends else nil)
-				setParty(workspace:GetAttribute("BobaParty") == true)
-				local buyerNow = workspace:GetAttribute("BobaPartyBuyer")
-				setBuyer(if typeof(buyerNow) == "string" then buyerNow else nil)
-				setClockedIn(player:GetAttribute("ClockedIn") ~= false)
+	React.useEffect(function()
+		if not RunService:IsRunning() then
+			return nil
+		end
+		local player = Players.LocalPlayer
+		local lastRush = workspace:GetAttribute("RushHour") == true
+		local function refresh()
+			local rushNow = workspace:GetAttribute("RushHour") == true
+			if rushNow and not lastRush and (not player or player:GetAttribute("ClockedIn") ~= false) then
+				UiSfx.Play("Rush")
 			end
-			refresh()
-			local conns = {
-				workspace:GetAttributeChangedSignal("CafeRating"):Connect(refresh),
-				workspace:GetAttributeChangedSignal("RushHour"):Connect(refresh),
-				workspace:GetAttributeChangedSignal("RushEndsAt"):Connect(refresh),
-				workspace:GetAttributeChangedSignal("BobaParty"):Connect(refresh),
-				workspace:GetAttributeChangedSignal("BobaPartyBuyer"):Connect(refresh),
-				player:GetAttributeChangedSignal("ClockedIn"):Connect(refresh),
-			}
-			return function()
-				for _, conn in conns do
-					conn:Disconnect()
-				end
+			lastRush = rushNow
+			local value = workspace:GetAttribute("CafeRating")
+			setRating(if typeof(value) == "number" then value else 50)
+			setRush(rushNow)
+			local ends = workspace:GetAttribute("RushEndsAt")
+			setEndsAt(if typeof(ends) == "number" then ends else nil)
+			local partyNow = workspace:GetAttribute("BobaParty") == true
+			setParty(partyNow)
+			local partyBuyer = workspace:GetAttribute("BobaPartyBuyer")
+			local rushBuyer = workspace:GetAttribute("RushHourBuyer")
+			local buyerNow = if partyNow then partyBuyer else rushBuyer
+			setBuyer(if typeof(buyerNow) == "string" then buyerNow else nil)
+		end
+		refresh()
+		local conns = {
+			workspace:GetAttributeChangedSignal("CafeRating"):Connect(refresh),
+			workspace:GetAttributeChangedSignal("RushHour"):Connect(refresh),
+			workspace:GetAttributeChangedSignal("RushEndsAt"):Connect(refresh),
+			workspace:GetAttributeChangedSignal("BobaParty"):Connect(refresh),
+			workspace:GetAttributeChangedSignal("BobaPartyBuyer"):Connect(refresh),
+			workspace:GetAttributeChangedSignal("RushHourBuyer"):Connect(refresh),
+		}
+		return function()
+			for _, conn in conns do
+				conn:Disconnect()
 			end
-		end, {})
-	end
+		end
+	end, {})
 
 	local hasCountdown = rush and endsAt ~= nil
-	if RunService:IsRunning() then
-		React.useEffect(function()
-			if not hasCountdown then
-				return nil
-			end
-			local alive = true
-			task.spawn(function()
-				while alive do
-					task.wait(1)
-					if alive then
-						setTick(function(n)
-							return n + 1
-						end)
-					end
+	React.useEffect(function()
+		if not RunService:IsRunning() or not hasCountdown then
+			return nil
+		end
+		local alive = true
+		task.spawn(function()
+			while alive do
+				task.wait(1)
+				if alive then
+					setTick(function(n)
+						return n + 1
+					end)
 				end
-			end)
-			return function()
-				alive = false
 			end
-		end, { rush, endsAt })
-	end
+		end)
+		return function()
+			alive = false
+		end
+	end, { rush, endsAt })
 
-	-- Unconditional (guard inside); the pulse frame is only mounted while clocked in.
+	-- Pulse animation for the button during Rush Hour
 	React.useEffect(function()
 		local scale: UIScale? = pulseRef.current
 		if not rush or scale == nil then
@@ -139,13 +144,9 @@ return function(props: { CurrentPage: ModuleScript? })
 			tween:Cancel()
 			scale.Scale = 1
 		end
-	end, { rush, clockedIn })
+	end, { rush })
 
-	if not clockedIn then
-		return nil
-	end
-
-	-- Tap the meter: choose Boba Party or Rush Hour (live prices, ButtonPrompt via DialogController).
+	-- Open event choice dialog (live prices, ButtonPrompt via DialogController).
 	local function openBuyChoice()
 		if openingRef.current then
 			return
@@ -200,7 +201,7 @@ return function(props: { CurrentPage: ModuleScript? })
 
 	local remaining = 0
 	if hasCountdown then
-		remaining = math.ceil(endsAt - workspace:GetServerTimeNow())
+		remaining = math.max(0, math.ceil(endsAt - workspace:GetServerTimeNow()))
 	end
 	local bannerText = "Cafe Rating"
 	if rush then
@@ -208,6 +209,8 @@ return function(props: { CurrentPage: ModuleScript? })
 			bannerText = `{shortName(buyer)}'s Party!`
 		elseif party then
 			bannerText = "Boba Party!"
+		elseif typeof(buyer) == "string" then
+			bannerText = `{shortName(buyer)}'s Rush!`
 		else
 			bannerText = "Rush Hour!"
 		end
@@ -216,12 +219,8 @@ return function(props: { CurrentPage: ModuleScript? })
 		end
 	end
 
-	-- UI-REVISION: during a Rush the rating is frozen, so the bar shows the Rush
-	-- itself instead of a stale percentage: it drains with the time left and
-	-- reads the pay boost.
 	local alpha = math.clamp(rating / 100, 0, 1)
 	local color = if party then Styles.ROSE_MID elseif rush then Styles.GOLD_MID else Styles.GREEN
-	local deep = if party then Styles.ROSE_DEEP elseif rush then Styles.GOLD_DEEP else Styles.GREEN_DEEP
 	local barText = `{math.floor(rating + 0.5)}%`
 	if rush then
 		local total = if party then RatingConfig.BOBA_PARTY_SECONDS else RatingConfig.RUSH_SECONDS
@@ -229,81 +228,123 @@ return function(props: { CurrentPage: ModuleScript? })
 		barText = `\u{00D7}{RatingConfig.RUSH_PAY_MULT} pay`
 	end
 
+	local btnText = if rush then "+ Time" else "+ Rush"
+	local btnColor = if party then Styles.ROSE_MID else Styles.GOLD_MID
+
 	return c(Pane, {
-		ClassName = "Frame",
-		AspectRatio = 5,
+		ClassName = "ImageLabel",
 		Native = {
-			Active = false,
 			AnchorPoint = Vector2.new(0.5, 0),
 			BackgroundTransparency = 1,
-			Position = UDim2.fromScale(0.5, 0.115),
-			Size = UDim2.fromScale(0.2, 0.08),
-			ZIndex = 10,
+			Image = "http://www.roblox.com/asset/?id=13407992271",
+			ImageColor3 = Styles.GREEN,
+			Position = UDim2.fromScale(0.5, 0.327),
+			ScaleType = Enum.ScaleType.Slice,
+			Size = UDim2.fromScale(0.509847, 1.04717),
+			SliceCenter = Rect.new(68, 73, 332, 90),
+			SliceScale = 0.35,
 		},
 	}, {
-		UISizeConstraint = c("UISizeConstraint", {
-			MaxSize = Vector2.new(300, 60),
-			MinSize = Vector2.new(190, 38),
-		}),
-
-		Track = c("Frame", {
-			AnchorPoint = Vector2.new(0.5, 1),
-			BackgroundColor3 = Styles.OFFWHITE,
-			BorderSizePixel = 0,
-			Position = UDim2.fromScale(0.5, 1),
-			Size = UDim2.fromScale(0.9, 0.38),
-		}, {
-			Corner = c("UICorner", { CornerRadius = UDim.new(0.5, 0) }),
-			Fill = c("Frame", {
-				BackgroundColor3 = color,
-				BorderSizePixel = 0,
-				Size = UDim2.fromScale(alpha, 1),
-			}, {
-				Corner = c("UICorner", { CornerRadius = UDim.new(0.5, 0) }),
-			}),
-			Percent = c("TextLabel", {
+		Border = c(Pane, {
+			ClassName = "ImageLabel",
+			Native = {
 				AnchorPoint = Vector2.new(0.5, 0.5),
 				BackgroundTransparency = 1,
+				Image = "http://www.roblox.com/asset/?id=13408001982",
+				ImageColor3 = Styles.OFFWHITE,
+				Position = UDim2.fromScale(0.5, 0.281037),
+				ScaleType = Enum.ScaleType.Slice,
+				Size = UDim2.new(1, 5, 1.43793, 5),
+				SliceCenter = Rect.new(68, 73, 332, 90),
+				SliceScale = 0.35,
+			},
+		}),
+
+		Inner = c("Frame", {
+			AnchorPoint = Vector2.new(0.5, 1),
+			BackgroundTransparency = 1,
+			Position = UDim2.fromScale(0.5, 0.94),
+			Size = UDim2.new(0.91, 0, 0.013, 22),
+			ZIndex = 3,
+		}, {
+			Track = c("Frame", {
+				BackgroundColor3 = TRACK_GRAY,
+				BorderSizePixel = 0,
+				LayoutOrder = 2,
+				Size = UDim2.fromScale(0.723279, 0.8),
+				ZIndex = 3,
+			}, {
+				Corner = c("UICorner", { CornerRadius = UDim.new(0.5, 0) }),
+				Fill = c("Frame", {
+					BackgroundColor3 = color,
+					BorderSizePixel = 0,
+					Size = UDim2.fromScale(alpha, 1),
+				}, {
+					Corner = c("UICorner", { CornerRadius = UDim.new(0.5, 0) }),
+				}),
+				Percent = c("TextLabel", {
+					AnchorPoint = Vector2.new(0.5, 0.5),
+					BackgroundTransparency = 1,
+					FontFace = Styles.FONT_FREDOKA,
+					Position = UDim2.fromScale(0.5, 0.5),
+					Size = UDim2.fromScale(0.95, 0.9),
+					Text = barText,
+					TextColor3 = Color3.fromRGB(48, 62, 44),
+					TextScaled = true,
+					ZIndex = 4,
+				}),
+				Tap = c("TextButton", {
+					BackgroundTransparency = 1,
+					Size = UDim2.fromScale(1, 1),
+					Text = "",
+					ZIndex = 5,
+					[React.Event.Activated] = openBuyChoice,
+				}),
+				Stroke = c("UIStroke", {
+					Color = Color3.new(1, 1, 1),
+					StrokeSizingMode = Enum.StrokeSizingMode.ScaledSize,
+					Thickness = 0.15,
+				}),
+			}),
+
+			BuyBtn = c("TextButton", {
+				BackgroundColor3 = btnColor,
+				BorderSizePixel = 0,
 				FontFace = Styles.FONT_FREDOKA,
-				Position = UDim2.fromScale(0.5, 0.5),
-				Size = UDim2.fromScale(0.5, 0.8),
-				Text = barText,
-				TextColor3 = deep,
+				LayoutOrder = 3,
+				Position = UDim2.fromScale(0.752034, -0.133444),
+				Size = UDim2.fromScale(0.254583, 1.02046),
+				Text = btnText,
+				TextColor3 = Styles.OFFWHITE,
 				TextScaled = true,
-				ZIndex = 2,
+				ZIndex = 3,
+				[React.Event.Activated] = openBuyChoice,
+			}, {
+				Corner = c("UICorner", { CornerRadius = UDim.new(0.5, 0) }),
+				Scale = c("UIScale", { ref = pulseRef }),
+				Padding = c("UIPadding", {
+					PaddingLeft = UDim.new(0, 4),
+					PaddingRight = UDim.new(0, 4),
+				}),
 			}),
 		}),
 
-		-- Visible buy entry point under the meter (the meter itself stays non-interactive).
-		BuyEvent = c("Frame", {
-			Visible = props.CurrentPage == nil,
-			AnchorPoint = Vector2.new(0.5, 0),
+		Label = c("TextLabel", {
+			AutomaticSize = Enum.AutomaticSize.X,
 			BackgroundTransparency = 1,
-			Position = UDim2.fromScale(0.5, 1.08),
-			Size = UDim2.fromScale(0.5, 0.6),
-			ZIndex = 10,
+			FontFace = Styles.FONT_FREDOKA,
+			LayoutOrder = 1,
+			Position = UDim2.fromScale(0.043, 0.285),
+			Size = UDim2.fromScale(0.474, 0.24),
+			Text = bannerText,
+			TextColor3 = Styles.OFFWHITE,
+			TextScaled = true,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			ZIndex = 3,
 		}, {
-			Button = c(PromptButton, {
-				Text = if rush then "Add Time!" else "Start a Rush!",
-				Color = if party then Styles.ROSE_MID elseif rush then Styles.GOLD_MID else Styles.GREEN,
-				Size = UDim2.fromScale(1, 1),
-				OnClick = openBuyChoice,
-			}),
-		}),
-
-		Pulse = c("Frame", {
-			AnchorPoint = Vector2.new(0.5, 0),
-			BackgroundTransparency = 1,
-			Position = UDim2.fromScale(0.5, 0),
-			Size = UDim2.fromScale(1, 1),
-			ZIndex = 10,
-		}, {
-			Scale = c("UIScale", { ref = pulseRef }),
-			Title = c(Banner, {
-				Text = bannerText,
-				Color = color,
-				Position = UDim2.fromScale(0.5, 0.3),
-				Size = UDim2.fromScale(0.85, 0.65),
+			Constraint = c("UITextSizeConstraint", {
+				MaxTextSize = 13,
+				MinTextSize = 8,
 			}),
 		}),
 	})

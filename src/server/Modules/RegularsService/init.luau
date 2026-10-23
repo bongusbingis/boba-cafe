@@ -126,17 +126,17 @@ function RegularsService:Attach(npc: any, regular: Rules.Regular)
 		end
 	end)
 
-	-- "Take Order" prompt names the regular; the counter bubble says who is here.
+	-- "Take Order" prompt names the regular; the counter speech says who is here
+	-- (the card itself is the Take Order button).
 	model:GetAttributeChangedSignal("State"):Connect(function()
 		if model:GetAttribute("State") ~= "AtCounter" then
 			return
 		end
 		task.defer(function()
 			local gui = model:FindFirstChild("OrderBubble")
-			local card = if gui ~= nil then gui:FindFirstChild("Card") else nil
-			local label = if card ~= nil then card:FindFirstChildOfClass("TextLabel") else nil
-			if label ~= nil and model:GetAttribute("State") == "AtCounter" then
-				label.Text = `{regular.Name}: Hi, can I order?`
+			local speech = if gui ~= nil then gui:FindFirstChild("Speech") else nil
+			if speech ~= nil and speech:IsA("TextLabel") and model:GetAttribute("State") == "AtCounter" then
+				speech.Text = `{regular.Name}: Hi, can I order?`
 			end
 		end)
 	end)

@@ -1,19 +1,31 @@
 local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local WEB_APP_URL =
-	"https://script.google.com/macros/s/AKfycbwUcq1gnY4QkogsfVj9P0VCZeDu7rKTK_UDhPCELJG0Xk3hZiM_QQlfteDBaOu5WVRO/exec"
-local SECRET = "0d82fcd9-164d-4d50-aab7-03aa9fcde6cb"
+local RankUtil = require(ReplicatedStorage.Shared.Utility.RankUtil)
 
--- Replace these example IDs with your actual moderator IDs.
-local MODERATORS = {
-	[123456789] = true,
-	[987654321] = true,
-}
+-- Secrets stored in Roblox Open Cloud (Creator Dashboard -> Settings -> Secrets).
+local WEB_APP_URL_SECRET = "ACTIVITY_WEBHOOK_URL"
+local SECRET_KEY_SECRET = "ACTIVITY_SECRET"
+
+local function getSecret(name: string): Secret?
+	local ok, secret = pcall(function()
+		return HttpService:GetSecret(name)
+	end)
+	return if ok and secret ~= nil then secret else nil
+end
+
+-- Players recorded as middle-rank+ staff at join, keyed by UserId.
+local TrackedStaff = {}
 
 local function sendEvent(player, action)
+	local url = getSecret(WEB_APP_URL_SECRET)
+	if not url then
+		return
+	end
+
+	local authSecret = getSecret(SECRET_KEY_SECRET)
 	local payload = {
-		secret = SECRET,
 		username = player.Name,
 		uid = tostring(player.UserId),
 		action = action,
@@ -21,12 +33,16 @@ local function sendEvent(player, action)
 
 	task.spawn(function()
 		local ok, result = pcall(function()
+			local headers: { [string]: any } = {
+				["Content-Type"] = "application/json",
+			}
+			if authSecret then
+				headers["X-Activity-Secret"] = authSecret
+			end
 			return HttpService:RequestAsync({
-				Url = WEB_APP_URL,
+				Url = url,
 				Method = "POST",
-				Headers = {
-					["Content-Type"] = "application/json",
-				},
+				Headers = headers,
 				Body = HttpService:JSONEncode(payload),
 			})
 		end)
@@ -38,13 +54,23 @@ local function sendEvent(player, action)
 end
 
 Players.PlayerAdded:Connect(function(player)
-	--if MODERATORS[player.UserId] then
-	sendEvent(player, "join")
-	--end
+	task.spawn(function()
+		local ok, isMR = pcall(RankUtil.IsMR, player)
+		if not ok or not isMR then
+			return
+		end
+		-- Player may have left while the rank fetch was yielding.
+		if not player.Parent then
+			return
+		end
+		TrackedStaff[player.UserId] = true
+		sendEvent(player, "join")
+	end)
 end)
 
 Players.PlayerRemoving:Connect(function(player)
-	--if MODERATORS[player.UserId] then
-	sendEvent(player, "leave")
-	--end
+	if TrackedStaff[player.UserId] then
+		TrackedStaff[player.UserId] = nil
+		sendEvent(player, "leave")
+	end
 end)

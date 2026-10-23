@@ -106,6 +106,46 @@ for productId, packAction in BobaBuckReceipts.BuildActions() do
 	ProductActionMap[productId] = { packAction.Name, packAction.Grant }
 end
 
+-- Starter Bundle (SEASON-PASS): one-time bundle grant on the loaded profile.
+local StarterBundleReceipts = require(ServerScriptService:WaitForChild("Server").Modules.StarterBundleReceipts)
+for productId, bundleAction in StarterBundleReceipts.BuildActions() do
+	if ProductActionMap[productId] then
+		warn(`[ProcessReceipt] Starter Bundle ProductId {productId} collides with an existing product; skipped`)
+		continue
+	end
+	ProductActionMap[productId] = { bundleAction.Name, bundleAction.Grant }
+end
+
+-- Season Pass premium (SEASON-PASS): flags premium for the current season (sync,
+-- no yield). Retroactive: already-reached premium tiers become claimable at once.
+local SEASON_PASS_PRODUCT_ID = ProductIds.SeasonPass
+if SEASON_PASS_PRODUCT_ID then
+	if ProductActionMap[SEASON_PASS_PRODUCT_ID] then
+		warn(
+			`[ProcessReceipt] Season Pass ProductId {SEASON_PASS_PRODUCT_ID} collides with an existing product; skipped`
+		)
+	else
+		ProductActionMap[SEASON_PASS_PRODUCT_ID] = {
+			"Season Pass",
+			function(player, _receiptInfo, playerData)
+				local seasonPassService = Knit.GetService("SeasonPassService")
+				return seasonPassService:GrantPremium(player, playerData)
+			end,
+			function(player, _receiptInfo)
+				local ok, err = pcall(function()
+					Knit.GetService("AnalyticsEvents"):Custom(player, "SeasonPassPurchased")
+				end)
+				if not ok then
+					warn(`[ProcessReceipt] SeasonPassPurchased analytics failed: {err}`)
+				end
+				pcall(function()
+					Knit.GetService("SeasonPassService").Client.SeasonPassChanged:Fire(player)
+				end)
+			end,
+		}
+	end
+end
+
 local BOBA_PARTY_PRODUCT_ID = ProductIds.BobaParty
 if BOBA_PARTY_PRODUCT_ID then
 	ProductActionMap[BOBA_PARTY_PRODUCT_ID] = {
@@ -117,6 +157,11 @@ if BOBA_PARTY_PRODUCT_ID then
 				return false, err or "failed to start or extend boba party"
 			end
 			return true
+		end,
+		function(player, _receiptInfo)
+			pcall(function()
+				Knit.GetService("AnalyticsEvents"):Custom(player, "BobaPartyPurchased", 1)
+			end)
 		end,
 	}
 end
@@ -133,6 +178,45 @@ if RUSH_HOUR_PRODUCT_ID then
 				return false, err or "failed to start or extend rush hour"
 			end
 			return true
+		end,
+		function(player, _receiptInfo)
+			pcall(function()
+				Knit.GetService("AnalyticsEvents"):Custom(player, "RushHourPurchased", 1)
+			end)
+		end,
+	}
+end
+
+-- Roleplay Nickname change: updates the profile's Nickname from memory cache.
+local CHANGE_NICKNAME_PRODUCT_ID = ProductIds.ChangeNickname
+if CHANGE_NICKNAME_PRODUCT_ID then
+	ProductActionMap[CHANGE_NICKNAME_PRODUCT_ID] = {
+		"Change Nickname",
+		function(player, _receiptInfo, playerData)
+			local cosmeticsService = Knit.GetService("CosmeticsService")
+			local pending = cosmeticsService:GetPendingNickname(player)
+			if not pending or pending == "" then
+				warn(`[ProcessReceipt] No pending nickname found for player {player.Name}`)
+				return false, "no pending nickname"
+			end
+			playerData:SetValue({ "Nickname" }, pending)
+			playerData:SetValue({ "NicknameSkipped" }, false)
+			return true
+		end,
+		function(player, _receiptInfo)
+			local cosmeticsService = Knit.GetService("CosmeticsService")
+			local pending = cosmeticsService:GetPendingNickname(player)
+			if pending and pending ~= "" then
+				cosmeticsService:NotifyNicknameChanged(player, pending)
+				cosmeticsService:ClearPendingNickname(player)
+			end
+			pcall(function()
+				Knit.GetService("AnalyticsEvents"):Custom(player, "NicknameChangePurchased", 1)
+				Knit.GetService("DialogService"):Notify(player, {
+					Title = "Nickname Changed",
+					Description = `Your roleplay nickname is now {pending or ""}.`,
+				})
+			end)
 		end,
 	}
 end

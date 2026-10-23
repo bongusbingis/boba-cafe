@@ -30,7 +30,7 @@ local function BottomLeftStoryContainer()
 			Size = UDim2.fromScale(0.7, 0.2),
 			BackgroundTransparency = 1,
 			FontFace = Styles.FONT_FREDOKA,
-			Text = "BottomLeft HUD Controls\nIncludes Shift Clock In/Out, Boba Bucks, Points, and Staff Guide",
+			Text = "BottomLeft HUD Controls\nIncludes Shift Clock In/Out, Boba Bucks, Points, and Staff Guide\nTry Show Less to collapse the stack to a tray",
 			TextColor3 = Styles.OFFWHITE,
 			TextSize = 18,
 		}),

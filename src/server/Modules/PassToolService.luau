@@ -36,6 +36,7 @@ local Knit = require(Packages.Knit)
 local GamepassUtil = require(Shared.Utility.GamepassUtil)
 local PassCatalog = require(Shared.Configuration.PassCatalog)
 local PassTools = require(Shared.Configuration.PassTools)
+local ProductIds = require(Shared.Configuration.ProductIds)
 local WhackTarget = require(Shared.Utility.WhackTarget)
 local WorldPath = require(Shared.Utility.WorldPath)
 
@@ -45,6 +46,7 @@ local TOOLS_STORAGE_NAME = "ToolsStorage"
 local ASSET_TIMEOUT_SECONDS = 10
 local KIND_MOP_WHACK = "MopWhack"
 local KIND_FLYING_MOP = "FlyingMop"
+local KIND_PUMPKIN_LAUNCHER = "PumpkinLauncher"
 local PASS_TOOL_ATTRIBUTE = PassTools.PassToolAttribute
 
 ---> service
@@ -328,6 +330,21 @@ function PassToolService:_buildFlyingMop(): Tool?
 	return tool
 end
 
+function PassToolService:_buildPumpkinLauncher(): Tool?
+	local storage = ReplicatedStorage:WaitForChild(TOOLS_STORAGE_NAME, ASSET_TIMEOUT_SECONDS)
+	local template = if storage then storage:FindFirstChild(PassTools.PumpkinLauncher.ToolName) else nil
+	if template == nil or not template:IsA("Tool") then
+		self:_warnOnce(
+			`ReplicatedStorage.{TOOLS_STORAGE_NAME}["{PassTools.PumpkinLauncher.ToolName}"] is missing; Pumpkin Launcher not granted.`
+		)
+		return nil
+	end
+	local tool = template:Clone()
+	tool.CanBeDropped = false
+	mark(tool, KIND_PUMPKIN_LAUNCHER)
+	return tool
+end
+
 ---> emotes
 
 -- Adds the Emote Pack emotes to the character's HumanoidDescription so the Roblox
@@ -368,11 +385,14 @@ function PassToolService:_grant(player: Player)
 	local perks = Knit.GetService("PerkService")
 	local wantsMop = perks:HasPerk(player, PassTools.MopWhackPerk)
 	local wantsFlying = perks:HasPerk(player, PassTools.FlyingMopPerk)
+	local wantsPumpkin = if ProductIds.PumpkinLauncherPass ~= nil
+		then perks:HasPerk(player, PassTools.PumpkinLauncherPerk)
+		else false
 	if player.Parent == nil then
 		return
 	end
 
-	if wantsMop or wantsFlying then
+	if wantsMop or wantsFlying or wantsPumpkin then
 		local backpack = player:FindFirstChildOfClass("Backpack") or player:WaitForChild("Backpack", 10)
 		if backpack ~= nil then
 			if wantsMop and not hasTool(player, KIND_MOP_WHACK) then
@@ -385,6 +405,19 @@ function PassToolService:_grant(player: Player)
 				local tool = self:_buildFlyingMop()
 				if tool then
 					tool.Parent = backpack
+				end
+			end
+			if wantsPumpkin and not hasTool(player, KIND_PUMPKIN_LAUNCHER) then
+				local tool = self:_buildPumpkinLauncher()
+				if tool then
+					tool.Parent = backpack
+				end
+				local starterGear = player:FindFirstChild("StarterGear")
+				if starterGear and not starterGear:FindFirstChild(PassTools.PumpkinLauncher.ToolName) then
+					local gearTool = self:_buildPumpkinLauncher()
+					if gearTool then
+						gearTool.Parent = starterGear
+					end
 				end
 			end
 		end
@@ -430,10 +463,20 @@ function PassToolService:KnitStart()
 				return
 			end
 			local relevant = false
-			for _, perk in { PassTools.MopWhackPerk, PassTools.FlyingMopPerk, PassTools.EmotePackPerk } do
-				if table.find(entry.Perks, perk) ~= nil then
+			for _, perk in
+				{
+					PassTools.MopWhackPerk,
+					PassTools.FlyingMopPerk,
+					PassTools.EmotePackPerk,
+					PassTools.PumpkinLauncherPerk,
+				}
+			do
+				if entry and table.find(entry.Perks, perk) ~= nil then
 					relevant = true
 				end
+			end
+			if ProductIds.PumpkinLauncherPass ~= nil and passId == ProductIds.PumpkinLauncherPass then
+				relevant = true
 			end
 			if not relevant then
 				return

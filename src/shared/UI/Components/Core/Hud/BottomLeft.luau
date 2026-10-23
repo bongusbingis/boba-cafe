@@ -1,6 +1,8 @@
 --[[
 	Hud
 	Renders groups of Hud buttons used for opening/closing page components.
+	The stack collapses to a bucks-only tray via the Show More / Show Less
+	handle; the hatching-capsule button lives outside the stack and stays put.
 	Props:
 	- CurrentPage: ModuleScript currently selected.
 	- SetCurrentPage: Callback to update the selected page (ModuleScript or nil).
@@ -75,6 +77,18 @@ return function(props: {
 	local bucksPop, bucksPopApi = ReactSpring.useSpring(function()
 		return { Scale = 1, config = Styles.SPRING_STANDARD }
 	end)
+	-- Collapse spring: the stack pops when the tray opens or shuts.
+	local collapsed, setCollapsed = React.useState(false)
+	local panelPop, panelPopApi = ReactSpring.useSpring(function()
+		return { Scale = 1, config = Styles.SPRING_STANDARD }
+	end)
+
+	local function toggleCollapsed()
+		setCollapsed(function(was)
+			return not was
+		end)
+		panelPopApi.start({ from = { Scale = 0.94 }, to = { Scale = 1 }, config = Styles.SPRING_STANDARD })
+	end
 	local shownBucks, setShownBucks = React.useState(0)
 	local prevBucksRef = React.useRef(nil :: number?)
 	React.useEffect(function()
@@ -381,6 +395,7 @@ return function(props: {
 
 			CurrencyPanel = c(Pane, {
 				ClassName = "Frame",
+				Scale = panelPop.Scale,
 				ListLayout = {
 					Padding = UDim.new(0.2, 0),
 					HorizontalAlignment = Enum.HorizontalAlignment.Center,
@@ -394,25 +409,28 @@ return function(props: {
 			}, {
 				Notification = c(SmallNotification.Component, {}),
 
-				LevelBar = c(LevelBar.Component, { LayoutOrder = -1 }),
+				LevelBar = not collapsed and c(LevelBar.Component, { LayoutOrder = -1 }) or nil,
 
-				ShiftTimer = clockedIn and shiftCount ~= nil and shiftTarget ~= nil and c(NormalButton, {
-					Icon = "rbxassetid://8184068342",
-					Size = BUTTON_SIZE,
-					Color = Styles.ROSE_MID,
-					Text = `Shift {shiftCount}/{shiftTarget}`,
-					LayoutOrder = 0,
-				}),
+				ShiftTimer = not collapsed and clockedIn and shiftCount ~= nil and shiftTarget ~= nil and c(
+					NormalButton,
+					{
+						Icon = "rbxassetid://8184068342",
+						Size = BUTTON_SIZE,
+						Color = Styles.ROSE_MID,
+						Text = `Shift {shiftCount}/{shiftTarget}`,
+						LayoutOrder = 0,
+					}
+				) or nil,
 
-				Shift = c(NormalButton, {
+				Shift = not collapsed and c(NormalButton, {
 					Size = BUTTON_SIZE,
 					Color = if clockedIn then Styles.GOLD_MID else Styles.GREEN_MID,
 					Text = if clockedIn then "Clock Out" else "Clock In",
 					OnClick = toggleClockedIn,
 					LayoutOrder = 1,
-				}),
+				}) or nil,
 
-				Recipes = c(NormalButton, {
+				Recipes = not collapsed and c(NormalButton, {
 					Icon = "",
 					Size = BUTTON_SIZE,
 					Color = Styles.ROSE_DEEP,
@@ -421,9 +439,9 @@ return function(props: {
 						props.SetCurrentPage(UI.Pages.Recipes)
 					end,
 					LayoutOrder = 2,
-				}),
+				}) or nil,
 
-				Invite = c(NormalButton, {
+				Invite = not collapsed and c(NormalButton, {
 					Icon = "",
 					Size = BUTTON_SIZE,
 					Color = Styles.GREEN_MID,
@@ -435,7 +453,7 @@ return function(props: {
 						end)
 					end,
 					LayoutOrder = 3,
-				}),
+				}) or nil,
 
 				BucksWrap = c(Pane, {
 					ClassName = "Frame",
@@ -454,6 +472,15 @@ return function(props: {
 							props.SetCurrentPage(UI.Pages.Shop, "Currency")
 						end,
 					}),
+				}),
+
+				-- Collapse handle: shuts the stack down to a bucks-only tray.
+				CollapseToggle = c(NormalButton, {
+					Size = BUTTON_SIZE,
+					Color = if collapsed then Styles.GREEN_DIM else Styles.GRAY,
+					Text = if collapsed then "Show More" else "Show Less",
+					OnClick = toggleCollapsed,
+					LayoutOrder = 5,
 				}),
 			}),
 		}),

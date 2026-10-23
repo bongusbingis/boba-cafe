@@ -28,6 +28,7 @@ type Spec = OrderSpec.OrderSpec
 type Grade = OrderSpec.Grade
 
 type Order = {
+	seq: number?,
 	orderNum: string,
 	customer: number, -- UserId
 	order: { any },
@@ -42,6 +43,7 @@ type Order = {
 }
 
 type CustomerOrder = {
+	seq: number?,
 	orderNum: string,
 	customerName: string,
 	numItems: number,
@@ -336,6 +338,13 @@ function OrderService:_hasOpenOrder(customerId: number): boolean
 	return false
 end
 
+local function isOlderOrder(a: any, b: any): boolean
+	if a.seq ~= nil and b.seq ~= nil and a.seq ~= b.seq then
+		return a.seq < b.seq
+	end
+	return a.orderNum < b.orderNum
+end
+
 -- Every order the player is preparing, oldest first.
 function OrderService:_getPlayerOrders(userId: number, status: string): { Order }
 	local found: { Order } = {}
@@ -345,7 +354,7 @@ function OrderService:_getPlayerOrders(userId: number, status: string): { Order 
 		end
 	end
 	table.sort(found, function(a, b)
-		return a.orderNum < b.orderNum
+		return isOlderOrder(a, b)
 	end)
 	return found
 end
@@ -462,7 +471,7 @@ function OrderService:_getNextOrder(excludeCustomerId: number?): Order?
 	local next: Order? = nil
 	for _, order in self._orders do
 		if order.status == "Pending Preparation" and order.customer ~= excludeCustomerId then
-			if next == nil or order.orderNum < next.orderNum then
+			if next == nil or isOlderOrder(order, next) then
 				next = order
 			end
 		end
@@ -536,7 +545,7 @@ function OrderService:_staffScreenOrder(): (Order?, CustomerOrder?, number)
 	for _, order in self._orders do
 		if order.status ~= "Ready for Pick Up" then
 			open += 1
-			if order.status == "Being Prepared" and (preparing == nil or order.orderNum < preparing.orderNum) then
+			if order.status == "Being Prepared" and (preparing == nil or isOlderOrder(order, preparing)) then
 				preparing = order
 			end
 		end
@@ -545,7 +554,7 @@ function OrderService:_staffScreenOrder(): (Order?, CustomerOrder?, number)
 	for _, order in self._customerOrders do
 		if order.status ~= "Ready for Pick Up" and not (order.npcModel and order.npcModel.Parent == nil) then
 			open += 1
-			if npc == nil or order.orderNum < npc.orderNum then
+			if npc == nil or isOlderOrder(order, npc) then
 				npc = order
 			end
 		end
@@ -553,7 +562,7 @@ function OrderService:_staffScreenOrder(): (Order?, CustomerOrder?, number)
 	if real ~= nil then
 		return real, nil, open
 	end
-	if preparing ~= nil and (npc == nil or preparing.orderNum <= npc.orderNum) then
+	if preparing ~= nil and (npc == nil or not isOlderOrder(npc, preparing)) then
 		return preparing, nil, open
 	end
 	return nil, npc, open
@@ -636,6 +645,7 @@ function OrderService:_updateStatusScreens()
 	for _, order in self._orders do
 		local customer = Players:GetPlayerByUserId(order.customer)
 		table.insert(allOrders, {
+			seq = order.seq,
 			orderNum = order.orderNum,
 			customerName = customer and customer.Name or "Unknown",
 			status = order.status,
@@ -649,6 +659,7 @@ function OrderService:_updateStatusScreens()
 			self._customerOrders[id] = nil
 		else
 			table.insert(allOrders, {
+				seq = order.seq,
 				orderNum = order.orderNum,
 				customerName = order.customerName,
 				status = order.status,
@@ -664,7 +675,7 @@ function OrderService:_updateStatusScreens()
 		if prioA ~= prioB then
 			return prioA < prioB
 		end
-		return (tonumber(a.orderNum) or 0) < (tonumber(b.orderNum) or 0)
+		return isOlderOrder(a, b)
 	end)
 
 	for _, screen in self._statusScreens do
@@ -719,8 +730,10 @@ end
 -- goes straight onto their ticket stack. Without it (Boba Phone) it is dispatched.
 function OrderService:_addOrder(customerId: number, orderItems: { any }, specs: { Spec }, assignTo: Player?)
 	self._currentOrderNum += 1
+	local currentSeq = self._currentOrderNum
 	local order: Order = {
-		orderNum = string.format("%04i", self._currentOrderNum % 1000),
+		seq = currentSeq,
+		orderNum = string.format("%04i", currentSeq % 1000),
 		customer = customerId,
 		order = orderItems,
 		specs = specs,
@@ -788,6 +801,60 @@ function OrderService:_dispatchPending(exclude: Player?): number
 	return assigned
 end
 
+function OrderService:_collectOrder(customerId: number, area: Model)
+	local ownerValue = area:FindFirstChild("OrderOwner") :: IntValue?
+	if not ownerValue or ownerValue.Value ~= customerId then
+		return
+	end
+
+	local customer = Players:GetPlayerByUserId(customerId)
+	if customer then
+		self.Client.PickUpNodeVisibilityChanged:Fire(customer, area, false)
+	end
+
+	local pickedTools: { Instance } = {}
+	local orderFolder = ServerStorage[ORDER_PICKUP_FOLDER]:FindFirstChild("Order_" .. customerId)
+	if orderFolder then
+		pickedTools = orderFolder:GetChildren()
+		if customer then
+			self:_grantToolsToCustomer(customer, pickedTools)
+		end
+		orderFolder:Destroy()
+	end
+
+	for _, child in area:GetChildren() do
+		if child:IsA("Model") then
+			child:Destroy()
+		end
+	end
+
+	ownerValue.Value = 0
+	local prompt = area:FindFirstChild("ProximityPrompt") :: ProximityPrompt?
+	if prompt then
+		prompt.ObjectText = "Pick Up Area"
+		prompt.ActionText = "Deposit Order"
+	end
+
+	for i = #self._orders, 1, -1 do
+		local order = self._orders[i]
+		if order.customer == customerId and order.status == "Ready for Pick Up" then
+			table.remove(self._orders, i)
+			local barista = order.preparedBy and Players:GetPlayerByUserId(order.preparedBy) or nil
+			local handed = pickedTools
+			pcall(function()
+				self.OrderPickedUp:Fire(customerId, barista, order.grade, order.specs, handed, order.order)
+			end)
+			if order.preparedBy then
+				self._freeSince[order.preparedBy] = os.clock()
+			end
+		end
+	end
+
+	self:_dispatchPending()
+	self:_updateStaffScreens()
+	self:_updateStatusScreens()
+end
+
 -- Handles both paths of a pick-up area interaction:
 --   • If the area belongs to the triggering player → they pick up their order.
 --   • Otherwise → the player is a staff member depositing a prepared order.
@@ -796,44 +863,7 @@ function OrderService:_handlePickUp(player: Player, area: Model)
 
 	if ownerValue.Value == player.UserId then
 		-- ── Customer path: collect their completed order ──────────────────────
-		self.Client.PickUpNodeVisibilityChanged:Fire(player, area, false)
-
-		local pickedTools: { Instance } = {}
-		local orderFolder = ServerStorage[ORDER_PICKUP_FOLDER]:FindFirstChild("Order_" .. player.UserId)
-		if orderFolder then
-			pickedTools = orderFolder:GetChildren()
-			self:_grantToolsToCustomer(player, pickedTools)
-			orderFolder:Destroy()
-		end
-
-		for _, child in area:GetChildren() do
-			if child:IsA("Model") then
-				child:Destroy()
-			end
-		end
-
-		ownerValue.Value = 0
-		area.ProximityPrompt.ObjectText = "Pick Up Area"
-		area.ProximityPrompt.ActionText = "Deposit Order"
-
-		for i = #self._orders, 1, -1 do
-			local order = self._orders[i]
-			if order.customer == player.UserId and order.status == "Ready for Pick Up" then
-				table.remove(self._orders, i)
-				local barista = order.preparedBy and Players:GetPlayerByUserId(order.preparedBy) or nil
-				local handed = pickedTools
-				pcall(function()
-					self.OrderPickedUp:Fire(player.UserId, barista, order.grade, order.specs, handed, order.order)
-				end)
-				if order.preparedBy then
-					self._freeSince[order.preparedBy] = os.clock()
-				end
-			end
-		end
-
-		self:_dispatchPending()
-		self:_updateStaffScreens()
-		self:_updateStatusScreens()
+		self:_collectOrder(player.UserId, area)
 	else
 		-- ── Staff path: deposit a prepared order ──────────────────────────────
 		-- A barista with two tickets may be preparing two real orders; the held tools
@@ -963,6 +993,13 @@ function OrderService:_handlePickUp(player: Player, area: Model)
 			area.ProximityPrompt.ActionText = "Pick Up Order"
 			self.Client.PickUpNodeVisibilityChanged:Fire(customer, area, true, true)
 		end
+
+		local targetCustomerId = playerOrder.customer
+		task.delay(30, function()
+			pcall(function()
+				self:_collectOrder(targetCustomerId, area)
+			end)
+		end)
 	end
 end
 
@@ -1039,7 +1076,7 @@ function OrderService:_refreshHandoffBeam(baristaUserId: number)
 	local target: Order? = nil
 	for _, order in self._orders do
 		if order.status == "Being Prepared" and order.preparedBy == baristaUserId and order.handoff == "direct" then
-			if target == nil or order.orderNum < target.orderNum then
+			if target == nil or isOlderOrder(order, target) then
 				target = order
 			end
 		end
@@ -1249,7 +1286,8 @@ function OrderService:RegisterCustomerOrder(
 	npcModel: Model?
 ): string
 	self._currentOrderNum += 1
-	local orderNum = string.format("%04i", self._currentOrderNum % 1000)
+	local currentSeq = self._currentOrderNum
+	local orderNum = string.format("%04i", currentSeq % 1000)
 	local orderStatus = status or "Being Prepared"
 	local color = if orderStatus == "Ready for Pick Up"
 		then COLOR_READY
@@ -1257,6 +1295,7 @@ function OrderService:RegisterCustomerOrder(
 		else COLOR_PENDING
 
 	self._customerOrders[orderId] = {
+		seq = currentSeq,
 		orderNum = orderNum,
 		customerName = customerName,
 		numItems = numItems,

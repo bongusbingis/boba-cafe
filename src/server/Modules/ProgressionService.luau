@@ -14,6 +14,7 @@
 
 ---> services
 local HttpService = game:GetService("HttpService")
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 ---> dependencies
@@ -299,6 +300,9 @@ function ProgressionService:AddXp(player: Player, amount: number, skipShiftCount
 	local data = Knit.GetService("DataService")
 	data:GetDataAsync(player)
 		:andThen(function(proxy)
+			if typeof(player) == "Instance" and not player:IsDescendantOf(Players) then
+				return
+			end
 			local state = self._state[player]
 			if state == nil then
 				state = { Level = proxy.Data.Level or 1, XP = proxy.Data.XP or 0 }
@@ -359,12 +363,24 @@ function ProgressionService:_onLevelUp(player: Player, level: number, proxy: any
 		end
 		local reward = Progression.COSMETIC_REWARDS[level]
 		if reward ~= nil then
-			proxy:SetValue({ "Inventory", "Items", reward.ItemType, HttpService:GenerateGUID(false) }, {
-				Name = reward.Name,
-				Tier = reward.Tier,
-				Equipped = false,
-				Properties = {},
-			})
+			task.spawn(function()
+				local Inventory = require(Shared.Inventory)
+				local okInv, inv = Inventory:GetPlayerInventoryAsync(player, reward.ItemType):await()
+				if okInv and inv then
+					inv:Insert({
+						Name = reward.Name,
+						Tier = reward.Tier,
+						Properties = {},
+					})
+				else
+					proxy:SetValue({ "Inventory", "Items", reward.ItemType, HttpService:GenerateGUID(false) }, {
+						Name = reward.Name,
+						Tier = reward.Tier,
+						Equipped = false,
+						Properties = {},
+					})
+				end
+			end)
 		end
 		local text = ProgressionService.LevelUpText(level)
 		Knit.GetService("DialogService"):Notify(player, { Text = text, SoundEnabled = true } :: any)
@@ -373,6 +389,14 @@ function ProgressionService:_onLevelUp(player: Player, level: number, proxy: any
 			Title = Progression.TitleFor(level),
 			Unlocks = unlocksAt(level),
 		})
+		pcall(function()
+			local a = Knit.GetService("AnalyticsEvents")
+			if level == 2 then
+				a:OnboardingFunnel(player, 8, "FirstLevelUp")
+				a:Funnel(player, 8, "FirstLevelUp")
+			end
+			a:ProgressionComplete(player, "CareerLevel", level, Progression.TitleFor(level))
+		end)
 	end)
 	if not ok then
 		warn(`[ProgressionService] Level-up step failed: {err}`)

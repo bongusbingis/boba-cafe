@@ -175,15 +175,13 @@ return function(props)
 		setRequiredIndex(1)
 	end
 
-	local function onSelectItem(itemKey)
-		if not selectedCategory then
-			return
-		end
-
-		local item = FoodTable[selectedCategory].Items[itemKey]
+	local function selectItem(categoryKey, itemKey)
+		local categoryData = FoodTable[categoryKey]
+		local item = if categoryData then categoryData.Items[itemKey] else nil
 		if not item then
 			return
 		end
+		setSelectedCategory(categoryKey)
 
 		local info = {}
 		if item.Select then
@@ -213,6 +211,23 @@ return function(props)
 		setRequiredIndex(1)
 		setPopupVisible(true)
 		setSubmitMessage("")
+	end
+
+	local function onSelectItem(itemKey)
+		if selectedCategory ~= nil then
+			selectItem(selectedCategory, itemKey)
+		end
+	end
+
+	local function onSelectCategory(categoryKey)
+		-- Single-item categories skip straight to customization.
+		local items = getOrderedItems(categoryKey)
+		if #items == 1 then
+			selectItem(categoryKey, items[1].key)
+		else
+			setSelectedCategory(categoryKey)
+			setMenuStage("Items")
+		end
 	end
 
 	local function onRequiredOptionPicked(optionKey)
@@ -319,8 +334,7 @@ return function(props)
 					Size = UDim2.new(1, 0, 0, 78),
 					Text = "",
 					[React.Event.Activated] = function()
-						setSelectedCategory(category.key)
-						setMenuStage("Items")
+						onSelectCategory(category.key)
 					end,
 				}, {
 					UICorner = c("UICorner", {

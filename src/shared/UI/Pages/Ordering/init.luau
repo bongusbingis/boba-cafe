@@ -141,7 +141,16 @@ end
 local function resolveItemDescription(orderItem)
 	local lines = {}
 	if orderItem.DefaultInfo.RequiredSelection then
+		local groups = {}
 		for selType in orderItem.DefaultInfo.RequiredSelection do
+			table.insert(groups, selType)
+		end
+		table.sort(groups, function(a, b)
+			local orderA = if a == "Syrup Flavor" then 1 elseif a == "Tapioca Flavor" then 2 else 3
+			local orderB = if b == "Syrup Flavor" then 1 elseif b == "Tapioca Flavor" then 2 else 3
+			return orderA < orderB
+		end)
+		for _, selType in ipairs(groups) do
 			table.insert(lines, selType .. ":\n	- " .. (orderItem.CustomInfo[selType] or "?"))
 		end
 	end
@@ -348,6 +357,8 @@ return function(props: {
 	end
 
 	local notepadVisible, setNotepadVisible = React.useState(npcOrderData ~= nil)
+	local px = usePx()
+	local freeformNotes, setFreeformNotes = React.useState("")
 
 	---> page routing
 	-- Pages: "CategorySelect" | "ItemSelect" | "RequiredSelection" | "SizeOptions"
@@ -408,9 +419,10 @@ return function(props: {
 	if page == "ItemSelect" and selCategory then
 		topBarTitle = selCategory
 	elseif page == "RequiredSelection" and reqSelQueue[reqSelIdx] then
-		topBarTitle = reqSelQueue[reqSelIdx].name
+		local stepName = reqSelQueue[reqSelIdx].name
+		topBarTitle = if stepName == "Syrup Flavor" then "Boba Tea Flavor" else stepName
 	elseif page == "SizeOptions" then
-		topBarTitle = "Add to Order"
+		topBarTitle = if #reqSelQueue > 0 then "Select Size" else "Add to Order"
 	end
 
 	---> navigation handlers
@@ -418,24 +430,17 @@ return function(props: {
 	local function goBack()
 		if page == "ItemSelect" then
 			setPage("CategorySelect")
+		elseif page == "SizeOptions" then
+			setSelItemKey(nil)
+			setCustomInfo({})
+			setReqSelQueue({})
+			setReqSelIdx(1)
+			setPage("ItemSelect")
 		elseif page == "RequiredSelection" then
 			if reqSelIdx > 1 then
 				setReqSelIdx(reqSelIdx - 1)
 			else
-				setSelItemKey(nil)
-				setCustomInfo({})
-				setReqSelQueue({})
-				setReqSelIdx(1)
-				setPage("ItemSelect")
-			end
-		elseif page == "SizeOptions" then
-			if #reqSelQueue > 0 then
-				setReqSelIdx(#reqSelQueue)
-				setPage("RequiredSelection")
-			else
-				setSelItemKey(nil)
-				setCustomInfo({})
-				setPage("ItemSelect")
+				setPage("SizeOptions")
 			end
 		end
 	end
@@ -470,18 +475,50 @@ return function(props: {
 		end
 
 		-- Build the required-selection queue.
+		-- Deterministic order: "Syrup Flavor" (Boba Tea Flavor) first, then "Tapioca Flavor".
 		local queue = {}
 		if item.RequiredSelection then
 			for typeName, options in item.RequiredSelection do
 				table.insert(queue, { name = typeName, options = launchOptions(typeName, options) })
 			end
+			table.sort(queue, function(a, b)
+				local orderA = if a.name == "Syrup Flavor" then 1 elseif a.name == "Tapioca Flavor" then 2 else 3
+				local orderB = if b.name == "Syrup Flavor" then 1 elseif b.name == "Tapioca Flavor" then 2 else 3
+				return orderA < orderB
+			end)
 		end
 
 		setSelItemKey(itemKey)
 		setCustomInfo(info)
 		setReqSelQueue(queue)
 		setReqSelIdx(1)
-		setPage(if #queue > 0 then "RequiredSelection" else "SizeOptions")
+		setPage("SizeOptions")
+	end
+
+	local function onAddToOrder(overrideInfo: { [string]: any }?)
+		if not selCategory or not selItemKey then
+			return
+		end
+		if #orderItems >= MAX_ORDER_ITEMS then
+			return
+		end
+		local item = FoodTable[selCategory :: string].Items[selItemKey :: string]
+		local finalInfo = overrideInfo or customInfo
+
+		local newOrder = table.clone(orderItems)
+		table.insert(newOrder, {
+			Category = selCategory,
+			Item = selItemKey,
+			DefaultInfo = item,
+			CustomInfo = finalInfo,
+		})
+		setOrderItems(newOrder)
+
+		setSelItemKey(nil)
+		setCustomInfo({})
+		setReqSelQueue({})
+		setReqSelIdx(1)
+		setPage("CategorySelect")
 	end
 
 	local function onReqSelOptionPicked(optionKey: string)
@@ -492,30 +529,8 @@ return function(props: {
 		if reqSelIdx < #reqSelQueue then
 			setReqSelIdx(reqSelIdx + 1)
 		else
-			setPage("SizeOptions")
+			onAddToOrder(newInfo)
 		end
-	end
-
-	local function onAddToOrder()
-		if not selCategory or not selItemKey then
-			return
-		end
-		local item = FoodTable[selCategory :: string].Items[selItemKey :: string]
-
-		local newOrder = table.clone(orderItems)
-		table.insert(newOrder, {
-			Category = selCategory,
-			Item = selItemKey,
-			DefaultInfo = item,
-			CustomInfo = customInfo,
-		})
-		setOrderItems(newOrder)
-
-		setSelItemKey(nil)
-		setCustomInfo({})
-		setReqSelQueue({})
-		setReqSelIdx(1)
-		setPage("CategorySelect")
 	end
 
 	local function onOrderItemRemoved(index: number)
@@ -672,6 +687,11 @@ return function(props: {
 			CustomInfo = customInfo,
 			OrderItemsCount = #orderItems,
 			MaxOrderItems = MAX_ORDER_ITEMS,
+			HasNextStep = #reqSelQueue > 0,
+			OnNext = function()
+				setPage("RequiredSelection")
+				setReqSelIdx(1)
+			end,
 			OnCustomInfoChanged = setCustomInfo,
 			OnAddToOrder = onAddToOrder,
 			OnCancel = cancelItemConfig,
@@ -679,103 +699,307 @@ return function(props: {
 		else nil
 
 	local function renderNotepad()
-		local noteText = if npcOrderData ~= nil then (npcOrderData.RequestedText or "") else ""
+		local isNpcOrder = npcOrderData ~= nil and npcOrderData.CounterCustomerId == nil
+		local parsedItems: { { Index: number, Title: string, Extras: { string } } } = {}
+
+		if isNpcOrder then
+			if typeof(npcOrderData.Orders) == "table" and #npcOrderData.Orders > 0 then
+				for i, order in ipairs(npcOrderData.Orders) do
+					local cInfo = order.CustomInfo or {}
+					local size = cInfo.Size
+					local syrup = cInfo["Syrup Flavor"]
+					local tapioca = cInfo["Tapioca Flavor"]
+					local iced = cInfo.Iced == true or cInfo.Ice == true
+					local sugar = cInfo.Sugar == true
+
+					local name = order.Item
+					if order.Category == "Boba Teas" or string.find(name, "Boba") then
+						if syrup ~= nil then
+							name = syrup .. " Boba"
+						else
+							name = "Boba"
+						end
+					elseif order.Category == "Coffees" then
+						if name == "Regular" then
+							name = "Regular Coffee"
+						end
+					end
+					if size ~= nil then
+						name = size .. " " .. name
+					end
+
+					local extras = {}
+					if tapioca ~= nil then
+						table.insert(extras, tapioca .. " Tapioca")
+					end
+					if iced then
+						table.insert(extras, "Ice")
+					end
+					if sugar then
+						table.insert(extras, "Sugar")
+					end
+
+					table.insert(parsedItems, {
+						Index = i,
+						Title = name,
+						Extras = extras,
+					})
+				end
+			elseif npcOrderData.RequestedText and #npcOrderData.RequestedText > 0 then
+				local rawLines = npcOrderData.RequestedText:split("\n")
+				for i, line in ipairs(rawLines) do
+					local trimmed = line:gsub("^%s+", ""):gsub("%s+$", "")
+					if #trimmed > 0 then
+						local parts = trimmed:split(", ")
+						local title = parts[1] or trimmed
+						local extras = {}
+						for p = 2, #parts do
+							table.insert(extras, parts[p])
+						end
+						table.insert(parsedItems, {
+							Index = i,
+							Title = title,
+							Extras = extras,
+						})
+					end
+				end
+			end
+		end
+
+		local orderItemElements: { [string]: any } = {
+			UIListLayout = c("UIListLayout", {
+				FillDirection = Enum.FillDirection.Vertical,
+				Padding = UDim.new(0, px(8)),
+				SortOrder = Enum.SortOrder.LayoutOrder,
+			}),
+			UIPadding = c("UIPadding", {
+				PaddingTop = UDim.new(0, px(4)),
+				PaddingBottom = UDim.new(0, px(8)),
+				PaddingLeft = UDim.new(0, px(2)),
+				PaddingRight = UDim.new(0, px(4)),
+			}),
+		}
+
+		for _, item in ipairs(parsedItems) do
+			local extraElements = {}
+			if #item.Extras > 0 then
+				extraElements["UIListLayout"] = c("UIListLayout", {
+					FillDirection = Enum.FillDirection.Vertical,
+					Padding = UDim.new(0, px(2)),
+					SortOrder = Enum.SortOrder.LayoutOrder,
+				})
+				for extraIdx, extra in ipairs(item.Extras) do
+					extraElements[`extra_{extraIdx}`] = c("TextLabel", {
+						BackgroundTransparency = 1,
+						FontFace = Styles.FONT_FREDOKA,
+						LayoutOrder = extraIdx,
+						Size = UDim2.new(1, 0, 0, px(22)),
+						Text = `  •  {extra}`,
+						TextColor3 = Color3.fromRGB(60, 60, 60),
+						TextSize = 16,
+						TextXAlignment = Enum.TextXAlignment.Left,
+					})
+				end
+			end
+
+			orderItemElements[`item_{item.Index}`] = c(Pane, {
+				ClassName = "Frame",
+				CornerRadius = Styles.CORNER_CARD,
+				Stroke = { Color = Color3.fromRGB(220, 220, 220), Thickness = 1 },
+				ListLayout = {
+					FillDirection = Enum.FillDirection.Vertical,
+					Padding = UDim.new(0, px(4)),
+					SortOrder = Enum.SortOrder.LayoutOrder,
+				},
+				Padding = {
+					PaddingTop = UDim.new(0, px(8)),
+					PaddingBottom = UDim.new(0, px(8)),
+					PaddingLeft = UDim.new(0, px(10)),
+					PaddingRight = UDim.new(0, px(10)),
+				},
+				Native = {
+					AutomaticSize = Enum.AutomaticSize.Y,
+					BackgroundColor3 = Color3.fromRGB(248, 248, 248),
+					BackgroundTransparency = 0,
+					LayoutOrder = item.Index,
+					Size = UDim2.fromScale(1, 0),
+				},
+			}, {
+				HeaderRow = c(Pane, {
+					ClassName = "Frame",
+					ListLayout = {
+						FillDirection = Enum.FillDirection.Horizontal,
+						Padding = UDim.new(0, px(8)),
+						VerticalAlignment = Enum.VerticalAlignment.Center,
+					},
+					Native = {
+						BackgroundTransparency = 1,
+						LayoutOrder = 1,
+						Size = UDim2.new(1, 0, 0, px(26)),
+					},
+				}, {
+					NumberBadge = c(Pane, {
+						ClassName = "Frame",
+						CornerRadius = 1,
+						Native = {
+							BackgroundColor3 = Color3.fromRGB(51, 51, 51),
+							BackgroundTransparency = 0,
+							Size = UDim2.fromOffset(px(22), px(22)),
+						},
+					}, {
+						BadgeText = c("TextLabel", {
+							BackgroundTransparency = 1,
+							FontFace = Styles.FONT_FREDOKA,
+							Size = UDim2.fromScale(1, 1),
+							Text = tostring(item.Index),
+							TextColor3 = Color3.new(1, 1, 1),
+							TextSize = 14,
+						}),
+					}),
+
+					ItemTitle = c("TextLabel", {
+						BackgroundTransparency = 1,
+						FontFace = Styles.FONT_FREDOKA,
+						Size = UDim2.new(1, -px(30), 1, 0),
+						Text = item.Title,
+						TextColor3 = Color3.fromRGB(20, 20, 20),
+						TextSize = 18,
+						TextTruncate = Enum.TextTruncate.AtEnd,
+						TextXAlignment = Enum.TextXAlignment.Left,
+					}),
+				}),
+
+				ExtrasList = if #item.Extras > 0
+					then c("Frame", {
+						AutomaticSize = Enum.AutomaticSize.Y,
+						BackgroundTransparency = 1,
+						LayoutOrder = 2,
+						Size = UDim2.fromScale(1, 0),
+					}, extraElements)
+					else nil,
+			})
+		end
+
 		return c(Pane, {
 			ClassName = "Frame",
-			CornerRadius = UDim.new(0, 12),
+			CornerRadius = Styles.CORNER_CARD,
 			Stroke = {
 				ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
-				Color = Color3.new(1, 1, 1),
-				Thickness = 5,
+				Color = Color3.fromRGB(51, 51, 51),
+				Thickness = 3,
 			},
 			Native = {
 				AnchorPoint = Vector2.new(0, 0),
-				BackgroundColor3 = Color3.fromRGB(51, 51, 51),
+				BackgroundColor3 = Styles.OFFWHITE,
 				BackgroundTransparency = 0,
 				ClipsDescendants = true,
-				Position = UDim2.fromScale(-0.42, 0.05),
-				Size = UDim2.fromScale(0.4, 0.5),
+				Position = UDim2.fromScale(-0.45, 0.02),
+				Size = UDim2.fromScale(0.43, 0.58),
 				Visible = notepadVisible,
 			},
 		}, {
-			Title = c(Pane, {
-				ClassName = "TextLabel",
-				Native = {
-					BackgroundTransparency = 1,
-					FontFace = Styles.FONT_FREDOKA,
-					Position = UDim2.fromScale(0.00462942, 0.0193365),
-					Size = UDim2.fromScale(0.991803, 0.0662963),
-					Text = "Notepad",
-					TextColor3 = Color3.new(1, 1, 1),
-					TextScaled = true,
-				},
-			}),
-
-			Description = c(Pane, {
-				ClassName = "TextLabel",
-				Native = {
-					BackgroundTransparency = 1,
-					FontFace = Styles.FONT_FREDOKA,
-					Position = UDim2.fromScale(0.00462942, 0.0994445),
-					Size = UDim2.fromScale(0.991803, 0.0662963),
-					Text = if counterData ~= nil
-						then "Take the customer's order:"
-						elseif npcOrderData ~= nil then "Customer's requested order:"
-						else "Use this page to take notes on customer orders.",
-					TextColor3 = Color3.new(1, 1, 1),
-					TextScaled = true,
-				},
-			}),
-
-			Notes = c(Pane, {
+			HeaderBar = c(Pane, {
 				ClassName = "Frame",
 				Native = {
-					Active = true,
-					AutoLocalize = false,
-					BackgroundColor3 = Color3.fromRGB(74, 74, 74),
+					BackgroundColor3 = Color3.fromRGB(51, 51, 51),
 					BackgroundTransparency = 0,
-					Position = UDim2.fromScale(0.0409836, 0.179426),
-					Selectable = true,
-					Size = UDim2.fromScale(0.913934, 0.790031),
+					Position = UDim2.new(0, 0, 0, 0),
+					Size = UDim2.new(1, 0, 0, px(38)),
 				},
 			}, {
-				TextBox = c("TextBox", {
-					AnchorPoint = Vector2.new(0.5, 0.5),
-					AutoLocalize = false,
+				Title = c("TextLabel", {
 					BackgroundTransparency = 1,
-					-- UI-REVISION: Fredoka like the rest of the terminal; wraps instead of
-					-- shrinking to one line; keeps the customer's request when tapped.
-					ClearTextOnFocus = false,
 					FontFace = Styles.FONT_FREDOKA,
-					Position = UDim2.fromScale(0.502242, 0.497798),
-					Size = UDim2.fromScale(0.932735, 0.941467),
-					Text = noteText,
+					Position = UDim2.fromOffset(px(12), 0),
+					Size = UDim2.fromScale(0.7, 1),
+					Text = if isNpcOrder then "Order Ticket" else "Notepad",
 					TextColor3 = Color3.new(1, 1, 1),
-					TextScaled = true,
-					TextWrapped = true,
+					TextSize = 18,
 					TextXAlignment = Enum.TextXAlignment.Left,
-					TextYAlignment = Enum.TextYAlignment.Top,
-				}, {
-					UITextSizeConstraint = c("UITextSizeConstraint", { MaxTextSize = 25 }),
+				}),
+
+				CloseBtn = c(Pane, {
+					ClassName = "TextButton",
+					CornerRadius = 1,
+					OnClick = function()
+						setNotepadVisible(false)
+					end,
+					Native = {
+						AnchorPoint = Vector2.new(1, 0.5),
+						AutoButtonColor = true,
+						BackgroundColor3 = Color3.fromRGB(70, 70, 70),
+						BackgroundTransparency = 0,
+						FontFace = Styles.FONT_FREDOKA,
+						Position = UDim2.new(1, -px(8), 0.5, 0),
+						Size = UDim2.fromOffset(px(24), px(24)),
+						Text = "✕",
+						TextColor3 = Color3.new(1, 1, 1),
+						TextSize = 13,
+					},
 				}),
 			}),
 
-			CloseBtn = c(Pane, {
-				ClassName = "TextButton",
-				OnClick = function()
-					setNotepadVisible(false)
-				end,
-				Native = {
-					AutoButtonColor = false,
-					BackgroundTransparency = 1,
-					FontFace = Styles.FONT_FREDOKA,
-					Position = UDim2.fromScale(0.877049, 0.00828708),
-					Size = UDim2.fromScale(0.118852, 0.0607716),
-					Text = ">",
-					TextColor3 = Color3.new(1, 1, 1),
-					TextScaled = true,
-				},
+			Description = c("TextLabel", {
+				BackgroundTransparency = 1,
+				FontFace = Styles.FONT_FREDOKA,
+				Position = UDim2.fromOffset(px(12), px(42)),
+				Size = UDim2.new(1, -px(24), 0, px(22)),
+				Text = if counterData ~= nil
+					then "Take the customer's order:"
+					elseif npcOrderData ~= nil then "Customer's requested order:"
+					else "Use this page to take notes on customer orders.",
+				TextColor3 = Color3.fromRGB(65, 65, 65),
+				TextSize = 15,
+				TextXAlignment = Enum.TextXAlignment.Left,
 			}),
+
+			Content = if isNpcOrder and #parsedItems > 0
+				then c("ScrollingFrame", {
+					Active = true,
+					AutomaticCanvasSize = Enum.AutomaticSize.Y,
+					BackgroundTransparency = 1,
+					CanvasSize = UDim2.new(),
+					Position = UDim2.fromOffset(px(10), px(68)),
+					ScrollBarImageColor3 = Color3.fromRGB(180, 180, 180),
+					ScrollBarThickness = 4,
+					ScrollingDirection = Enum.ScrollingDirection.Y,
+					Size = UDim2.new(1, -px(20), 1, -px(76)),
+				}, orderItemElements)
+				else c(Pane, {
+					ClassName = "Frame",
+					CornerRadius = Styles.CORNER_CARD,
+					Stroke = { Color = Color3.fromRGB(215, 215, 215), Thickness = 1 },
+					Padding = {
+						PaddingLeft = UDim.new(0, px(8)),
+						PaddingRight = UDim.new(0, px(8)),
+						PaddingTop = UDim.new(0, px(8)),
+						PaddingBottom = UDim.new(0, px(8)),
+					},
+					Native = {
+						BackgroundColor3 = Color3.fromRGB(248, 248, 248),
+						BackgroundTransparency = 0,
+						Position = UDim2.fromOffset(px(10), px(68)),
+						Size = UDim2.new(1, -px(20), 1, -px(76)),
+					},
+				}, {
+					TextBox = c("TextBox", {
+						BackgroundTransparency = 1,
+						ClearTextOnFocus = false,
+						FontFace = Styles.FONT_FREDOKA,
+						PlaceholderColor3 = Styles.GRAY,
+						PlaceholderText = "Type customer notes here...",
+						Size = UDim2.fromScale(1, 1),
+						Text = if npcOrderData ~= nil then (npcOrderData.RequestedText or "") else freeformNotes,
+						TextColor3 = Color3.fromRGB(45, 55, 45),
+						TextSize = 16,
+						TextWrapped = true,
+						TextXAlignment = Enum.TextXAlignment.Left,
+						TextYAlignment = Enum.TextYAlignment.Top,
+						[React.Change.Text] = function(rbx: TextBox)
+							setFreeformNotes(rbx.Text)
+						end,
+					}),
+				}),
 		})
 	end
 

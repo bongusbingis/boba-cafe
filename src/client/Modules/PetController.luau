@@ -35,8 +35,9 @@ local function cloneList(list: { any }?): { any }
 	return copied
 end
 
-function PetController:GetEquippedPetsForUserId(userId: number): { any }
-	return self.EquippedPetsByUserId[userId] or {}
+function PetController:GetEquippedPetsForUserId(userId: any): { any }
+	local numId = tonumber(userId) or userId
+	return self.EquippedPetsByUserId[numId] or {}
 end
 
 function PetController:GetLocalEquippedPets(): { any }
@@ -44,13 +45,15 @@ function PetController:GetLocalEquippedPets(): { any }
 end
 
 function PetController:PlayerRemoving(player: Player)
-	if self.EquippedPetsByUserId[player.UserId] ~= nil then
-		self.EquippedPetsByUserId[player.UserId] = nil
-		self.EquippedPetsChanged:Fire(player.UserId, {})
-	end
+	local userId = player.UserId
+	local strId = tostring(userId)
+
+	self.EquippedPetsByUserId[userId] = nil
+	self.EquippedPetsByUserId[strId] = nil
+	self.EquippedPetsChanged:Fire(userId, {})
 
 	if self._renderer then
-		self._renderer:RemoveFollower(player.UserId)
+		self._renderer:RemoveFollower(userId)
 	end
 end
 
@@ -58,22 +61,28 @@ function PetController:KnitStart()
 	local PetService = Knit.GetService("PetService")
 	self._renderer = PetFollowerRenderer.new(LocalPlayer)
 
-	PetService:GetAllEquippedPetsAsync():andThen(function(snapshotByUser)
-		self.EquippedPetsByUserId = {}
-		for userId, equippedPets in snapshotByUser do
-			local copied = cloneList(equippedPets)
-			self.EquippedPetsByUserId[userId] = copied
-			if self._renderer then
-				self._renderer:SyncEquippedPets(userId, copied)
+	PetService:GetAllEquippedPetsAsync()
+		:andThen(function(snapshotByUser)
+			self.EquippedPetsByUserId = {}
+			if typeof(snapshotByUser) == "table" then
+				for rawUserId, equippedPets in snapshotByUser do
+					local userId = tonumber(rawUserId) or rawUserId
+					local copied = cloneList(equippedPets)
+					self.EquippedPetsByUserId[userId] = copied
+					if self._renderer then
+						self._renderer:SyncEquippedPets(userId, copied)
+					end
+				end
 			end
-		end
 
-		self.LocalEquippedPetsChanged:Fire(self:GetLocalEquippedPets())
-	end):catch(function(err)
-		warn("[PetController]: Failed to fetch initial equipped pets snapshot", err)
-	end)
+			self.LocalEquippedPetsChanged:Fire(self:GetLocalEquippedPets())
+		end)
+		:catch(function(err)
+			warn("[PetController]: Failed to fetch initial equipped pets snapshot", err)
+		end)
 
-	PetService.EquippedPetsChanged:Connect(function(userId: number, equippedPets: { any })
+	PetService.EquippedPetsChanged:Connect(function(rawUserId: any, equippedPets: { any })
+		local userId = tonumber(rawUserId) or rawUserId
 		local copied = cloneList(equippedPets)
 		self.EquippedPetsByUserId[userId] = copied
 		if self._renderer then

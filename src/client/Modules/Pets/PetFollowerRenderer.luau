@@ -192,11 +192,15 @@ end
 
 function PetFollowerRenderer.new(localPlayer: Player)
 	local existingFolder = Workspace:FindFirstChild("ClientPetFollowers")
-	local renderFolder = if existingFolder and existingFolder:IsA("Folder")
-		then existingFolder
-		else Instance.new("Folder")
-	renderFolder.Name = "ClientPetFollowers"
-	renderFolder.Parent = Workspace
+	local renderFolder: Folder
+	if existingFolder and existingFolder:IsA("Folder") then
+		existingFolder:ClearAllChildren()
+		renderFolder = existingFolder
+	else
+		renderFolder = Instance.new("Folder")
+		renderFolder.Name = "ClientPetFollowers"
+		renderFolder.Parent = Workspace
+	end
 
 	local self = setmetatable({
 		_localPlayer = localPlayer,
@@ -327,6 +331,17 @@ function PetFollowerRenderer:_ensureVisual(follower: FollowerState): boolean
 	if follower.Container and follower.RootPart and follower.Billboard then
 		self:_refreshBillboard(follower)
 		return true
+	end
+
+	-- Guard against orphaned visual instances
+	if follower.Container then
+		follower.Container:Destroy()
+		follower.Container = nil
+		follower.RootPart = nil
+	end
+	if follower.Billboard then
+		follower.Billboard:Destroy()
+		follower.Billboard = nil
 	end
 
 	local definition = PetDefinitions[follower.Snapshot.Name]
@@ -533,11 +548,25 @@ function PetFollowerRenderer:_step(dt: number)
 	end
 end
 
-function PetFollowerRenderer:SyncEquippedPets(userId: number, equippedPets: { EquippedPetSnapshot })
+function PetFollowerRenderer:SyncEquippedPets(rawUserId: any, equippedPets: { EquippedPetSnapshot })
+	local userId = tonumber(rawUserId) or rawUserId
+	local strId = tostring(rawUserId)
+
 	local primaryPet = equippedPets and equippedPets[1] or nil
 	if not primaryPet then
-		self:RemoveFollower(userId)
+		self:RemoveFollower(rawUserId)
 		return
+	end
+
+	-- Clean up any lingering string-keyed ghost entry from remote dictionary serialization
+	if
+		typeof(userId) == "number"
+		and self._followers[strId] ~= nil
+		and self._followers[strId] ~= self._followers[userId]
+	then
+		self:_destroyVisual(self._followers[strId])
+		self._followers[strId] = nil
+		self._allowedRemoteUserIds[strId] = nil
 	end
 
 	local follower = self._followers[userId]
@@ -563,22 +592,28 @@ function PetFollowerRenderer:SyncEquippedPets(userId: number, equippedPets: { Eq
 		TargetCFrame = nil,
 		NextTargetUpdateAt = 0,
 		LastVisibleAt = os.clock(),
-		SideSign = if userId % 2 == 0 then 1 else -1,
-		BobPhase = (userId % 37) * 0.77,
+		SideSign = if typeof(userId) == "number" and userId % 2 == 0 then 1 else -1,
+		BobPhase = (if typeof(userId) == "number" then userId % 37 else 1) * 0.77,
 		Visible = false,
 		CurrentQuality = nil,
 	}
 end
 
-function PetFollowerRenderer:RemoveFollower(userId: number)
-	local follower = self._followers[userId]
-	if not follower then
-		return
+function PetFollowerRenderer:RemoveFollower(rawUserId: any)
+	local numId = tonumber(rawUserId)
+	local strId = tostring(rawUserId)
+
+	if numId ~= nil and self._followers[numId] then
+		self:_destroyVisual(self._followers[numId])
+		self._followers[numId] = nil
+		self._allowedRemoteUserIds[numId] = nil
 	end
 
-	self:_destroyVisual(follower)
-	self._followers[userId] = nil
-	self._allowedRemoteUserIds[userId] = nil
+	if self._followers[strId] then
+		self:_destroyVisual(self._followers[strId])
+		self._followers[strId] = nil
+		self._allowedRemoteUserIds[strId] = nil
+	end
 end
 
 function PetFollowerRenderer:Destroy()

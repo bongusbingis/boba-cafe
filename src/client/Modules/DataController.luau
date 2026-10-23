@@ -39,7 +39,6 @@ end
 
 function DataController:KnitInit()
 	ReplicaController.ReplicaOfClassCreated("PlayerProfile", function(replica)
-		print("Local player data received:", replica.Data)
 		DataController.LocalPlayerData = setmetatable(replica.Data, { __index = replica })
 		PlayerDataReceivedSignal:Fire(DataController.LocalPlayerData)
 		applyClientSettings(replica.Data.Settings or {})

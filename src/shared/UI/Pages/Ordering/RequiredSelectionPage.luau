@@ -4,9 +4,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local UI = Shared:WaitForChild("UI")
 
 local React = require(Packages.React)
-local Pane = require(UI.Components.Pane)
 local SelectionCard = require(UI.Components.Buttons.SelectionCard)
-local Styles = require(UI.Styles)
 
 local c = React.createElement
 
@@ -24,41 +22,31 @@ return function(props)
 		}),
 	}
 
-	local order = 0
-	for optionKey, optionData in step.options do
-		order += 1
+	local sortedKeys = {}
+	for optionKey in step.options do
+		table.insert(sortedKeys, optionKey)
+	end
+	table.sort(sortedKeys, function(a, b)
+		if a == "Normal" then
+			return true
+		elseif b == "Normal" then
+			return false
+		end
+		return a < b
+	end)
+
+	for order, optionKey in ipairs(sortedKeys) do
+		local optionData = step.options[optionKey]
 		local isSelected = props.CustomInfo[step.name] == optionKey
 		children[optionKey] = c(SelectionCard, {
 			Text = optionKey,
 			Color = optionData.Color,
 			LayoutOrder = order,
+			Highlighted = isSelected,
 			OnClick = function()
 				props.OnOptionPicked(optionKey)
 			end,
 		})
-
-		if isSelected then
-			children[optionKey] = c(Pane, {
-				ClassName = "Frame",
-				Stroke = {
-					Color = Styles.GOLD_BADGE,
-					Thickness = 3,
-					ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
-				},
-				Native = {
-					BackgroundTransparency = 1,
-					LayoutOrder = order,
-				},
-			}, {
-				Card = c(SelectionCard, {
-					Text = optionKey,
-					Color = optionData.Color,
-					OnClick = function()
-						props.OnOptionPicked(optionKey)
-					end,
-				}),
-			})
-		end
 	end
 
 	return c("ScrollingFrame", {

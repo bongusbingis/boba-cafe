@@ -12,19 +12,19 @@ local AddonCheckbox = require(script.Parent.AddonCheckbox)
 local ORANGE = Color3.fromRGB(237, 114, 47)
 local c = React.createElement
 
-local function count(t: {[any]: any})
-    if not t then
-        return 0
-    end
+local function count(t: { [any]: any })
+	if not t then
+		return 0
+	end
 
-    local n = 0
-    for _ in t do
-        n += 1
-    end
-    return n
+	local n = 0
+	for _ in t do
+		n += 1
+	end
+	return n
 end
 
-local function hasSelectableChoices(selectTable: {[any]: { any }}?): boolean
+local function hasSelectableChoices(selectTable: { [any]: { any } }?): boolean
 	if not selectTable then
 		return false
 	end
@@ -50,25 +50,25 @@ return function(props)
 			Padding = UDim.new(0.05, 0),
 			SortOrder = Enum.SortOrder.LayoutOrder,
 		}),
-        UIPadding = c("UIPadding", {
-            PaddingTop = UDim.new(0.015, 0),
-            PaddingLeft = UDim.new(0.015, 0),
-        }),
+		UIPadding = c("UIPadding", {
+			PaddingTop = UDim.new(0.015, 0),
+			PaddingLeft = UDim.new(0.015, 0),
+		}),
 	}
 
-    scrollChildren["ItemName"] = c(Pane, {
-        ClassName = "TextLabel",
-        Native = {
-            BackgroundTransparency = 1,
-            FontFace = Styles.FONT_FREDOKA,
-            Size = UDim2.fromScale(1, 0.115),
-            Text = item.ItemName,
-            TextColor3 = ORANGE,
-            TextXAlignment = Enum.TextXAlignment.Left,
-            TextScaled = true,
-            LayoutOrder = -1,
-        },
-    })
+	scrollChildren["ItemName"] = c(Pane, {
+		ClassName = "TextLabel",
+		Native = {
+			BackgroundTransparency = 1,
+			FontFace = Styles.FONT_FREDOKA,
+			Size = UDim2.fromScale(1, 0.115),
+			Text = item.ItemName,
+			TextColor3 = ORANGE,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			TextScaled = true,
+			LayoutOrder = -1,
+		},
+	})
 
 	local sectionOrder = 0
 
@@ -212,20 +212,20 @@ return function(props)
 	end
 
 	if not hasSelectableChoices(item.Select) and count(item.Options) == 0 then
-        scrollChildren["NoOptions"] = c(Pane, {
-            ClassName = "TextLabel",
-            Native = {
-                BackgroundTransparency = 1,
-                FontFace = Styles.FONT_FREDOKA,
-                LayoutOrder = 1,
-                Size = UDim2.fromScale(1, 0.075),
-                Text = "No options for this item.",
-                TextColor3 = Styles.GRAY,
-                TextScaled = true,
-                TextXAlignment = Enum.TextXAlignment.Left,
-            },
-        })
-    end
+		scrollChildren["NoOptions"] = c(Pane, {
+			ClassName = "TextLabel",
+			Native = {
+				BackgroundTransparency = 1,
+				FontFace = Styles.FONT_FREDOKA,
+				LayoutOrder = 1,
+				Size = UDim2.fromScale(1, 0.075),
+				Text = "No options for this item.",
+				TextColor3 = Styles.GRAY,
+				TextScaled = true,
+				TextXAlignment = Enum.TextXAlignment.Left,
+			},
+		})
+	end
 
 	return c(Pane, {
 		ClassName = "Frame",
@@ -257,12 +257,12 @@ return function(props)
 			},
 		}, {
 			AddToOrder = canAdd and c(ActionButton, {
-				Text = "Add to Order",
+				Text = if props.HasNextStep then "Next" else "Add to Order",
 				Color = ORANGE,
 				AnchorPoint = Vector2.new(0, 0.5),
 				Position = UDim2.fromScale(0.05, 0.5),
 				Size = UDim2.fromScale(0.4, 1),
-				OnClick = props.OnAddToOrder,
+				OnClick = if props.HasNextStep then props.OnNext else props.OnAddToOrder,
 			}) or c(Pane, {
 				ClassName = "TextLabel",
 				Native = {
