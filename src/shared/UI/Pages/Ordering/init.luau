@@ -813,6 +813,7 @@ return function(props: {
 						Text = `  •  {extra}`,
 						TextColor3 = Color3.fromRGB(60, 60, 60),
 						TextSize = 16,
+						TextTruncate = Enum.TextTruncate.AtEnd,
 						TextXAlignment = Enum.TextXAlignment.Left,
 					})
 				end
@@ -905,12 +906,12 @@ return function(props: {
 				Thickness = 3,
 			},
 			Native = {
-				AnchorPoint = Vector2.new(0, 0),
+				AnchorPoint = Vector2.new(1, 0),
 				BackgroundColor3 = Styles.OFFWHITE,
 				BackgroundTransparency = 0,
 				ClipsDescendants = true,
-				Position = UDim2.fromScale(-0.45, 0.02),
-				Size = UDim2.fromScale(0.43, 0.58),
+				Position = UDim2.fromScale(-0.02, 0.02),
+				Size = UDim2.fromScale(0.34, 0.58),
 				Visible = notepadVisible,
 			},
 		}, {
@@ -966,6 +967,7 @@ return function(props: {
 					else "Use this page to take notes on customer orders.",
 				TextColor3 = Color3.fromRGB(65, 65, 65),
 				TextSize = 15,
+				TextTruncate = Enum.TextTruncate.AtEnd,
 				TextXAlignment = Enum.TextXAlignment.Left,
 			}),
 
