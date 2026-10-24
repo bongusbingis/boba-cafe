@@ -35,14 +35,8 @@ local PassCatalog: { [number]: PassEntry } = {
 		Icon = "rbxassetid://16709481934",
 		Rank = 8,
 		Perks = { "TipBoost25", "XpBoost25" },
-		Listed = true,
-		Legacy = false,
-	},
-	[6202144] = {
-		Name = "Senior Barista",
-		Perks = { "TipBoost25", "XpBoost25" },
 		Listed = false,
-		Legacy = true,
+		Legacy = false,
 	},
 	[15243046] = {
 		Name = "Kitchen Leader",
@@ -50,14 +44,8 @@ local PassCatalog: { [number]: PassEntry } = {
 		Icon = "rbxassetid://16728123715",
 		Rank = 10,
 		Perks = { "TipBoost50", "XpBoost50" },
-		Listed = true,
-		Legacy = false,
-	},
-	[6202139] = {
-		Name = "Staff Assistant",
-		Perks = { "TipBoost50", "XpBoost50" },
 		Listed = false,
-		Legacy = true,
+		Legacy = false,
 	},
 	[12385781] = {
 		Name = "VIP",
@@ -67,7 +55,6 @@ local PassCatalog: { [number]: PassEntry } = {
 		Listed = true,
 		Legacy = false,
 	},
-	[2126368] = { Name = "Premium Lounge", Perks = { "VipLounge" }, Listed = false, Legacy = true },
 	[219650999] = {
 		Name = "Star Employee",
 		Description = "Unlock an exclusive benefits package to make your job easier!",
@@ -146,22 +133,14 @@ local PassCatalog: { [number]: PassEntry } = {
 		Listed = true,
 		Legacy = false,
 	},
-	-- Display-only passes: sold in the shop before, but wired to no perks yet.
-	-- Delisted until they grant something (Jack).
-	[29083693] = {
-		Name = "Nametag Customizer",
-		Description = "Customize your nametag with a variety of colors!",
+
+	-- LEGACY: NEEDS IMPLEMENTATION
+	[43707849] = {
+		Name = "Unlimited Stock",
+		Description = "Unlimited stock for all your stations! Never restock again!",
 		Icon = "rbxassetid://16728123607",
-		Perks = {},
-		Listed = false,
-		Legacy = false,
-	},
-	[219651161] = {
-		Name = "Water Pack",
-		Description = "Buckle up and unleash the thrill as you conquer the waves!",
-		Icon = "rbxassetid://16709440324",
-		Perks = {},
-		Listed = false,
+		Perks = { "UnlimitedStock" },
+		Listed = true,
 		Legacy = false,
 	},
 }
