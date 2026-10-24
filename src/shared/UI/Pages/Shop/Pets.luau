@@ -24,7 +24,7 @@ local pets = InventoryItemDefinitions.Pets
 
 ---> constants
 local TIER_ORDER = { "Basic", "Uncommon", "Rare", "Epic", "Legendary" }
-local PET_CELL_SIZE = 90
+local PET_CELL_SIZE = 100
 
 ---> public
 return function()

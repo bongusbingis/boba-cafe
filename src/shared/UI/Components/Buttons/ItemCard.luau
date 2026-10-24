@@ -134,14 +134,24 @@ end
 --- Builds the name label's position and size based on the active variant.
 local function resolveNameLayout(isPet: boolean, isShop: boolean, hasTier: boolean): (UDim2, UDim2)
 	if isPet then
-		-- Same text layout as nametags; viewport is sized to stay above.
-		return UDim2.fromScale(0.5, 0.48), UDim2.fromScale(0.8, 0.22)
+		-- Viewport sits at top (0-0.52); name sits clearly in the lower half with generous width
+		return UDim2.fromScale(0.5, 0.64), UDim2.fromScale(0.90, 0.26)
 	elseif isShop and not hasTier then
 		return UDim2.fromScale(0.5, 0.825908), UDim2.fromScale(0.8, 0.3554)
 	elseif hasTier then
-		return UDim2.fromScale(0.5, 0.48), UDim2.fromScale(0.8, 0.22)
+		-- Nametag swatch: name & drop chance occupy upper/mid area with ample vertical height
+		return UDim2.fromScale(0.5, 0.40), UDim2.fromScale(0.86, 0.46)
 	else
 		return UDim2.fromScale(0.5, 0.48), UDim2.fromScale(0.8, 0.4)
+	end
+end
+
+--- Resolves the tier label's position and size based on the active variant.
+local function resolveTierLayout(isPet: boolean): (UDim2, UDim2)
+	if isPet then
+		return UDim2.fromScale(0.5, 0.83), UDim2.fromScale(0.78, 0.18)
+	else
+		return UDim2.fromScale(0.5, 0.75), UDim2.fromScale(0.78, 0.22)
 	end
 end
 
@@ -257,7 +267,7 @@ end
 local function buildViewport(model: Instance?)
 	return c(ViewportModel, {
 		Model = model,
-		Size = UDim2.fromScale(1, 0.55),
+		Size = UDim2.fromScale(1, 0.52),
 		ModelRotation = 15,
 		ElevationAngle = 15,
 		FieldOfView = 30,
@@ -277,6 +287,7 @@ local function buildNameLabel(text: string, position: UDim2, size: UDim2, stroke
 			Text = text,
 			TextColor3 = Color3.new(1, 1, 1),
 			TextScaled = true,
+			TextWrapped = true,
 		},
 	})
 end
@@ -305,7 +316,7 @@ local function buildCountBadge(count: number)
 	})
 end
 
-local function buildTierLabel(tier: string, tierColor: Color3?)
+local function buildTierLabel(tier: string, tierColor: Color3?, position: UDim2?, size: UDim2?)
 	return c(Pane, {
 		ClassName = "TextLabel",
 		Stroke = { Color = Color3.new(0, 0, 0), Thickness = 1.5 },
@@ -313,8 +324,8 @@ local function buildTierLabel(tier: string, tierColor: Color3?)
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			BackgroundTransparency = 1,
 			FontFace = Styles.FONT_FREDOKA,
-			Position = UDim2.fromScale(0.5, 0.75),
-			Size = UDim2.fromScale(0.7, 0.16),
+			Position = position or UDim2.fromScale(0.5, 0.75),
+			Size = size or UDim2.fromScale(0.7, 0.16),
 			Text = tier,
 			TextColor3 = tierColor or Styles.OFFWHITE,
 			TextScaled = true,
@@ -363,7 +374,8 @@ return function(props: Props)
 
 	-- Layout
 	local namePosition, nameSize = resolveNameLayout(isPet, isShop, props.Tier ~= nil)
-	local nameText = isPet and props.Name:gsub("Pet", "") or props.Name
+	local tierPosition, tierSize = resolveTierLayout(isPet)
+	local nameText = isPet and (props.Name:gsub("%s*Pet%s*$", ""):match("^%s*(.-)%s*$") or props.Name) or props.Name
 	local nameVisible = isPet or not props.OffSale
 
 	-- Children
@@ -375,7 +387,9 @@ return function(props: Props)
 
 		ProductName = nameVisible and buildNameLabel(nameText, namePosition, nameSize, isPet and 1 or 1.5) or nil,
 
-		TierLabel = (not props.OffSale and props.Tier) and buildTierLabel(props.Tier, tierColor) or nil,
+		TierLabel = (not props.OffSale and props.Tier)
+				and buildTierLabel(props.Tier, tierColor, tierPosition, tierSize)
+			or nil,
 
 		OwnedOverlay = props.Owned and buildOwnedOverlay() or nil,
 		Banner = props.TopBanner and buildBanner(props.TopBanner) or nil,

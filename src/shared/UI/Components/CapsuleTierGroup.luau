@@ -31,9 +31,11 @@ return function(props: Props)
 
 	local weightText
 	if tier.Weight > 0 then
-		weightText = `{props.Tier}  •  {math.floor(tier.Weight * 100)}% DROP CHANCE`
+		local pct = tier.Weight * 100
+		local pctStr = if pct == math.floor(pct) then string.format("%d%%", pct) else string.format("%.1f%%", pct)
+		weightText = `{props.Tier} - {pctStr}`
 	else
-		weightText = `{props.Tier}  •  EVENT ONLY`
+		weightText = `{props.Tier} - Event Only`
 	end
 
 	return c(Pane, {
@@ -48,7 +50,7 @@ return function(props: Props)
 			FillDirection = Enum.FillDirection.Vertical,
 			HorizontalAlignment = Enum.HorizontalAlignment.Left,
 			VerticalAlignment = Enum.VerticalAlignment.Top,
-			Padding = UDim.new(0, 8),
+			Padding = UDim.new(0, 10),
 		},
 		Padding = {
 			PaddingLeft = BORDER_PADDING,
@@ -59,10 +61,10 @@ return function(props: Props)
 			ClassName = "Frame",
 			CornerRadius = 1,
 			Padding = {
-				PaddingTop = UDim.new(0, 4),
-				PaddingBottom = UDim.new(0, 4),
-				PaddingLeft = UDim.new(0, 14),
-				PaddingRight = UDim.new(0, 14),
+				PaddingTop = UDim.new(0, 6),
+				PaddingBottom = UDim.new(0, 6),
+				PaddingLeft = UDim.new(0, 18),
+				PaddingRight = UDim.new(0, 18),
 			},
 			Native = {
 				AutomaticSize = Enum.AutomaticSize.XY,
@@ -77,11 +79,11 @@ return function(props: Props)
 				FontFace = Styles.FONT_FREDOKA,
 				Text = weightText,
 				TextColor3 = Color3.new(1, 1, 1),
-				TextSize = 15,
+				TextSize = 20,
 			}, {
 				UIStroke = c("UIStroke", {
 					Color = tier.Color:Lerp(Color3.new(0, 0, 0), 0.4),
-					Thickness = 1.5,
+					Thickness = 2,
 				}),
 			}),
 		}),

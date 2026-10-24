@@ -26,7 +26,7 @@ local Knit = require(Packages.Knit)
 ---> constants
 local TIER_COLORS = InventoryItemDefinitions.Tiers
 local TIER_ORDER = { "Basic", "Uncommon", "Rare", "Epic", "Legendary", "Special" }
-local NAMETAG_CELL_SIZE = 90
+local NAMETAG_CELL_SIZE = 100
 
 ---> public
 return function()
