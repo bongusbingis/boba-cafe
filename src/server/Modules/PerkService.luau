@@ -7,6 +7,7 @@
 --]]
 
 ---> services
+local MarketplaceService = game:GetService("MarketplaceService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 ---> dependencies
@@ -92,12 +93,26 @@ function PerkService:GetStorageMultiplier(player: Player): number
 end
 
 ---> lifecycle
+function PerkService:KnitStart()
+	MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(player, passId, wasPurchased)
+		if not wasPurchased then
+			return
+		end
+		if passId == 43707849 or self:HasPerk(player, "UnlimitedStock") then
+			player:SetAttribute("PerkUnlimitedStock", true)
+		end
+	end)
+end
+
 function PerkService:PlayerAdded(player: Player)
 	-- Warm the pass cache so serve/XP paths read it without yielding, then resolve the
 	-- storage multiplier once the prefetch settles (no await in the hook).
 	pcall(function()
 		(GamepassUtil :: any):PrefetchAllPassesAsync(player):andThen(function()
 			self:RefreshStorageMultiplier(player)
+			if self:HasPerk(player, "UnlimitedStock") then
+				player:SetAttribute("PerkUnlimitedStock", true)
+			end
 		end)
 	end)
 end

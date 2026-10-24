@@ -675,6 +675,8 @@ local function startGuidance()
 	Knit.GetService("KitchenService").InteractionFailed:Connect(function(reason: string)
 		if reason == "ClockedOut" then
 			offerClockIn()
+		elseif reason == "OutOfStock" then
+			toast("This station is out of stock! Grab a box from a shelf to restock.")
 		end
 	end)
 end

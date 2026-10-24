@@ -25,6 +25,9 @@ export type PromptConfig = {
     Label: string,
     ActionText: string,
     HoldDuration: number?, -- default 3
+    MaxActivationDistance: number?,
+    Stock: number?,
+    Theme: string?,
 }
 
 return {}

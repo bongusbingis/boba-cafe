@@ -6,5 +6,5 @@ return {
 	Min_Distance = {
 		Floor = 15,
 	},
-	PointIncrement = 1,
+	XpIncrement = 5,
 }

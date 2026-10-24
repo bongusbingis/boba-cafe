@@ -30,4 +30,53 @@ KitchenConfig.POUR_METER = {
 	MIN_CUSTOMERS_SERVED = 1, -- DEC-058 Opus-set, Jack to tune: hidden until the first serve
 }
 
+-- Restocking System Configuration (legacy port)
+KitchenConfig.RESTOCK_HOLD_DURATION = 3
+KitchenConfig.RESTOCK_XP_AWARD = 25
+KitchenConfig.RESTOCK_BOX_ANIMATION_ID = "rbxassetid://6999226257"
+KitchenConfig.RESTOCK_BOX_MESH_ID = "rbxassetid://7706347498"
+KitchenConfig.UNLIMITED_STOCK_PASS_ID = 43707849
+
+-- Default stock capacity per station name or pattern
+KitchenConfig.DEFAULT_STOCKS = {
+	["Food Display"] = 10,
+	["Fruits Freezer"] = 10,
+	["Ice Cream Freezer"] = 10,
+	["Cup"] = 8,
+	["Clear Cup"] = 8,
+	["Mug"] = 5,
+	["Lids"] = 5,
+	["Milk"] = 5,
+	["Sugar"] = 5,
+	["Ice Machine"] = 5,
+	["Blender"] = 3,
+	["Coffee Machine"] = 3,
+	["Syrups"] = 4, -- default for all syrups
+	["Tapioca"] = 5, -- default for all tapioca jars
+	["Powder"] = 5, -- default for all tea / hot chocolate powders
+	["Default"] = 5,
+}
+
+--- Resolves default stock for a given station name
+function KitchenConfig.GetDefaultStock(stationName: string): number
+	local direct = KitchenConfig.DEFAULT_STOCKS[stationName]
+	if direct ~= nil then
+		return direct
+	end
+	if string.find(stationName, "Syrup") then
+		return KitchenConfig.DEFAULT_STOCKS["Syrups"]
+	end
+	if string.find(stationName, "Tapioca") then
+		return KitchenConfig.DEFAULT_STOCKS["Tapioca"]
+	end
+	if
+		string.find(stationName, "Powder")
+		or string.find(stationName, "Tea")
+		or string.find(stationName, "Chocolate")
+	then
+		return KitchenConfig.DEFAULT_STOCKS["Powder"]
+	end
+	return KitchenConfig.DEFAULT_STOCKS["Default"]
+end
+
 return KitchenConfig

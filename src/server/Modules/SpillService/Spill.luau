@@ -227,7 +227,6 @@ function Spill:_FinishCleaning(Player: Player, AnimationTrack: AnimationTrack, R
 	self:_UnlockPlayerMovement(Player)
 	Player:SetAttribute("CleaningSpill", nil)
 
-	Service("CurrencyService"):Modify(Player, "Points", Config.PointIncrement)
 	self.CleanedBy = Player -- read by SpillService.SpillCleanedSignal (rating and XP)
 
 	task.wait(1)

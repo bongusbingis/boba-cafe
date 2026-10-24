@@ -311,7 +311,7 @@ function InteractionRunner:Run(player: Player, recipeData: RecipeData, model: Mo
 			end
 			-- A successful station may invoke onSuccess if provided.
 			if self._onSuccess then
-				local okSuccess, errSuccess = pcall(self._onSuccess, player, recipeData)
+				local okSuccess, errSuccess = pcall(self._onSuccess, player, recipeData, model)
 				if not okSuccess then
 					warn(
 						string.format(
