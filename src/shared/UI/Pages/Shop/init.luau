@@ -1,9 +1,11 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 local Packages = ReplicatedStorage:WaitForChild("Packages")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local UI = Shared:WaitForChild("UI")
 
 ---> dependencies
+local Knit = require(Packages.Knit)
 local React = require(Packages.React)
 
 ---> styles
@@ -68,6 +70,46 @@ local PAGES: { OpenableMenu.Page } = {
 }
 
 return function(props)
+	local isClaimed, setIsClaimed = React.useState(false)
+
+	React.useEffect(function()
+		if not RunService:IsRunning() then
+			return
+		end
+
+		local function checkClaim()
+			local okGroup, GroupBenefitService = pcall(function()
+				return Knit.GetService("GroupBenefitService")
+			end)
+			if okGroup and GroupBenefitService then
+				GroupBenefitService:GetClaimStatusAsync()
+					:andThen(function(claimStatus)
+						if claimStatus == "Claimed" then
+							setIsClaimed(true)
+						end
+					end)
+					:catch(function() end)
+			end
+		end
+
+		checkClaim()
+
+		local okData, DataController = pcall(function()
+			return Knit.GetController("DataController")
+		end)
+		if okData and DataController then
+			DataController:GetDataAsync()
+				:andThen(function(data)
+					if data and data.Inventory and data.Inventory.FreeItemsRedeemed then
+						if table.find(data.Inventory.FreeItemsRedeemed, "GroupPet") then
+							setIsClaimed(true)
+						end
+					end
+				end)
+				:catch(function() end)
+		end
+	end, {})
+
 	local landingPage = PAGES[1]
 	local landingKey = if props.Args and props.Args[1] then props.Args[1] else nil
 	if landingKey == "Currency" then
@@ -79,17 +121,44 @@ return function(props)
 	if landingKey then
 		for _, page in PAGES do
 			if page.Key == landingKey then
-				landingPage = page
+				if page.Key == "Group Benefit" and isClaimed then
+					landingPage = PAGES[1]
+				else
+					landingPage = page
+				end
 				break
 			end
 		end
+	end
+
+	local pages: { OpenableMenu.Page } = {}
+	for _, page in PAGES do
+		local copy = table.clone(page)
+		if page.Key == "Group Benefit" then
+			copy.Visible = not isClaimed
+			copy.Content = c(require(script.GroupBenefit), {
+				OnClaimed = function()
+					setIsClaimed(true)
+				end,
+			})
+		end
+		table.insert(pages, copy)
 	end
 
 	return c(OpenableMenu, {
 		TitleText = "Shop",
 		TitleColor = Styles.GREEN,
 		DefaultPage = landingPage.Key,
-		Pages = PAGES,
+		Pages = pages,
+		TabHeight = 0.095,
+		SideButtonsProps = {
+			ListLayout = {
+				HorizontalAlignment = Enum.HorizontalAlignment.Center,
+				VerticalAlignment = Enum.VerticalAlignment.Top,
+				Padding = UDim.new(0.015, 0), -- ensures all tabs fit without overflowing
+				SortOrder = Enum.SortOrder.LayoutOrder,
+			},
+		},
 		OnClose = function()
 			props.ClosePage()
 		end,

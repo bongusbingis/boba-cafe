@@ -1,3 +1,4 @@
+--# selene: allow(unused_variable)
 --[[
 	Hud
 	Renders groups of Hud buttons used for opening/closing page components.
@@ -123,22 +124,22 @@ return function(props: {
 					end
 				end,
 			}),
-			ClaimDot = if claimable
-				then c(Pane, {
-					ClassName = "Frame",
-					CornerRadius = Styles.CORNER_FULL,
-					Stroke = { Color = Styles.OFFWHITE, Thickness = 2 },
-					Native = {
-						Name = "QuestClaimDot",
-						AnchorPoint = Vector2.new(0.5, 0.5),
-						BackgroundColor3 = Styles.GREEN_BADGE,
-						BackgroundTransparency = 0,
-						Position = UDim2.fromScale(0.94, 0.1),
-						Size = UDim2.fromOffset(px(16), px(16)),
-						ZIndex = 5,
-					},
-				})
-				else nil,
+			-- ClaimDot = if claimable JACK DECISION: REMOVE CLAIMDOT
+			-- 	then c(Pane, {
+			-- 		ClassName = "Frame",
+			-- 		CornerRadius = Styles.CORNER_FULL,
+			-- 		Stroke = { Color = Styles.OFFWHITE, Thickness = 2 },
+			-- 		Native = {
+			-- 			Name = "QuestClaimDot",
+			-- 			AnchorPoint = Vector2.new(0.5, 0.5),
+			-- 			BackgroundColor3 = Styles.GREEN_BADGE,
+			-- 			BackgroundTransparency = 0,
+			-- 			Position = UDim2.fromScale(0.94, 0.1),
+			-- 			Size = UDim2.fromOffset(px(16), px(16)),
+			-- 			ZIndex = 5,
+			-- 		},
+			-- 	})
+			-- 	else nil,
 		}),
 	})
 end

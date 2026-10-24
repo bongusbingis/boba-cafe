@@ -15,7 +15,7 @@ local Styles = require(UI.Styles)
 local c = React.createElement
 local GROUP_ID = 3174578
 
-return function()
+return function(props: { OnClaimed: (() -> ())? }?)
 	local isClaimed, setIsClaimed = React.useState(false)
 	local isBusy, setIsBusy = React.useState(false)
 	local status, setStatus = React.useState("Join the group to claim your Ant Pet.")
@@ -27,6 +27,9 @@ return function()
 				if claimStatus == "Claimed" then
 					setIsClaimed(true)
 					setStatus("You already claimed your Ant Pet!")
+					if props and props.OnClaimed then
+						props.OnClaimed()
+					end
 				elseif claimStatus == "Retry" then
 					setStatus("Claim status is unavailable. Please try again.")
 				end
@@ -73,6 +76,9 @@ return function()
 				if claimStatus == "Claimed" then
 					setIsClaimed(true)
 					setStatus("Ant Pet claimed!")
+					if props and props.OnClaimed then
+						props.OnClaimed()
+					end
 				elseif claimStatus == "NotMember" then
 					setStatus("Group membership could not be confirmed. Please try again.")
 				else

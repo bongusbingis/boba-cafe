@@ -48,6 +48,8 @@ export type Page = {
 	ButtonTextColor: Color3?,
 	--- Shows a claim dot on the side button
 	ShowDot: boolean?,
+	--- Controls visibility of this tab in the side navigation column (defaults to true)
+	Visible: boolean?,
 }
 
 export type Props = {
@@ -82,6 +84,9 @@ return function(props: Props)
 	local sideButtonChildren: { [string]: any } = {}
 	if props.Pages then
 		for i, page in ipairs(props.Pages) do
+			if page.Visible == false then
+				continue
+			end
 			local key = page.Key
 			local isSelected = currentPage == key
 			sideButtonChildren[key] = c(HudTabButton, {
@@ -105,9 +110,19 @@ return function(props: Props)
 	local activeContent = nil
 	if props.Pages then
 		for _, page in ipairs(props.Pages) do
-			if page.Key == currentPage then
+			if page.Key == currentPage and page.Visible ~= false then
 				activeContent = page.Content
 				break
+			end
+		end
+
+		-- If current page is no longer visible, fallback to first visible page
+		if activeContent == nil then
+			for _, page in ipairs(props.Pages) do
+				if page.Visible ~= false then
+					activeContent = page.Content
+					break
+				end
 			end
 		end
 	end

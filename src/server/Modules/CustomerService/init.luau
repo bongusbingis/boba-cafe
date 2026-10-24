@@ -1406,6 +1406,8 @@ function CustomerService:_onTakeOrderTriggered(npc: Npc.Npc, player: Player)
 		Orders = npc.Orders,
 		Specs = npc.Specs,
 		Guided = npc.RolledScriptedFor == player.UserId,
+		PatienceEnd = if npc.Model ~= nil then npc.Model:GetAttribute("PatienceEnd") else nil,
+		PatienceTotal = if npc.Model ~= nil then npc.Model:GetAttribute("PatienceTotal") else nil,
 	})
 end
 

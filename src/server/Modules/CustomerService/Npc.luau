@@ -819,7 +819,13 @@ function Npc.ExtendRegisterPatience(self: Npc, seconds: number)
 	if self.State ~= "AtCounter" or self._registerEnd <= 0 then
 		return
 	end
-	self._registerEnd = math.max(self._registerEnd, os.clock() + seconds)
+	local now = os.clock()
+	local newEnd = math.max(self._registerEnd, now + seconds)
+	local remaining = newEnd - now
+	self._registerEnd = newEnd
+	if self.Model ~= nil then
+		self.Model:SetAttribute("PatienceEnd", workspace:GetServerTimeNow() + remaining)
+	end
 end
 
 -- Lowers remaining register patience by a factor (e.g. 0.25 for 25%). Returns new remaining seconds.
@@ -832,6 +838,9 @@ function Npc.ReduceRegisterPatience(self: Npc, factor: number): number
 	local newRemaining = remaining * math.max(0, 1 - factor)
 	self._registerEnd = now + newRemaining
 	self:_setPatienceBar(newRemaining / math.max(1, self._registerTotal))
+	if self.Model ~= nil then
+		self.Model:SetAttribute("PatienceEnd", workspace:GetServerTimeNow() + newRemaining)
+	end
 	return newRemaining
 end
 
@@ -1304,6 +1313,10 @@ function Npc._run(self: Npc)
 	registerTotal = math.max(1, registerTotal)
 	self._registerTotal = registerTotal
 	self._registerEnd = os.clock() + registerTotal
+	if self.Model ~= nil then
+		self.Model:SetAttribute("PatienceTotal", registerTotal)
+		self.Model:SetAttribute("PatienceEnd", workspace:GetServerTimeNow() + registerTotal)
+	end
 	local registerLast = os.clock()
 	while self.State == "AtCounter" and not self._destroyed and not self.Left do
 		task.wait(WAIT_POLL_SECONDS)
