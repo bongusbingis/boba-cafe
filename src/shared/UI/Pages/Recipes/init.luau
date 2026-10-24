@@ -1,12 +1,10 @@
 local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Packages = ReplicatedStorage:WaitForChild("Packages")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 
 local React = require(Packages.React)
-local Knit = require(Packages.Knit)
 
 local UI = Shared:WaitForChild("UI")
 local Styles = require(UI.Styles)
@@ -63,10 +61,14 @@ return function(props)
 			CanvasSize = UDim2.new(),
 		},
 	}, {
+		ListLayout = c("UIListLayout", {
+			SortOrder = Enum.SortOrder.LayoutOrder,
+		}),
 		Label = c(Pane, {
 			ClassName = "TextLabel",
 			Native = {
 				AutomaticSize = Enum.AutomaticSize.Y,
+				LayoutOrder = 1,
 				Size = UDim2.fromScale(0.95, 0),
 				FontFace = Styles.FONT_FREDOKA,
 				Position = UDim2.fromScale(0.025, 0),
@@ -78,6 +80,12 @@ return function(props)
 				Text = if isRecipes then Content.build(focusItem, level) else Content.Tips,
 				RichText = true,
 			},
+		}),
+		BottomSpacer = c("Frame", {
+			BackgroundTransparency = 1,
+			LayoutOrder = 9999,
+			Size = UDim2.new(1, 0, 0, px(40)),
+			Visible = true,
 		}),
 	})
 

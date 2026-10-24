@@ -733,10 +733,7 @@ return function()
 			SeasonHero = if seasonAvailable
 				then c(HeroCard, {
 					LayoutOrder = 2,
-					Fill = Styles.GREEN_LIGHT,
-					TitleColor = Styles.GREEN_DEEP,
-					LinesColor = Styles.GREEN_DEEP,
-					PriceColor = Styles.GREEN_DEEP,
+					Fill = Styles.GREEN,
 					Title = "Season 1",
 					Lines = {
 						"• 30 tiers of rewards",
@@ -831,6 +828,13 @@ return function()
 					Size = UDim2.fromScale(0.98, 0),
 				},
 			}, gridChildren),
+
+			BottomSpacer = c("Frame", {
+				BackgroundTransparency = 1,
+				LayoutOrder = 9999,
+				Size = UDim2.new(1, 0, 0, px(40)),
+				Visible = true,
+			}),
 		}),
 	})
 end

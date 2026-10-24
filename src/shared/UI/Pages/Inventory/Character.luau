@@ -460,5 +460,12 @@ return function()
 		CostumesFooter = c(SectionFooter, {
 			LayoutOrder = 22,
 		}),
+
+		BottomSpacer = c("Frame", {
+			BackgroundTransparency = 1,
+			LayoutOrder = 9999,
+			Size = UDim2.new(1, 0, 0, 40),
+			Visible = true,
+		}),
 	})
 end

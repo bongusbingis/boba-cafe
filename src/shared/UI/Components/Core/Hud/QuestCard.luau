@@ -725,6 +725,12 @@ local function QuestCardBody(props: {
 		Padding = UDim.new(0, px(10)),
 		SortOrder = Enum.SortOrder.LayoutOrder,
 	})
+	questItems.BottomSpacer = c("Frame", {
+		BackgroundTransparency = 1,
+		LayoutOrder = 9999,
+		Size = UDim2.new(1, 0, 0, px(20)),
+		Visible = true,
+	})
 
 	-- Page content is laid out in the Page pane's own pixel space (0.8 of the screen).
 	local bodyMaxHeight = math.floor(camera.ViewportSize.Y * PAGE_SCREEN_FRACTION * BODY_MAX_FRACTION)

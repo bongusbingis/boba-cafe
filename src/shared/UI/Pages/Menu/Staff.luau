@@ -1,12 +1,13 @@
 --[[
 	Staff (Menu tab)
 	Your rank at a glance: a rank card (level and title on a ShopCategory header,
-	the HUD LevelBar's gold XP bar, the next title to earn), six work stats in the
-	Statistics card style, then the title roadmap as ShopCategory rows.
-	UI-REVISION: restructured from a loose bar + ten-card dump; title rows no longer
-	carry the currency glyph.
---]]
+	the HUD LevelBar's gold XP bar, group rank status and Claim Group Rank button,
+	and the next title to earn), six work stats in the Statistics card style,
+	then the title roadmap as ShopCategory rows.
+	UI-REVISION: integrated Option B Claim Group Rank button into RankCard.
+]]
 
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local Packages = ReplicatedStorage:WaitForChild("Packages")
@@ -14,8 +15,8 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local UI = Shared:WaitForChild("UI")
 
 ---> dependencies
-local React = require(Packages.React)
 local Knit = require(Packages.Knit)
+local React = require(Packages.React)
 
 ---> styles
 local Styles = require(UI.Styles)
@@ -24,8 +25,12 @@ local Styles = require(UI.Styles)
 local ShopCategory = require(UI.Pages.Shop.ShopCategory)
 
 ---> configuration
+local GroupRankProgression = require(Shared.Configuration.GroupRankProgression)
 local Progression = require(Shared.Configuration.Progression)
+local RankUtil = require(Shared.Utility.RankUtil)
 local Titles = require(Shared.Configuration.Titles)
+
+type GroupRankTier = GroupRankProgression.GroupRankTier
 
 ---> constants
 local HEADER_IMAGE = "http://www.roblox.com/asset/?id=13465572823"
@@ -63,35 +68,69 @@ local function StatCard(props: {
 		}),
 		LabelText = c("TextLabel", {
 			BackgroundTransparency = 1,
+			FontFace = Styles.FONT_DENKONE,
 			LayoutOrder = 1,
 			Size = UDim2.fromScale(1, 0.35),
 			Text = props.Label,
 			TextColor3 = Styles.GREEN_LIGHT,
 			TextScaled = true,
-			FontFace = Styles.FONT_DENKONE,
 			TextXAlignment = Enum.TextXAlignment.Left,
 		}),
 		ValueText = c("TextLabel", {
 			BackgroundTransparency = 1,
+			FontFace = Styles.FONT_FREDOKA,
 			LayoutOrder = 2,
 			Size = UDim2.fromScale(1, 0.55),
 			Text = props.Value,
 			TextColor3 = Styles.GREEN,
 			TextScaled = true,
-			FontFace = Styles.FONT_FREDOKA,
 			TextXAlignment = Enum.TextXAlignment.Left,
 		}),
 	})
 end
 
--- ShopCategory anatomy (header slice, GREEN body, footer slice) holding the XP bar.
+-- ShopCategory anatomy (header slice, GREEN body, footer slice) holding the XP bar
+-- and Option B integrated Group Rank status + Claim button.
 local function RankCard(props: {
 	Heading: string,
 	Progress: number,
 	BarText: string,
 	Caption: string,
+	GroupRankStatus: string,
+	ClaimableTier: GroupRankTier?,
+	NextLockedTier: GroupRankTier?,
+	IsUpToDate: boolean,
+	IsClaiming: boolean,
+	OnClaimRank: (() -> ())?,
 	LayoutOrder: number,
 })
+	local buttonText = "Rank Claimed"
+	local buttonBg = Styles.GREEN_DEEP
+	local buttonTextColor = Color3.fromRGB(205, 225, 200)
+	local isInteractive = false
+
+	if props.IsClaiming then
+		buttonText = "Claiming..."
+		buttonBg = Styles.GOLD
+		buttonTextColor = Styles.GREEN_DEEP
+		isInteractive = false
+	elseif props.ClaimableTier ~= nil then
+		buttonText = "Claim Rank"
+		buttonBg = Styles.GOLD_MID
+		buttonTextColor = Styles.OFFWHITE
+		isInteractive = true
+	elseif props.IsUpToDate then
+		buttonText = "Rank Claimed"
+		buttonBg = Styles.GREEN_DEEP
+		buttonTextColor = Color3.fromRGB(205, 225, 200)
+		isInteractive = false
+	elseif props.NextLockedTier ~= nil then
+		buttonText = `Lvl {props.NextLockedTier.MinLevel} Required`
+		buttonBg = Styles.GRAY
+		buttonTextColor = Styles.OFFWHITE
+		isInteractive = false
+	end
+
 	return c("Frame", {
 		AutomaticSize = Enum.AutomaticSize.Y,
 		BackgroundTransparency = 1,
@@ -124,15 +163,15 @@ local function RankCard(props: {
 			BackgroundColor3 = Styles.GREEN,
 			BorderSizePixel = 0,
 			LayoutOrder = 2,
-			Size = UDim2.fromScale(ROW_WIDTH, 0.12),
+			Size = UDim2.fromScale(ROW_WIDTH, 0.19),
 			SizeConstraint = Enum.SizeConstraint.RelativeXX,
 		}, {
 			Bar = c("Frame", {
 				AnchorPoint = Vector2.new(0.5, 0),
 				BackgroundColor3 = Styles.OFFWHITE,
 				BorderSizePixel = 0,
-				Position = UDim2.fromScale(0.5, 0.14),
-				Size = UDim2.fromScale(0.94, 0.36),
+				Position = UDim2.fromScale(0.5, 0.09),
+				Size = UDim2.fromScale(0.94, 0.28),
 			}, {
 				Corner = c("UICorner", { CornerRadius = Styles.CORNER_FULL }),
 				Fill = c("Frame", {
@@ -155,16 +194,67 @@ local function RankCard(props: {
 					ZIndex = 2,
 				}),
 			}),
-			Caption = c("TextLabel", {
+
+			BottomRow = c("Frame", {
 				AnchorPoint = Vector2.new(0.5, 0),
 				BackgroundTransparency = 1,
-				FontFace = Styles.FONT_FREDOKA,
-				Position = UDim2.fromScale(0.5, 0.6),
-				Size = UDim2.fromScale(0.94, 0.28),
-				Text = props.Caption,
-				TextColor3 = Color3.new(1, 1, 1),
-				TextScaled = true,
-				TextXAlignment = Enum.TextXAlignment.Left,
+				Position = UDim2.fromScale(0.5, 0.44),
+				Size = UDim2.fromScale(0.94, 0.48),
+			}, {
+				LeftInfo = c("Frame", {
+					BackgroundTransparency = 1,
+					Size = UDim2.fromScale(0.64, 1),
+				}, {
+					UIListLayout = c("UIListLayout", {
+						FillDirection = Enum.FillDirection.Vertical,
+						Padding = UDim.new(0.04, 0),
+						SortOrder = Enum.SortOrder.LayoutOrder,
+					}),
+					RankStatus = c("TextLabel", {
+						BackgroundTransparency = 1,
+						FontFace = Styles.FONT_FREDOKA,
+						LayoutOrder = 1,
+						Size = UDim2.fromScale(1, 0.48),
+						Text = props.GroupRankStatus,
+						TextColor3 = Color3.new(1, 1, 1),
+						TextScaled = true,
+						TextXAlignment = Enum.TextXAlignment.Left,
+					}),
+					Caption = c("TextLabel", {
+						BackgroundTransparency = 1,
+						FontFace = Styles.FONT_FREDOKA,
+						LayoutOrder = 2,
+						Size = UDim2.fromScale(1, 0.44),
+						Text = props.Caption,
+						TextColor3 = Styles.GREEN_LIGHT,
+						TextScaled = true,
+						TextXAlignment = Enum.TextXAlignment.Left,
+					}),
+				}),
+
+				ClaimButton = c("TextButton", {
+					AnchorPoint = Vector2.new(1, 0.5),
+					AutoButtonColor = isInteractive,
+					BackgroundColor3 = buttonBg,
+					FontFace = Styles.FONT_FREDOKA,
+					Position = UDim2.fromScale(1, 0.5),
+					Size = UDim2.fromScale(0.34, 0.76),
+					Text = buttonText,
+					TextColor3 = buttonTextColor,
+					TextScaled = true,
+					ZIndex = 3,
+					[React.Event.Activated] = if isInteractive then props.OnClaimRank else nil,
+				}, {
+					Corner = c("UICorner", { CornerRadius = UDim.new(0, 8) }),
+					Stroke = c("UIStroke", {
+						Color = Styles.GREEN_DEEP,
+						Thickness = 2,
+					}),
+					Padding = c("UIPadding", {
+						PaddingLeft = UDim.new(0, 4),
+						PaddingRight = UDim.new(0, 4),
+					}),
+				}),
 			}),
 		}),
 		Footer = c("ImageLabel", {
@@ -190,15 +280,44 @@ end
 
 return function()
 	local playerData, setPlayerData = React.useState(nil)
+	local currentRank, setCurrentRank = React.useState(1)
+	local currentRole, setCurrentRole = React.useState("Customer")
+	local ownedPasses, setOwnedPasses = React.useState({})
+	local isClaiming, setIsClaiming = React.useState(false)
 
 	React.useEffect(function()
 		if not RunService:IsRunning() then
 			setPlayerData(sampleData())
+			setCurrentRank(1)
+			setCurrentRole("Customer")
 			return
 		end
+
+		local player = Players.LocalPlayer
 		local DataController = Knit.GetController("DataController")
 		DataController:GetDataAsync():andThen(function(data)
 			setPlayerData(data)
+		end)
+
+		task.spawn(function()
+			local okRank, rank = pcall(function()
+				return RankUtil:GetRankAsync(player)
+			end)
+			if okRank and typeof(rank) == "number" then
+				setCurrentRank(rank)
+			end
+
+			local okRole, role = pcall(function()
+				return RankUtil:GetRoleAsync(player)
+			end)
+			if okRole and typeof(role) == "string" then
+				setCurrentRole(role)
+			end
+		end)
+
+		task.spawn(function()
+			local passes = GroupRankProgression.FetchPassOwnershipAsync(player)
+			setOwnedPasses(passes)
 		end)
 	end, {})
 
@@ -262,6 +381,57 @@ return function()
 		elseif nextTitle then `Next title: {nextTitle.Text} at Level {nextTitle.Level}`
 		else "Every level title earned!"
 
+	-- Group Rank & Claim calculations (Option B):
+	local claimableTier = GroupRankProgression.GetClaimableTier(level, currentRank, ownedPasses)
+	local nextLockedTier = GroupRankProgression.GetNextLockedTier(level, currentRank, ownedPasses)
+	local highestEligibleTier = GroupRankProgression.GetHighestEligibleTier(level, ownedPasses)
+	local isUpToDate = not claimableTier and (highestEligibleTier ~= nil and currentRank >= highestEligibleTier.Rank)
+
+	local groupRankStatus: string
+	if not isLoaded then
+		groupRankStatus = "Checking group rank..."
+	elseif claimableTier ~= nil then
+		local viaPass = claimableTier.PassId
+			and ownedPasses[claimableTier.PassId] == true
+			and level < claimableTier.MinLevel
+		if viaPass then
+			groupRankStatus = `Eligible: {claimableTier.RoleName} ({claimableTier.PassName} Pass)!`
+		else
+			groupRankStatus = `Eligible: {claimableTier.RoleName} (Rank {claimableTier.Rank})!`
+		end
+	elseif nextLockedTier ~= nil and not isUpToDate then
+		groupRankStatus = `Group Rank: {currentRole} · Next: {nextLockedTier.RoleName}`
+	else
+		groupRankStatus = `Group Rank: {currentRole} (Rank {currentRank})`
+	end
+
+	-- STUB: Ranking Mechanism Wire Point (Jack to connect later)
+	local function onClaimRank()
+		if not claimableTier or isClaiming then
+			return
+		end
+		setIsClaiming(true)
+
+		-- =========================================================================
+		-- WIRE POINT: Jack's ranking mechanism will be connected here
+		-- e.g., Knit.GetService("RankingService"):SetRankAsync(player, claimableTier.Rank)
+		-- =========================================================================
+		print(
+			string.format(
+				"[STUB] Claim Group Rank initiated: Role=%s, Rank=%d, RoleId=%s (Player Level: %d)",
+				claimableTier.RoleName,
+				claimableTier.Rank,
+				tostring(claimableTier.RoleId),
+				level
+			)
+		)
+
+		-- Simulated completion delay for UI state preview:
+		task.delay(1, function()
+			setIsClaiming(false)
+		end)
+	end
+
 	local cards = {
 		{ Label = "Orders Served", Value = stat("OrdersPrepared") },
 		{ Label = "Shifts Completed", Value = stat("ShiftsCompleted") },
@@ -273,8 +443,8 @@ return function()
 
 	local gridChildren = {
 		UIGridLayout = c("UIGridLayout", {
-			CellSize = UDim2.fromScale(0.47, 0.3),
 			CellPadding = UDim2.fromScale(0.025, 0.03),
+			CellSize = UDim2.fromScale(0.47, 0.3),
 			FillDirection = Enum.FillDirection.Horizontal,
 			HorizontalAlignment = Enum.HorizontalAlignment.Center,
 			SortOrder = Enum.SortOrder.LayoutOrder,
@@ -283,8 +453,8 @@ return function()
 	for i, card in ipairs(cards) do
 		gridChildren[card.Label] = c(StatCard, {
 			Label = card.Label,
-			Value = card.Value,
 			LayoutOrder = i,
+			Value = card.Value,
 		})
 	end
 
@@ -322,13 +492,20 @@ return function()
 			BackgroundTransparency = 1,
 			LayoutOrder = 9999,
 			Size = UDim2.new(1, 0, 0, 60),
+			Visible = true,
 		}),
 		Rank = c(RankCard, {
-			Heading = heading,
-			Progress = progress,
 			BarText = barText,
 			Caption = caption,
+			ClaimableTier = claimableTier,
+			GroupRankStatus = groupRankStatus,
+			Heading = heading,
+			IsClaiming = isClaiming,
+			IsUpToDate = isUpToDate,
 			LayoutOrder = 1,
+			NextLockedTier = nextLockedTier,
+			OnClaimRank = onClaimRank,
+			Progress = progress,
 		}),
 		Cards = c("Frame", {
 			BackgroundTransparency = 1,
@@ -337,18 +514,18 @@ return function()
 			SizeConstraint = Enum.SizeConstraint.RelativeXX,
 		}, gridChildren),
 		LevelTitles = c(ShopCategory, {
-			Title = "Level Titles",
 			Items = levelItems,
 			LayoutOrder = 3,
 			PriceGlyph = "",
+			Title = "Level Titles",
 		}),
 	}
 	if #manualItems > 0 then
 		bodyChildren.ManualTitles = c(ShopCategory, {
-			Title = "Event Titles",
 			Items = manualItems,
 			LayoutOrder = 4,
 			PriceGlyph = "",
+			Title = "Event Titles",
 		})
 	end
 

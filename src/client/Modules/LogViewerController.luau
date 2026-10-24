@@ -259,6 +259,16 @@ function LogViewerController:RenderWindow(tab: string)
 		end
 	end
 
+	if filteredCount > 0 then
+		local spacer = Instance.new("Frame")
+		spacer.Name = "BottomSpacer"
+		spacer.Size = UDim2.new(1, 0, 0, 16)
+		spacer.BackgroundTransparency = 1
+		spacer.Visible = true
+		spacer.LayoutOrder = 999999
+		spacer.Parent = listScroll
+	end
+
 	statusLabel.Text = string.format("Showing %d of %d %s logs", filteredCount, #rawList, tab)
 end
 

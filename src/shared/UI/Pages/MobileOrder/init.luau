@@ -390,6 +390,13 @@ return function(props)
 				})
 			end
 
+			categoryChildren["BottomSpacer"] = c("Frame", {
+				BackgroundTransparency = 1,
+				LayoutOrder = 9999,
+				Size = UDim2.new(1, 0, 0, 30),
+				Visible = true,
+			})
+
 			return c("Frame", {
 				BackgroundTransparency = 1,
 				Size = UDim2.fromScale(1, 1),
@@ -612,6 +619,13 @@ return function(props)
 				TextScaled = true,
 				FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Medium),
 			})
+		else
+			orderChildren["BottomSpacer"] = c("Frame", {
+				BackgroundTransparency = 1,
+				LayoutOrder = 9999,
+				Size = UDim2.new(1, 0, 0, 30),
+				Visible = true,
+			})
 		end
 
 		return c("Frame", {
@@ -774,6 +788,13 @@ return function(props)
 				})
 			end
 
+			reqButtons["BottomSpacer"] = c("Frame", {
+				BackgroundTransparency = 1,
+				LayoutOrder = 9999,
+				Size = UDim2.new(1, 0, 0, 20),
+				Visible = true,
+			})
+
 			popupBodyChildren.RequiredOptions = c("ScrollingFrame", {
 				Active = true,
 				AutomaticCanvasSize = Enum.AutomaticSize.Y,
@@ -900,6 +921,13 @@ return function(props)
 				end
 			end
 		end
+
+		popupBodyChildren["BottomSpacer"] = c("Frame", {
+			BackgroundTransparency = 1,
+			LayoutOrder = 9999,
+			Size = UDim2.new(1, 0, 0, 30),
+			Visible = true,
+		})
 
 		popupChildren.ItemOptions = c("Frame", {
 			AnchorPoint = Vector2.new(0.5, 0.5),

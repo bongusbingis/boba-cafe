@@ -736,6 +736,13 @@ return function()
 					Size = UDim2.fromScale(0.98, 0),
 				},
 			}, tierRowChildren),
+
+			BottomSpacer = c("Frame", {
+				BackgroundTransparency = 1,
+				LayoutOrder = 9999,
+				Size = UDim2.new(1, 0, 0, px(40)),
+				Visible = true,
+			}),
 		}),
 
 		LoadingSpinner = if state == nil

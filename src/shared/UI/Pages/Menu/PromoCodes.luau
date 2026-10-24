@@ -275,8 +275,9 @@ return function()
 
 			Spacer = c("Frame", {
 				BackgroundTransparency = 1,
-				LayoutOrder = 999,
-				Size = UDim2.fromScale(1, 0),
+				LayoutOrder = 9999,
+				Size = UDim2.new(1, 0, 0, 40),
+				Visible = true,
 			}),
 		}),
 	})

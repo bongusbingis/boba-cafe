@@ -1,5 +1,6 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 local Packages = ReplicatedStorage:WaitForChild("Packages")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local UI = Shared:WaitForChild("UI")
@@ -13,6 +14,15 @@ local Styles = require(UI.Styles)
 local ORANGE = Color3.fromRGB(237, 114, 47)
 local c = React.createElement
 local localPlayer = Players.LocalPlayer or { Name = "bongusbingus" }
+
+local function patienceColor(fraction: number)
+	if fraction < 0.25 then
+		return Styles.RED
+	elseif fraction < 0.5 then
+		return Styles.GOLD_MID
+	end
+	return Styles.GREEN
+end
 
 return function(props)
 	local orderChildren = {
@@ -33,7 +43,77 @@ return function(props)
 		})
 	end
 
+	orderChildren["BottomSpacer"] = c("Frame", {
+		BackgroundTransparency = 1,
+		LayoutOrder = 9999,
+		Size = UDim2.new(1, 0, 0, 24),
+		Visible = true,
+	})
+
 	local hasRequestText = typeof(props.NpcOrderText) == "string" and #props.NpcOrderText > 0
+	local showPatience = (
+		props.IsNpc ~= false
+		and (hasRequestText or props.NpcId ~= nil or props.Patience ~= nil or props.PatienceEnd ~= nil)
+	) or props.PreviewPatience ~= nil
+
+	local patience, setPatience = React.useState(props.PreviewPatience or props.Patience or 1)
+
+	React.useEffect(function()
+		if props.PreviewPatience ~= nil or props.Patience ~= nil then
+			setPatience(props.PreviewPatience or props.Patience or 1)
+			return
+		end
+
+		if not RunService:IsRunning() then
+			return
+		end
+
+		local patienceEnd = props.PatienceEnd
+		local patienceTotal = props.PatienceTotal
+		local npcModel = nil
+		if props.NpcId then
+			local customersFolder = workspace:FindFirstChild("Customers")
+			npcModel = if customersFolder then customersFolder:FindFirstChild(props.NpcId) else nil
+			if npcModel then
+				local endAttr = npcModel:GetAttribute("PatienceEnd")
+				local totalAttr = npcModel:GetAttribute("PatienceTotal")
+				if typeof(endAttr) == "number" then
+					patienceEnd = endAttr
+				end
+				if typeof(totalAttr) == "number" then
+					patienceTotal = totalAttr
+				end
+			end
+		end
+
+		if typeof(patienceEnd) ~= "number" or typeof(patienceTotal) ~= "number" or patienceTotal <= 0 then
+			setPatience(1)
+			return
+		end
+
+		local function updateFraction()
+			local currentEnd = patienceEnd
+			local currentTotal = patienceTotal
+			if npcModel then
+				local endAttr = npcModel:GetAttribute("PatienceEnd")
+				local totalAttr = npcModel:GetAttribute("PatienceTotal")
+				if typeof(endAttr) == "number" then
+					currentEnd = endAttr
+				end
+				if typeof(totalAttr) == "number" then
+					currentTotal = totalAttr
+				end
+			end
+			local fraction = math.clamp((currentEnd - workspace:GetServerTimeNow()) / currentTotal, 0, 1)
+			setPatience(math.floor(fraction * 200) / 200)
+		end
+
+		updateFraction()
+		local conn = RunService.Heartbeat:Connect(updateFraction)
+		return function()
+			conn:Disconnect()
+		end
+	end, { props.PreviewPatience, props.Patience, props.PatienceEnd, props.PatienceTotal, props.NpcId })
 
 	return c(Pane, {
 		ClassName = "Frame",
@@ -134,12 +214,12 @@ return function(props)
 			}),
 		}),
 
-		CustomerRequest = hasRequestText and c(Pane, {
+		CustomerPatience = showPatience and c(Pane, {
 			ClassName = "Frame",
 			Native = {
 				BackgroundTransparency = 1,
 				LayoutOrder = 2,
-				Size = UDim2.fromScale(1, 0.14),
+				Size = UDim2.fromScale(1, 0.08),
 			},
 			Padding = {
 				PaddingLeft = UDim.new(0.05, 0),
@@ -149,6 +229,7 @@ return function(props)
 				FillDirection = Enum.FillDirection.Vertical,
 				HorizontalAlignment = Enum.HorizontalAlignment.Left,
 				SortOrder = Enum.SortOrder.LayoutOrder,
+				Padding = UDim.new(0, 4),
 			},
 		}, {
 			Title = c(Pane, {
@@ -157,27 +238,27 @@ return function(props)
 					BackgroundTransparency = 1,
 					FontFace = Styles.FONT_FREDOKA,
 					LayoutOrder = 1,
-					Size = UDim2.fromScale(1, 0.4),
-					Text = "Customer Request:",
+					Size = UDim2.fromScale(1, 0.55),
+					Text = "Customer Patience:",
 					TextColor3 = ORANGE,
 					TextScaled = true,
 					TextXAlignment = Enum.TextXAlignment.Left,
 				},
 			}),
-			Text = c(Pane, {
-				ClassName = "TextLabel",
-				MaxTextSize = 25,
-				Native = {
-					BackgroundTransparency = 1,
-					FontFace = Styles.FONT_FREDOKA,
-					LayoutOrder = 2,
-					Size = UDim2.fromScale(1, 0.6),
-					Text = props.NpcOrderText,
-					TextColor3 = Color3.new(),
-					TextScaled = true,
-					TextWrapped = true,
-					TextXAlignment = Enum.TextXAlignment.Left,
-				},
+			ProgressBar = c("Frame", {
+				BackgroundColor3 = Styles.GRAY,
+				BorderSizePixel = 0,
+				LayoutOrder = 2,
+				Size = UDim2.new(1, 0, 0, 8),
+			}, {
+				Corner = c("UICorner", { CornerRadius = Styles.CORNER_FULL }),
+				Fill = c("Frame", {
+					BackgroundColor3 = patienceColor(math.clamp(patience, 0, 1)),
+					BorderSizePixel = 0,
+					Size = UDim2.fromScale(math.clamp(patience, 0, 1), 1),
+				}, {
+					Corner = c("UICorner", { CornerRadius = Styles.CORNER_FULL }),
+				}),
 			}),
 		}) or nil,
 
@@ -186,7 +267,7 @@ return function(props)
 			Native = {
 				BackgroundTransparency = 1,
 				LayoutOrder = 3,
-				Size = if hasRequestText then UDim2.fromScale(1, 0.52) else UDim2.fromScale(1, 0.65),
+				Size = if showPatience then UDim2.fromScale(1, 0.58) else UDim2.fromScale(1, 0.65),
 			},
 			ListLayout = {
 				FillDirection = Enum.FillDirection.Vertical,

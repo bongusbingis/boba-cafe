@@ -897,6 +897,13 @@ return function(props: {
 			})
 		end
 
+		orderItemElements["BottomSpacer"] = c("Frame", {
+			BackgroundTransparency = 1,
+			LayoutOrder = 9999,
+			Size = UDim2.new(1, 0, 0, px(24)),
+			Visible = true,
+		})
+
 		return c(Pane, {
 			ClassName = "Frame",
 			CornerRadius = Styles.CORNER_CARD,
@@ -1136,6 +1143,10 @@ return function(props: {
 						OnOrderItemRemoved = onOrderItemRemoved,
 						OnSubmit = submitOrder,
 						NpcOrderText = npcOrderData and npcOrderData.RequestedText,
+						NpcId = npcOrderData and npcOrderData.NpcId,
+						PatienceEnd = npcOrderData and npcOrderData.PatienceEnd,
+						PatienceTotal = npcOrderData and npcOrderData.PatienceTotal,
+						IsNpc = npcOrderData ~= nil and npcOrderData.CounterCustomerId == nil,
 					}),
 
 					Pages = c(Pane, {

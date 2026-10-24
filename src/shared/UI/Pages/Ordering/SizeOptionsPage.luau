@@ -227,6 +227,13 @@ return function(props)
 		})
 	end
 
+	scrollChildren["BottomSpacer"] = c("Frame", {
+		BackgroundTransparency = 1,
+		LayoutOrder = 9999,
+		Size = UDim2.new(1, 0, 0, 30),
+		Visible = true,
+	})
+
 	return c(Pane, {
 		ClassName = "Frame",
 		Native = {

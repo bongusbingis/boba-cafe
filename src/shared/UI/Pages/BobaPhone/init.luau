@@ -429,6 +429,14 @@ return function(props: { Open: boolean, OnClose: (() -> ())? })
 				}),
 			})
 		end
+
+		rows["BottomSpacer"] = c("Frame", {
+			BackgroundTransparency = 1,
+			LayoutOrder = 9999,
+			Size = UDim2.new(1, 0, 0, 30),
+			Visible = true,
+		})
+
 		return c("ScrollingFrame", {
 			Active = true,
 			AutomaticCanvasSize = Enum.AutomaticSize.Y,
@@ -518,6 +526,13 @@ return function(props: { Open: boolean, OnClose: (() -> ())? })
 				Text = "No items yet. Add drinks or snacks from Menu.",
 				TextColor3 = TEXT_MUTED,
 				TextScaled = true,
+			})
+		else
+			orderChildren["BottomSpacer"] = c("Frame", {
+				BackgroundTransparency = 1,
+				LayoutOrder = 9999,
+				Size = UDim2.new(1, 0, 0, 30),
+				Visible = true,
 			})
 		end
 		local canPlace = orderCount > 0 and not submitting
@@ -822,6 +837,12 @@ return function(props: { Open: boolean, OnClose: (() -> ())? })
 				})
 			end
 		end
+		rows["BottomSpacer"] = c("Frame", {
+			BackgroundTransparency = 1,
+			LayoutOrder = 9999,
+			Size = UDim2.new(1, 0, 0, 20),
+			Visible = true,
+		})
 		local done = requiredDone(customInfo, requiredQueue)
 		return c("Frame", {
 			AnchorPoint = Vector2.new(0.5, 0.5),
@@ -938,6 +959,12 @@ return function(props: { Open: boolean, OnClose: (() -> ())? })
 				}),
 			})
 		end
+		buttons["BottomSpacer"] = c("Frame", {
+			BackgroundTransparency = 1,
+			LayoutOrder = 9999,
+			Size = UDim2.new(1, 0, 0, 20),
+			Visible = true,
+		})
 		return c("Frame", {
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			BackgroundColor3 = Color3.new(1, 1, 1),

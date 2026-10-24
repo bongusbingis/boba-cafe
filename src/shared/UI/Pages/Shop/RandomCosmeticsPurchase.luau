@@ -127,8 +127,9 @@ return function()
 
 	heroCards["BottomSpacer"] = c("Frame", {
 		BackgroundTransparency = 1,
-		Size = UDim2.new(1, 0, 0, 30),
+		Size = UDim2.new(1, 0, 0, 40),
 		LayoutOrder = 9999,
+		Visible = true,
 	})
 
 	local capsuleChildren = {
@@ -271,5 +272,12 @@ return function()
 			Size = UDim2.fromScale(1, 0),
 			AutomaticSize = Enum.AutomaticSize.Y,
 		}, heroCards),
+
+		BottomSpacer = c("Frame", {
+			BackgroundTransparency = 1,
+			LayoutOrder = 9999,
+			Size = UDim2.new(1, 0, 0, 40),
+			Visible = true,
+		}),
 	})
 end

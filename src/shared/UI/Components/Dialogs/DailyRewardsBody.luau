@@ -298,6 +298,12 @@ local function DailyRewardsBody(props: { Status: { [string]: any }? })
 		Padding = UDim.new(0, px(3)),
 		SortOrder = Enum.SortOrder.LayoutOrder,
 	})
+	rows.BottomSpacer = c("Frame", {
+		BackgroundTransparency = 1,
+		LayoutOrder = 9999,
+		Size = UDim2.new(1, 0, 0, px(20)),
+		Visible = true,
+	})
 
 	-- The claimed day is the streak position (1-7); its reward is the value the row shows.
 	local claimedDay = if streak > 0 then ((streak - 1) % 7) + 1 else nil

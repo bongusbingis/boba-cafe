@@ -92,6 +92,7 @@ return function()
 			BackgroundTransparency = 1,
 			LayoutOrder = 9999,
 			Size = UDim2.new(1, 0, 0, 60),
+			Visible = true,
 		}),
 	}
 
