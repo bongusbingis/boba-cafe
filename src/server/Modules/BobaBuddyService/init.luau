@@ -38,37 +38,6 @@ local BobaBuddyService = Knit.CreateService({
 	_buddiesFolder = nil :: Folder?,
 })
 
-local function resolveBuddyModel(): Model?
-	-- 1. Try authored model in ReplicatedStorage.Assets.NPCs.BobaBuddy
-	local assets = ReplicatedStorage:FindFirstChild("Assets")
-	local npcs = assets and assets:FindFirstChild("NPCs")
-	local authoredTemplate = npcs and npcs:FindFirstChild("BobaBuddy")
-	if authoredTemplate and authoredTemplate:IsA("Model") then
-		return authoredTemplate:Clone()
-	end
-
-	-- 2. Fallback: use customer R15 character rig
-	local desc = Instance.new("HumanoidDescription")
-	local ok, result = pcall(function()
-		return Players:CreateHumanoidModelFromDescription(desc, Enum.HumanoidRigType.R15)
-	end)
-	desc:Destroy()
-
-	if ok and typeof(result) == "Instance" and result:IsA("Model") then
-		local humanoid = result:FindFirstChildOfClass("Humanoid")
-		if humanoid then
-			humanoid.DisplayName = "Boba Buddy"
-			humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
-			humanoid:SetStateEnabled(Enum.HumanoidStateType.Climbing, false)
-			humanoid:SetStateEnabled(Enum.HumanoidStateType.Swimming, false)
-			humanoid:SetStateEnabled(Enum.HumanoidStateType.Seated, false)
-		end
-		return result
-	end
-
-	return nil
-end
-
 function BobaBuddyService:KnitInit()
 	local folder = workspace:FindFirstChild("BobaBuddies") :: Folder?
 	if not folder then
@@ -160,10 +129,20 @@ function BobaBuddyService:SpawnBuddyForPlayer(player: Player, chore: "Cleaner" |
 		return true, "Extended"
 	end
 
-	local model = resolveBuddyModel()
-	if not model then
+	local sharedStorage = ReplicatedStorage:FindFirstChild("SharedStorage")
+	local npcs = sharedStorage and sharedStorage:FindFirstChild("NPCs")
+	local template = npcs and npcs:FindFirstChild("BobaBuddy")
+	if not template or not template:IsA("Model") then
+		local assets = ReplicatedStorage:FindFirstChild("Assets")
+		local assetsNpcs = assets and assets:FindFirstChild("NPCs")
+		template = assetsNpcs and assetsNpcs:FindFirstChild("BobaBuddy")
+	end
+
+	if not template or not template:IsA("Model") then
 		return false, "ModelFailed"
 	end
+
+	local model = template:Clone()
 
 	model.Name = `{player.Name}_BobaBuddy_{chore}`
 	model:SetAttribute("IsBobaBuddy", true)

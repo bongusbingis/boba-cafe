@@ -92,8 +92,8 @@ local ProductIds: ProductIds = {
 	ChangeNickname = 1152995517,
 	PumpkinLauncherPass = nil, -- STUB: Jack to provide Game Pass ID
 	BobaBuddy = {
-		Cleaner = nil, -- STUB: 49 R$ (Jack Creator Hub ID)
-		Stocker = nil, -- STUB: 99 R$ (Jack Creator Hub ID)
+		Cleaner = 3721839758, -- STUB: 49 R$ (Jack Creator Hub ID)
+		Stocker = 3721839790, -- STUB: 99 R$ (Jack Creator Hub ID)
 	},
 }
 

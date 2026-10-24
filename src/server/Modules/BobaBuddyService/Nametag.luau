@@ -36,8 +36,8 @@ function Nametag.Attach(model: Model, owner: Player, chore: string, getRemaining
 	title.BackgroundTransparency = 1
 	title.Font = Enum.Font.FredokaOne
 	title.TextSize = 16
-	title.TextColor3 = Styles.WHITE
-	title.TextStrokeColor3 = Styles.CHARCOAL
+	title.TextColor3 = Color3.new(1, 1, 1)
+	title.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
 	title.TextStrokeTransparency = 0.4
 	title.Text = `{owner.DisplayName}'s Boba Buddy`
 	title.Parent = frame
@@ -46,11 +46,11 @@ function Nametag.Attach(model: Model, owner: Player, chore: string, getRemaining
 	badge.Name = "Badge"
 	badge.Size = UDim2.fromScale(0.8, 0.4)
 	badge.Position = UDim2.fromScale(0.1, 0.5)
-	badge.BackgroundColor3 = if chore == "Cleaner" then Styles.MINT else Styles.ORANGE
+	badge.BackgroundColor3 = if chore == "Cleaner" then Styles.GREEN else Styles.GOLD_MID
 	badge.BackgroundTransparency = 0.2
-	badge.Font = Enum.Font.GothamBold
+	badge.Font = Enum.Font.FredokaOne
 	badge.TextSize = 12
-	badge.TextColor3 = Styles.CHARCOAL
+	badge.TextColor3 = Color3.new(1, 1, 1)
 	badge.Text = `{chore} (3:00)`
 	badge.Parent = frame
 
@@ -59,7 +59,7 @@ function Nametag.Attach(model: Model, owner: Player, chore: string, getRemaining
 	corner.Parent = badge
 
 	local stroke = Instance.new("UIStroke")
-	stroke.Color = Styles.WHITE
+	stroke.Color = Color3.new(1, 1, 1)
 	stroke.Thickness = 1.2
 	stroke.Transparency = 0.5
 	stroke.Parent = badge
