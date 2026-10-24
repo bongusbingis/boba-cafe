@@ -120,7 +120,25 @@ end
 
 function Spill:_GetAnimation(Player: Player): AnimationTrack
 	if self.Type == "Mopping" then
-		return Animator:LoadAnimation(Player.Character, self.Object.MoppingAnim.Value)
+		local moppingAnim = self.Object:FindFirstChild("MoppingAnim")
+		if moppingAnim and moppingAnim:IsA("ObjectValue") and moppingAnim.Value then
+			return Animator:LoadAnimation(Player.Character, moppingAnim.Value)
+		end
+
+		local storage = Service("SpillService").Storage
+		local defaultAnim = storage
+			and storage:FindFirstChild("Animations")
+			and storage.Animations:FindFirstChild("MoppingAnimation")
+		if defaultAnim then
+			return Animator:LoadAnimation(Player.Character, defaultAnim)
+		end
+
+		local anim = self.Object:FindFirstChild("Animation")
+		if anim and anim:IsA("ObjectValue") and anim.Value then
+			return Animator:LoadAnimation(Player.Character, anim.Value)
+		end
+
+		error("No mopping animation found for spill", 0)
 	else
 		if self.Object.Animation.Value.Name == "TableAnimations" then
 			return Animator:LoadAnimation(Player.Character, self.Object.Animation.Value[self.Region.Parent.Parent.Name])
@@ -507,7 +525,7 @@ function Spill:_Build()
 	if self.Type == "Mopping" then
 		self.Object:ScaleTo(1)
 
-		-- Templates without a sign (e.g. MeltedPopsicle, Donut) still spill and clean normally; only the sign and its trip zone are skipped.
+		-- Templates without a sign (e.g. MeltedPopsicle) still spill and clean normally; only the sign and its trip zone are skipped.
 		if self.Object:FindFirstChild("SignStartPosition") then
 			self.SignPrompt = Instance.new("ProximityPrompt")
 			self.SignPrompt.Style = Enum.ProximityPromptStyle.Custom

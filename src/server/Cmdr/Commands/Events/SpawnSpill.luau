@@ -6,9 +6,9 @@ return {
 	Group = "Events",
 	Args = {
 		{
-			Type = "string",
-			Name = "type",
-			Description = "Spill type (Water, Boba, Tea)",
+			Type = "spillTemplate",
+			Name = "template",
+			Description = "Spill template (Boba, MeltedPopsicle). Defaults to random if omitted.",
 			Optional = true,
 		},
 	},
