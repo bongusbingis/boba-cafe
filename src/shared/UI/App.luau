@@ -82,9 +82,33 @@ local function App()
 			end)
 		end)
 
+		local connUpsell
+		pcall(function()
+			local upsellService = Knit.GetService("BobaBuddyUpsellService")
+			if upsellService and upsellService.OpenShopRequested then
+				connUpsell = upsellService.OpenShopRequested:Connect(function(tab, highlightKey)
+					local pages = UI:FindFirstChild("Pages")
+					local shopPage = pages and pages:FindFirstChild("Shop")
+					if shopPage then
+						extraData.current = { tab or "Products", highlightKey }
+						setCurrentPage(function()
+							closeCurrentPageIfExists()
+							return shopPage
+						end)
+						setPageMountKey(function(n)
+							return n + 1
+						end)
+					end
+				end)
+			end
+		end)
+
 		return function()
 			conn1:Disconnect()
 			conn2:Disconnect()
+			if connUpsell then
+				connUpsell:Disconnect()
+			end
 		end
 	end, {})
 

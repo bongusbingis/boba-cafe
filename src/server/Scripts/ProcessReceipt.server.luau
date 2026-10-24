@@ -221,6 +221,76 @@ if CHANGE_NICKNAME_PRODUCT_ID then
 	}
 end
 
+-- Boba Buddy: Cleaner (consumable companion that cleans spills)
+local BOBA_BUDDY_CLEANER_ID = ProductIds.BobaBuddy and ProductIds.BobaBuddy.Cleaner
+if BOBA_BUDDY_CLEANER_ID then
+	ProductActionMap[BOBA_BUDDY_CLEANER_ID] = {
+		"Boba Buddy: Cleaner",
+		function(player, _receiptInfo, _playerData)
+			local shiftService = Knit.GetService("ShiftService")
+			local isClockedIn = player:GetAttribute("ClockedIn") == true
+			if shiftService and shiftService.IsClockedIn then
+				isClockedIn = shiftService:IsClockedIn(player)
+			end
+			if not isClockedIn then
+				warn(`[ProcessReceipt] Player {player.Name} is not clocked in; deferring Boba Buddy Cleaner grant`)
+				return false, "not clocked in"
+			end
+
+			local buddyService = Knit.GetService("BobaBuddyService")
+			if not buddyService then
+				return false, "service unavailable"
+			end
+
+			local ok, err = buddyService:SpawnBuddyForPlayer(player, "Cleaner")
+			return ok, err
+		end,
+		function(player, _receiptInfo)
+			pcall(function()
+				local upsellService = Knit.GetService("BobaBuddyUpsellService")
+				if upsellService and upsellService.OnProductPurchased then
+					upsellService:OnProductPurchased(player, "Cleaner")
+				end
+			end)
+		end,
+	}
+end
+
+-- Boba Buddy: Stocker (consumable companion that restocks stations)
+local BOBA_BUDDY_STOCKER_ID = ProductIds.BobaBuddy and ProductIds.BobaBuddy.Stocker
+if BOBA_BUDDY_STOCKER_ID then
+	ProductActionMap[BOBA_BUDDY_STOCKER_ID] = {
+		"Boba Buddy: Stocker",
+		function(player, _receiptInfo, _playerData)
+			local shiftService = Knit.GetService("ShiftService")
+			local isClockedIn = player:GetAttribute("ClockedIn") == true
+			if shiftService and shiftService.IsClockedIn then
+				isClockedIn = shiftService:IsClockedIn(player)
+			end
+			if not isClockedIn then
+				warn(`[ProcessReceipt] Player {player.Name} is not clocked in; deferring Boba Buddy Stocker grant`)
+				return false, "not clocked in"
+			end
+
+			local buddyService = Knit.GetService("BobaBuddyService")
+			if not buddyService then
+				return false, "service unavailable"
+			end
+
+			local ok, err = buddyService:SpawnBuddyForPlayer(player, "Stocker")
+			return ok, err
+		end,
+		function(player, _receiptInfo)
+			pcall(function()
+				local upsellService = Knit.GetService("BobaBuddyUpsellService")
+				if upsellService and upsellService.OnProductPurchased then
+					upsellService:OnProductPurchased(player, "Stocker")
+				end
+			end)
+		end,
+	}
+end
+
 -- PurchaseIds currently being handled; guards against a re-entrant call for the same receipt while one yields.
 local inFlight: { [string]: boolean } = {}
 -- PurchaseIds granted on this server whose post-grant hook has not run yet (the save was not confirmed). The hook

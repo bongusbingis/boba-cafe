@@ -1,4 +1,5 @@
 ---> services
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Packages = ReplicatedStorage:WaitForChild("Packages")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -394,6 +395,88 @@ function Spill:_ListenToPlayerTrip()
 		task.wait(0.6)
 		self.Object.SignStartPosition.CFrame = self.Object.SignEndPosition.CFrame
 		self.SignPrompt.Enabled = true
+	end)
+
+	-- NPC slip and fall: deducts 5% Cafe Rating and sends a toast notification
+	TripZone.partEntered:Connect(function(part: BasePart)
+		if self.Cleaning then
+			return
+		end
+
+		local character = part.Parent
+		if not character or not character:IsA("Model") then
+			return
+		end
+
+		local humanoid = character:FindFirstChildOfClass("Humanoid")
+		if not humanoid or humanoid.Health <= 0 then
+			return
+		end
+
+		-- Real players are handled by playerEntered
+		if Players:GetPlayerFromCharacter(character) then
+			return
+		end
+
+		-- Ignore pets and Boba Buddies
+		if character:GetAttribute("IsBobaBuddy") == true or character:GetAttribute("IsPet") == true then
+			return
+		end
+
+		-- Debounce per NPC
+		if character:GetAttribute("TrippedOnSpill") == true then
+			return
+		end
+		character:SetAttribute("TrippedOnSpill", true)
+
+		-- NPC slips and falls
+		pcall(function()
+			humanoid.Sit = true
+			humanoid.PlatformStand = true
+			humanoid.WalkSpeed = 0
+		end)
+
+		-- Knock over warning sign if present
+		if self.Object:FindFirstChild("SignStartPosition") and self.Object:FindFirstChild("SignEndPosition") then
+			SpillsReplica:FireAllClients(self.Object.SignStartPosition, {
+				Time = 0.6,
+				EasingStyle = "Bounce",
+				EasingDirection = "Out",
+				Goal = { CFrame = self.Object.SignEndPosition.CFrame },
+			})
+			task.delay(0.6, function()
+				if self.Object and self.Object:FindFirstChild("SignStartPosition") then
+					self.Object.SignStartPosition.CFrame = self.Object.SignEndPosition.CFrame
+					if self.SignPrompt then
+						self.SignPrompt.Enabled = true
+					end
+				end
+			end)
+		end
+
+		-- Apply 5% cafe rating penalty
+		pcall(function()
+			local cafeRatingService = Service("CafeRatingService")
+			if cafeRatingService and cafeRatingService.ApplyNpcSlipPenalty then
+				cafeRatingService:ApplyNpcSlipPenalty()
+			end
+		end)
+
+		-- Recover after 2.5s
+		task.delay(2.5, function()
+			if humanoid and humanoid.Parent then
+				humanoid.PlatformStand = false
+				humanoid.Sit = false
+				humanoid.WalkSpeed = 16
+			end
+		end)
+
+		-- Clear debounce after 6s
+		task.delay(6, function()
+			if character and character.Parent then
+				character:SetAttribute("TrippedOnSpill", nil)
+			end
+		end)
 	end)
 
 	return TripZone

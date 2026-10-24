@@ -50,6 +50,7 @@ local KitchenService = Knit.CreateService({
 	_activeBoxTracks = {} :: { [Player]: AnimationTrack },
 	_restockPromptShown = {} :: { [number]: boolean },
 	_shiftService = nil :: any,
+	StationRestocked = Knit.CreateSignal(),
 })
 
 ---> Private Helper Functions
@@ -340,6 +341,8 @@ function KitchenService:RestockStation(player: Player, model: Model, prompt: Pro
 			serveSound:Play()
 		end
 	end)
+
+	self.StationRestocked:Fire(player, model)
 
 	return true
 end

@@ -48,6 +48,8 @@ return function()
 	-- in which case the row shows no price and its purchase path stays inert.
 	local prices, setPrices = React.useState({})
 	local nicknamePrice, setNicknamePrice = React.useState(nil)
+	local cleanerPrice, setCleanerPrice = React.useState(nil)
+	local stockerPrice, setStockerPrice = React.useState(nil)
 
 	React.useEffect(function()
 		local mounted = true
@@ -75,6 +77,27 @@ return function()
 				end)
 				if mounted and ok and typeof(info) == "table" and info.PriceInRobux ~= nil then
 					setNicknamePrice(tostring(info.PriceInRobux))
+				end
+			end
+
+			if ProductIds.BobaBuddy then
+				local cleanerId = ProductIds.BobaBuddy.Cleaner
+				if cleanerId ~= nil then
+					local ok, info = pcall(function()
+						return MarketplaceService:GetProductInfoAsync(cleanerId, Enum.InfoType.Product)
+					end)
+					if mounted and ok and typeof(info) == "table" and info.PriceInRobux ~= nil then
+						setCleanerPrice(tostring(info.PriceInRobux))
+					end
+				end
+				local stockerId = ProductIds.BobaBuddy.Stocker
+				if stockerId ~= nil then
+					local ok, info = pcall(function()
+						return MarketplaceService:GetProductInfoAsync(stockerId, Enum.InfoType.Product)
+					end)
+					if mounted and ok and typeof(info) == "table" and info.PriceInRobux ~= nil then
+						setStockerPrice(tostring(info.PriceInRobux))
+					end
 				end
 			end
 		end)
@@ -206,6 +229,28 @@ return function()
 		end
 	end
 
+	local function onPurchaseBuddy(item)
+		if not ProductIds.BobaBuddy then
+			return
+		end
+		local isCleaner = string.find(item.Label, "Cleaner") ~= nil
+		local id = if isCleaner then ProductIds.BobaBuddy.Cleaner else ProductIds.BobaBuddy.Stocker
+		if id ~= nil then
+			MarketplaceService:PromptProductPurchase(Players.LocalPlayer, id)
+		end
+	end
+
+	local buddyItems = {
+		{
+			Label = "Boba Buddy: Cleaner",
+			Price = if cleanerPrice then cleanerPrice else "49",
+		},
+		{
+			Label = "Boba Buddy: Stocker",
+			Price = if stockerPrice then stockerPrice else "99",
+		},
+	}
+
 	local function onPurchaseNickname(_item)
 		NicknamePrompt.Open()
 	end
@@ -259,6 +304,13 @@ return function()
 				Items = bucksItems,
 				LayoutOrder = 0,
 				OnPurchase = onPurchaseBucks,
+			}),
+
+			BobaBuddy = c(ShopCategory, {
+				Title = "Boba Buddy (3 Min)",
+				Items = buddyItems,
+				LayoutOrder = 1,
+				OnPurchase = onPurchaseBuddy,
 			}),
 
 			Events = if #eventItems > 0

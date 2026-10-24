@@ -99,6 +99,11 @@ export type SeasonPassData = {
 	ClaimedTiers: { [number]: boolean | string },
 }
 
+export type UpsellsSeenData = {
+	Cleaner: boolean,
+	Stocker: boolean,
+}
+
 export type ModerationAction = {
 	Timestamp: number,
 	Reason: string,
@@ -160,6 +165,7 @@ export type ProfileTemplate = {
 	-- SEASON-PASS (additive; reconcile fills old profiles).
 	SeasonPass: SeasonPassData,
 	StarterBundleClaimed: boolean,
+	UpsellsSeen: UpsellsSeenData,
 }
 
 return {
@@ -250,4 +256,8 @@ return {
 		ClaimedTiers = {},
 	},
 	StarterBundleClaimed = false,
+	UpsellsSeen = {
+		Cleaner = false,
+		Stocker = false,
+	},
 }

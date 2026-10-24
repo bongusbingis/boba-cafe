@@ -1,0 +1,56 @@
+--!strict
+--[[
+	BobaBuddyConfig
+	Configuration for consumable Boba Buddy products (Cleaner & Stocker)
+	and their first-pain onboarding upsell modals.
+--]]
+
+return {
+	LIFESPAN_SECONDS = 180,
+
+	-- Behavior when purchasing the same buddy product while one is already active
+	-- "Extend": Adds 180s to existing timer (recommended; prevents visual clutter)
+	-- "Spawn": Spawns an additional buddy
+	STACK_MODE = "Extend" :: "Extend" | "Spawn",
+
+	CLEANER = {
+		RANGE_STUDS = 25,
+		CHECK_INTERVAL_SECONDS = 5,
+		COOLDOWN_SECONDS = 8,
+		MOP_DURATION_SECONDS = 1.2,
+		WALK_SPEED = 14,
+		ANCHOR_ROBUX = 49,
+	},
+
+	STOCKER = {
+		RANGE_STUDS = 30,
+		CHECK_INTERVAL_SECONDS = 10,
+		COOLDOWN_SECONDS = 12,
+		STOCK_THRESHOLD_PERCENT = 0.5,
+		WALK_SPEED = 14,
+		ANCHOR_ROBUX = 99,
+	},
+
+	UPSELL = {
+		TriggerCount = 1, -- Fires on 1st chore completion; configurable for A/B testing
+		DelaySeconds = 8, -- Delay after chore before presenting modal
+		SuppressWindowSeconds = 60, -- Minimum delay after any other upsell/dialog
+		ConversionWindowSeconds = 300, -- Purchases within 5 min attributed to upsell
+
+		CleanerTitle = "Boba Buddy",
+		CleanerText = "That took a minute, didn't it? A Boba Buddy can clean spills for you next time.",
+
+		StockerTitle = "Boba Buddy",
+		StockerText = "That took a minute, didn't it? A Boba Buddy can restock for you next time.",
+
+		ButtonSee = "See Buddy",
+		ButtonDismiss = "Not Now",
+	},
+
+	NPC_SLIP = {
+		RATING_PENALTY_PERCENT = 5,
+		FALL_DURATION_SECONDS = 2.5,
+		COOLDOWN_SECONDS = 5,
+		TOAST_MESSAGE = "A customer slipped on a spill! -5% Cafe Rating",
+	},
+}

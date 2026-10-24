@@ -41,6 +41,10 @@ export type ProductIds = {
 	ChangeNickname: number?,
 	-- Limited-time Halloween Gamepass (STUB: Jack to provide Game Pass ID).
 	PumpkinLauncherPass: number?,
+	BobaBuddy: {
+		Cleaner: number?,
+		Stocker: number?,
+	},
 }
 
 local ProductIds: ProductIds = {
@@ -87,6 +91,10 @@ local ProductIds: ProductIds = {
 	},
 	ChangeNickname = 1152995517,
 	PumpkinLauncherPass = nil, -- STUB: Jack to provide Game Pass ID
+	BobaBuddy = {
+		Cleaner = nil, -- STUB: 49 R$ (Jack Creator Hub ID)
+		Stocker = nil, -- STUB: 99 R$ (Jack Creator Hub ID)
+	},
 }
 
 return ProductIds

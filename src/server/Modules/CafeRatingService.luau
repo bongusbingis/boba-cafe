@@ -212,6 +212,11 @@ function CafeRatingService:StartOrExtendBobaParty(buyer: Player?): (boolean, str
 	return true
 end
 
+function CafeRatingService:ApplyNpcSlipPenalty()
+	self:_change(-5)
+	self:_notifyAll("A customer slipped on a spill! -5% Cafe Rating")
+end
+
 function CafeRatingService:_change(delta: number)
 	if self._rush then
 		return -- the meter is frozen during Rush Hour
