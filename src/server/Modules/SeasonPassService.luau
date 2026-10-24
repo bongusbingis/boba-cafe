@@ -271,6 +271,19 @@ function SeasonPassService:ClaimTier(player: Player, tierIndex: number): (boolea
 			end
 		end
 
+		local function grantCostume(costumeId: string)
+			local charService = self:_getService("CharacterCustomizationService")
+			if charService and charService.GrantCostume then
+				charService:GrantCostume(player, costumeId)
+			end
+		end
+		if freeReward ~= nil and (freeReward :: any).Type == "Costume" then
+			grantCostume((freeReward :: any).Id)
+		end
+		if grantsPremium and (premiumReward :: any).Type == "Costume" then
+			grantCostume((premiumReward :: any).Id)
+		end
+
 		stateCache[player.UserId] = cloneState(state)
 		self:_fireChanged(player)
 		return true, nil

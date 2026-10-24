@@ -291,6 +291,22 @@ if BOBA_BUDDY_STOCKER_ID then
 	}
 end
 
+-- Boba Buddy Costume (permanent wearable costume)
+local BOBA_BUDDY_COSTUME_ID = ProductIds.BobaBuddyCostume
+if BOBA_BUDDY_COSTUME_ID then
+	ProductActionMap[BOBA_BUDDY_COSTUME_ID] = {
+		"Boba Buddy Costume",
+		function(player, _receiptInfo, _playerData)
+			local charService = Knit.GetService("CharacterCustomizationService")
+			if not charService then
+				return false, "service unavailable"
+			end
+			local ok, err = charService:GrantCostume(player, "BobaCostume")
+			return ok, err
+		end,
+	}
+end
+
 -- PurchaseIds currently being handled; guards against a re-entrant call for the same receipt while one yields.
 local inFlight: { [string]: boolean } = {}
 -- PurchaseIds granted on this server whose post-grant hook has not run yet (the save was not confirmed). The hook

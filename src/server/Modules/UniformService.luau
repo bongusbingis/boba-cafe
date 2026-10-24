@@ -100,15 +100,23 @@ function UniformService:_apply(player: Player)
 			return
 		end
 
-		local ownsStarEmployee = false
-		local okPass, owns = pcall(function()
-			return (GamepassUtil :: any):PlayerOwnsPassAsync(player, STAR_EMPLOYEE_PASS_ID)
-		end)
-		if okPass and owns == true then
-			ownsStarEmployee = true
+		local folderName = "Default"
+		local charCustomService = Knit.GetService("CharacterCustomizationService")
+		if charCustomService and charCustomService.GetEquippedUniform then
+			local equipped = charCustomService:GetEquippedUniform(player)
+			if equipped == "StarEmployee" or equipped == "Default" then
+				folderName = equipped
+			end
+		else
+			local ownsStarEmployee = false
+			local okPass, owns = pcall(function()
+				return (GamepassUtil :: any):PlayerOwnsPassAsync(player, STAR_EMPLOYEE_PASS_ID)
+			end)
+			if okPass and owns == true then
+				ownsStarEmployee = true
+			end
+			folderName = if ownsStarEmployee then "StarEmployee" else "Default"
 		end
-
-		local folderName = if ownsStarEmployee then "StarEmployee" else "Default"
 		local shirtTemplate = self:_template(folderName, "Shirt")
 		local pantsTemplate = self:_template(folderName, "Pants")
 

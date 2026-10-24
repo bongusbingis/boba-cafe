@@ -45,6 +45,7 @@ export type ProductIds = {
 		Cleaner: number?,
 		Stocker: number?,
 	},
+	BobaBuddyCostume: number?,
 }
 
 local ProductIds: ProductIds = {
@@ -95,6 +96,7 @@ local ProductIds: ProductIds = {
 		Cleaner = 3721839758, -- STUB: 49 R$ (Jack Creator Hub ID)
 		Stocker = 3721839790, -- STUB: 99 R$ (Jack Creator Hub ID)
 	},
+	BobaBuddyCostume = 3721840647,
 }
 
 return ProductIds

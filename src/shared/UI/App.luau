@@ -120,6 +120,22 @@ local function App()
 		if not ok or not dialogController or not dialogController.OpenShopRequested then
 			return
 		end
+		local connInv = dialogController.OpenInventoryRequested
+			and dialogController.OpenInventoryRequested:Connect(function(pageKey)
+				local pages = UI:FindFirstChild("Pages")
+				local invPage = pages and pages:FindFirstChild("Inventory")
+				if invPage then
+					extraData.current = { pageKey }
+					setCurrentPage(function()
+						closeCurrentPageIfExists()
+						return invPage
+					end)
+					setPageMountKey(function(n)
+						return n + 1
+					end)
+				end
+			end)
+
 		local conn = dialogController.OpenShopRequested:Connect(function(pageKey)
 			local pages = UI:FindFirstChild("Pages")
 			local shopPage = pages and pages:FindFirstChild("Shop")
@@ -136,6 +152,9 @@ local function App()
 		end)
 		return function()
 			conn:Disconnect()
+			if connInv then
+				connInv:Disconnect()
+			end
 		end
 	end, {})
 

@@ -1,3 +1,4 @@
+--!strict
 local MarketplaceService = game:GetService("MarketplaceService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -22,6 +23,7 @@ local ShopCard = require(UI.Components.Buttons.ShopCard)
 local Pane = require(UI.Components.Pane)
 local PromptButton = require(UI.Components.Buttons.PromptButton)
 local BobaBucksShortfall = require(UI.Utility.BobaBucksShortfall)
+local ViewportCostumePreview = require(UI.Components.ViewportCostumePreview)
 local usePx = require(UI.Hooks.usePx)
 
 ---> private
@@ -43,9 +45,25 @@ type FeaturedCardData = {
 	OnClick: () -> (),
 }
 
--- Full-width hero offer: image left, tag/title/lines in the middle, price +
+-- Full-width hero offer: image/viewport left, tag/title/lines in the middle, price +
 -- button right. Page-local composition (like StatCard): Pane + Styles tokens only.
-local function HeroCard(props)
+local function HeroCard(props: {
+	LayoutOrder: number,
+	Fill: Color3?,
+	Title: string,
+	TitleColor: Color3?,
+	Lines: { string },
+	LinesColor: Color3?,
+	Image: string?,
+	CustomVisual: any?,
+	Tag: string?,
+	TagColor: Color3?,
+	Price: string?,
+	PriceColor: Color3?,
+	ButtonText: string,
+	ButtonColor: Color3?,
+	OnClick: () -> (),
+})
 	local px = usePx()
 	return c(Pane, {
 		ClassName = "Frame",
@@ -64,13 +82,24 @@ local function HeroCard(props)
 			Size = UDim2.new(0.98, 0, 0, px(HERO_HEIGHT)),
 		},
 	}, {
-		Image = c("ImageLabel", {
-			BackgroundTransparency = 1,
-			Image = props.Image,
-			LayoutOrder = 1,
-			ScaleType = Enum.ScaleType.Fit,
-			Size = UDim2.fromOffset(px(90), px(90)),
-		}),
+		Visual = if props.CustomVisual ~= nil
+			then c(Pane, {
+				ClassName = "Frame",
+				Native = {
+					BackgroundTransparency = 1,
+					LayoutOrder = 1,
+					Size = UDim2.fromOffset(px(90), px(90)),
+				},
+			}, {
+				Content = props.CustomVisual,
+			})
+			else c("ImageLabel", {
+				BackgroundTransparency = 1,
+				Image = props.Image or "",
+				LayoutOrder = 1,
+				ScaleType = Enum.ScaleType.Fit,
+				Size = UDim2.fromOffset(px(90), px(90)),
+			}),
 
 		Info = c(Pane, {
 			ClassName = "Frame",
@@ -199,6 +228,12 @@ return function()
 	local starterClaimed, setStarterClaimed = React.useState(false)
 	local randomPolicyRestricted, setRandomPolicyRestricted = React.useState(false)
 
+	-- BOBA BUDDY & COSTUME:
+	local cleanerPrice, setCleanerPrice = React.useState(nil)
+	local stockerPrice, setStockerPrice = React.useState(nil)
+	local costumePrice, setCostumePrice = React.useState(nil)
+	local costumeOwned, setCostumeOwned = React.useState(false)
+
 	React.useEffect(function()
 		local mounted = true
 		task.spawn(function()
@@ -246,7 +281,7 @@ return function()
 				setBobaPartyPrice(`\u{e002} {partyPrices["BobaParty"]}`)
 			end
 
-			-- SEASON-PASS: live prices only (DEC-026), never hardcoded.
+			-- Live prices only (DEC-026), never hardcoded.
 			local function fetchProductPrice(id: number?)
 				if id == nil then
 					return nil
@@ -262,9 +297,14 @@ return function()
 			if mounted then
 				setSeasonPrice(fetchProductPrice(ProductIds.SeasonPass))
 				setStarterPrice(fetchProductPrice(ProductIds.StarterBundle))
+				if ProductIds.BobaBuddy then
+					setCleanerPrice(fetchProductPrice(ProductIds.BobaBuddy.Cleaner))
+					setStockerPrice(fetchProductPrice(ProductIds.BobaBuddy.Stocker))
+				end
+				setCostumePrice(fetchProductPrice(ProductIds.BobaBuddyCostume))
 			end
 
-			-- SEASON-PASS: hide the Starter Bundle hero once claimed.
+			-- Hide Starter Bundle hero once claimed & check costume ownership
 			local dataOk, dataController = pcall(function()
 				return Knit.GetController("DataController")
 			end)
@@ -272,11 +312,39 @@ return function()
 				dataController
 					:GetDataAsync()
 					:andThen(function(data)
-						if mounted and typeof(data) == "table" and data.StarterBundleClaimed == true then
-							setStarterClaimed(true)
+						if mounted and typeof(data) == "table" then
+							if data.StarterBundleClaimed == true then
+								setStarterClaimed(true)
+							end
+							if
+								data.Character
+								and data.Character.OwnedCostumes
+								and data.Character.OwnedCostumes["BobaCostume"] == true
+							then
+								setCostumeOwned(true)
+							end
 						end
 					end)
 					:catch(function() end)
+			end
+
+			-- Also verify costume state with CharacterCustomizationService
+			local charOk, charService = pcall(function()
+				return Knit.GetService("CharacterCustomizationService")
+			end)
+			if mounted and charOk and charService then
+				pcall(function()
+					charService:GetCharacterState():andThen(function(charState)
+						if
+							mounted
+							and charState
+							and charState.OwnedCostumes
+							and charState.OwnedCostumes["BobaCostume"] == true
+						then
+							setCostumeOwned(true)
+						end
+					end)
+				end)
 			end
 
 			-- PolicyService: check if paid random items (capsules) are restricted
@@ -305,9 +373,35 @@ return function()
 			end
 		end)
 
+		local prodConn = MarketplaceService.PromptProductPurchaseFinished:Connect(
+			function(userId, productId, wasPurchased)
+				if wasPurchased and localPlayer and userId == localPlayer.UserId and mounted then
+					if productId == ProductIds.BobaBuddyCostume then
+						setCostumeOwned(true)
+					end
+				end
+			end
+		)
+
+		local charConn
+		pcall(function()
+			local charService = Knit.GetService("CharacterCustomizationService")
+			if charService and charService.CharacterCustomizationChanged then
+				charConn = charService.CharacterCustomizationChanged:Connect(function(state)
+					if mounted and state and state.OwnedCostumes and state.OwnedCostumes["BobaCostume"] == true then
+						setCostumeOwned(true)
+					end
+				end)
+			end
+		end)
+
 		return function()
 			mounted = false
 			conn:Disconnect()
+			prodConn:Disconnect()
+			if charConn then
+				charConn:Disconnect()
+			end
 		end
 	end, {})
 
@@ -394,10 +488,62 @@ return function()
 		end)
 	end
 
+	local function promptCostumePurchase()
+		if costumeOwned then
+			pcall(function()
+				Knit.GetController("DialogController").OpenInventoryRequested:Fire("Character")
+			end)
+			return
+		end
+		local id = ProductIds.BobaBuddyCostume
+		if id ~= nil and localPlayer then
+			MarketplaceService:PromptProductPurchase(localPlayer, id)
+		end
+	end
+
+	local function promptCleanerPurchase()
+		local id = ProductIds.BobaBuddy and ProductIds.BobaBuddy.Cleaner
+		if id ~= nil and localPlayer then
+			MarketplaceService:PromptProductPurchase(localPlayer, id)
+		end
+	end
+
+	local function promptStockerPurchase()
+		local id = ProductIds.BobaBuddy and ProductIds.BobaBuddy.Stocker
+		if id ~= nil and localPlayer then
+			MarketplaceService:PromptProductPurchase(localPlayer, id)
+		end
+	end
+
 	-- The collectible grid under the heroes: the same ShopCards as before,
-	-- but demoted to "More to Collect" so the money offers lead the page.
-	-- Paid random items (capsules) are hidden when restricted by Roblox PolicyService.
+	-- plus the Boba Buddy chore assistants.
 	local gridCards: { FeaturedCardData } = {
+		{
+			Key = "BobaBuddyCleaner",
+			Name = "Boba Buddy: Cleaner",
+			Price = cleanerPrice or "\u{e002} 49",
+			Image = "rbxassetid://16728139086",
+			TopBanner = {
+				Color = Styles.GREEN_BADGE,
+				Text = "Cleans Spills",
+				Size = UDim2.fromScale(1.05, 0.28),
+			},
+			LayoutOrder = 1,
+			OnClick = promptCleanerPurchase,
+		},
+		{
+			Key = "BobaBuddyStocker",
+			Name = "Boba Buddy: Stocker",
+			Price = stockerPrice or "\u{e002} 99",
+			Image = "rbxassetid://16728139086",
+			TopBanner = {
+				Color = Styles.GREEN_BADGE,
+				Text = "Restocks",
+				Size = UDim2.fromScale(1.05, 0.28),
+			},
+			LayoutOrder = 2,
+			OnClick = promptStockerPurchase,
+		},
 		{
 			Key = "PumpkinLauncher",
 			Name = "Pumpkin Launcher",
@@ -409,7 +555,7 @@ return function()
 				Text = if pumpkinOwned then "Owned" else "Halloween",
 				Size = UDim2.fromScale(1.05, 0.28),
 			},
-			LayoutOrder = 1,
+			LayoutOrder = 3,
 			OnClick = function()
 				if localPlayer and ProductIds.PumpkinLauncherPass ~= nil then
 					MarketplaceService:PromptGamePassPurchase(localPlayer, ProductIds.PumpkinLauncherPass)
@@ -427,7 +573,7 @@ return function()
 				Text = if headlessOwned then "Owned" else "New Pass",
 				Size = UDim2.fromScale(1.05, 0.28),
 			},
-			LayoutOrder = 2,
+			LayoutOrder = 4,
 			OnClick = function()
 				if localPlayer then
 					MarketplaceService:PromptGamePassPurchase(localPlayer, HEADLESS_PASS_ID)
@@ -444,7 +590,7 @@ return function()
 				Text = "Event",
 				Size = UDim2.fromScale(1.05, 0.28),
 			},
-			LayoutOrder = 3,
+			LayoutOrder = 5,
 			OnClick = function()
 				local partyProduct = nil
 				for _, prod in EventProducts.Products do
@@ -472,7 +618,7 @@ return function()
 				Text = "Featured",
 				Size = UDim2.fromScale(1.05, 0.28),
 			},
-			LayoutOrder = 4,
+			LayoutOrder = 6,
 			OnClick = function()
 				promptPetPurchase("Epic Pet Capsule", "1,200 Boba Bucks")
 			end,
@@ -483,7 +629,7 @@ return function()
 			Price = " 250",
 			Image = "rbxassetid://7621095542",
 			Tier = "Rare",
-			LayoutOrder = 5,
+			LayoutOrder = 7,
 			OnClick = function()
 				promptPetPurchase("Rare Pet Capsule", "250 Boba Bucks")
 			end,
@@ -494,7 +640,7 @@ return function()
 			Price = " 75",
 			Image = "rbxassetid://6073658218",
 			Tier = "Basic",
-			LayoutOrder = 6,
+			LayoutOrder = 8,
 			OnClick = function()
 				promptPetPurchase("Regular Pet Capsule", "75 Boba Bucks")
 			end,
@@ -509,7 +655,7 @@ return function()
 				Text = "Best Value",
 				Size = UDim2.fromScale(1.05, 0.28),
 			},
-			LayoutOrder = 7,
+			LayoutOrder = 9,
 			OnClick = function()
 				promptNametagPurchase("10 Nametag Capsules", 10, "1,350 Boba Bucks")
 			end,
@@ -519,7 +665,7 @@ return function()
 			Name = "Nametag Capsule",
 			Price = " 150",
 			Image = "rbxassetid://6073658218",
-			LayoutOrder = 8,
+			LayoutOrder = 10,
 			OnClick = function()
 				promptNametagPurchase("Nametag Capsule", 1, "150 Boba Bucks")
 			end,
@@ -552,6 +698,7 @@ return function()
 
 	local starterAvailable = ProductIds.StarterBundle ~= nil and not starterClaimed
 	local seasonAvailable = ProductIds.SeasonPass ~= nil
+	local costumeAvailable = ProductIds.BobaBuddyCostume ~= nil
 
 	return c("Frame", {
 		BackgroundTransparency = 1,
@@ -624,10 +771,35 @@ return function()
 				})
 				else nil,
 
+			CostumeHero = if costumeAvailable
+				then c(HeroCard, {
+					LayoutOrder = 3,
+					Fill = Styles.ROSE,
+					TitleColor = Styles.ROSE_TEXT,
+					LinesColor = Styles.ROSE_TEXT,
+					PriceColor = Styles.ROSE_TEXT,
+					Title = "Boba Buddy Costume",
+					Lines = {
+						"• Wearable Boba Buddy cup!",
+						"• Earnable in Season 1 (Tier 25)",
+						"• Or unlock instantly here",
+					},
+					CustomVisual = c(ViewportCostumePreview, {
+						Size = UDim2.fromScale(1, 1),
+					}),
+					Tag = if costumeOwned then "Owned" else "Featured Wearable",
+					TagColor = if costumeOwned then Styles.GREEN_BADGE else Styles.ROSE_MID,
+					Price = if costumeOwned then "Owned" else costumePrice,
+					ButtonText = if costumeOwned then "View" else "Buy",
+					ButtonColor = if costumeOwned then Styles.GREEN_BADGE else Styles.GREEN,
+					OnClick = promptCostumePurchase,
+				})
+				else nil,
+
 			MoreTitle = c("TextLabel", {
 				BackgroundTransparency = 1,
 				FontFace = Styles.FONT_FREDOKA,
-				LayoutOrder = 3,
+				LayoutOrder = 4,
 				Size = UDim2.fromScale(0.96, 0.05),
 				Text = "More to Collect",
 				TextColor3 = Styles.GREEN,
@@ -648,7 +820,7 @@ return function()
 				Native = {
 					AutomaticSize = Enum.AutomaticSize.Y,
 					BackgroundTransparency = 1,
-					LayoutOrder = 4,
+					LayoutOrder = 5,
 					Size = UDim2.fromScale(0.98, 0),
 				},
 			}, gridChildren),

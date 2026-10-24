@@ -21,11 +21,12 @@ local GoodSignal = require(Packages.GoodSignal)
 
 ---> module declaration
 local DialogController = Knit.CreateController({
-    Name = "DialogController",
+	Name = "DialogController",
 })
 DialogController.Prototype = {}
 -- fires(pageKey: string?). App opens Shop on that tab (BobaBucksShortfall "Get Boba Bucks").
 DialogController.OpenShopRequested = GoodSignal.new()
+DialogController.OpenInventoryRequested = GoodSignal.new()
 
 ---> private
 local c = React.createElement
@@ -150,9 +151,9 @@ local function dialogHolder()
 
 			local dialogComponent: ModuleScript = Dialogs:FindFirstChild(dialog.type)
 			if not dialogComponent then
-                error("[CRITICAL] Unknown dialog type; must exist in Shared -> UI -> Components -> Dialogs")
+				error("[CRITICAL] Unknown dialog type; must exist in Shared -> UI -> Components -> Dialogs")
 				return
-            end
+			end
 
 			setQueue(function(oldQueue: Queue)
 				local newQueue = table.clone(oldQueue)
@@ -180,8 +181,8 @@ local function dialogHolder()
 						if current.Dialog.onResolution then
 							current.Dialog.onResolution(value)
 						elseif doNotSendToServer == nil then
-                            local dialogService = Knit.GetService("DialogService")
-                            dialogService.DialogSignal:Fire("Resolve", {id = current.Dialog.id, value = value})
+							local dialogService = Knit.GetService("DialogService")
+							dialogService.DialogSignal:Fire("Resolve", { id = current.Dialog.id, value = value })
 						end
 						setQueue(function(oldQueue: Queue)
 							local newQueue = table.clone(oldQueue)
@@ -233,7 +234,9 @@ DialogController.FormatBrackets = formatBrackets
 	Pushes a toast notification from the client side.
 	Mirror of DialogService:Notify on the server.
 ]=]
-function DialogController:Notify(notification: { Title: string, Description: string, Image: string, SoundEnabled: boolean? })
+function DialogController:Notify(
+	notification: { Title: string, Description: string, Image: string, SoundEnabled: boolean? }
+)
 	SmallNotification.Push(notification)
 end
 

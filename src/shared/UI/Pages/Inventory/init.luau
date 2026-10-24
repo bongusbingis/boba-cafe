@@ -1,6 +1,6 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local PolicyService = game:GetService("PolicyService")
-local Players = game:GetService("Players")
+local _PolicyService = game:GetService("PolicyService")
+local _Players = game:GetService("Players")
 local Packages = ReplicatedStorage:WaitForChild("Packages")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local UI = Shared:WaitForChild("UI")
@@ -19,9 +19,16 @@ local c = React.createElement
 -- local success, playerPolicyInfo: { ArePaidRandomItemsRestricted: boolean } =
 -- 	pcall(PolicyService.GetPolicyInfoForPlayerAsync, PolicyService, Players.LocalPlayer)
 
-local paidRandomItemsRestricted = false --success and playerPolicyInfo.ArePaidRandomItemsRestricted or false
+local _paidRandomItemsRestricted = false --success and playerPolicyInfo.ArePaidRandomItemsRestricted or false
 
 local PAGES: { OpenableMenu.Page } = {
+	{
+		Key = "Character",
+		Label = "Character",
+		Content = c(require(script.Character)),
+		ButtonColor = Styles.GREEN_MID,
+		ButtonTextColor = Color3.new(1, 1, 1),
+	},
 	{
 		Key = "Capsules",
 		Label = "Capsules",

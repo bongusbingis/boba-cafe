@@ -104,6 +104,12 @@ export type UpsellsSeenData = {
 	Stocker: boolean,
 }
 
+export type CharacterCustomizationData = {
+	EquippedUniform: string?,
+	OwnedCostumes: { [string]: boolean },
+	EquippedCostume: string?,
+}
+
 export type ModerationAction = {
 	Timestamp: number,
 	Reason: string,
@@ -166,6 +172,7 @@ export type ProfileTemplate = {
 	SeasonPass: SeasonPassData,
 	StarterBundleClaimed: boolean,
 	UpsellsSeen: UpsellsSeenData,
+	Character: CharacterCustomizationData,
 }
 
 return {
@@ -259,5 +266,10 @@ return {
 	UpsellsSeen = {
 		Cleaner = false,
 		Stocker = false,
+	},
+	Character = {
+		EquippedUniform = "Default",
+		OwnedCostumes = {},
+		EquippedCostume = nil,
 	},
 }

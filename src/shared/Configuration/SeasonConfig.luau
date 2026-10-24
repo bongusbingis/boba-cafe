@@ -16,6 +16,7 @@ export type Reward =
 	| { Type: "Nametag", Name: string }
 	| { Type: "Title", Id: string }
 	| { Type: "Perk", Perk: string }
+	| { Type: "Costume", Id: string, Name: string? }
 
 export type TierTrack = {
 	Free: Reward?,
@@ -96,7 +97,7 @@ local TRACK: { [number]: TierTrack } = {
 	[22] = {},
 	[23] = {},
 	[24] = { Free = bb(25) },
-	[25] = { Free = nil, Premium = { Type = "Title", Id = "Season1" } },
+	[25] = { Free = nil, Premium = { Type = "Costume", Id = "BobaCostume", Name = "Boba Buddy Costume" } },
 	[26] = {},
 	[27] = { Free = bb(25) },
 	[28] = {},
