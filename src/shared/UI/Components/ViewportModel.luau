@@ -13,10 +13,12 @@ export type Props = {
 	Size: UDim2?,
 	LayoutOrder: number?,
 	ZIndex: number?,
-	ModelRotation: number?,  -- Y-axis rotation of the model in degrees; default 0
+	ModelRotation: number?, -- Y-axis rotation of the model in degrees; default 0
 	-- optional camera overrides
 	ElevationAngle: number?, -- degrees above horizontal; default 30
-	FieldOfView: number?,    -- default 45
+	FieldOfView: number?, -- default 45
+	CameraDistanceMultiplier: number?, -- multiplier for camera distance; < 1 moves camera closer
+	FocusOffset: Vector3?, -- offset added to center focus point
 	Ambient: Color3?,
 	LightColor: Color3?,
 	LightDirection: Vector3?,
@@ -39,8 +41,8 @@ return function(props: Props)
 		-- Clone and move pivot to origin for consistent framing, applying Y rotation
 		local worldModel = Instance.new("WorldModel")
 		local modelClone = props.Model:Clone()
-		local rotY = math.rad(props.ModelRotation or 0)
-		;(modelClone :: PVInstance):PivotTo(CFrame.Angles(0, rotY, 0))
+		local rotY = math.rad(props.ModelRotation or 0);
+		(modelClone :: PVInstance):PivotTo(CFrame.Angles(0, rotY, 0))
 		modelClone.Parent = worldModel
 		worldModel.Parent = viewport
 
@@ -61,16 +63,14 @@ return function(props: Props)
 
 		-- Position camera: in front (+Z) and elevated by ElevationAngle
 		local elevRad = math.rad(props.ElevationAngle or 30)
-		local dist = maxDim * 2.5
-		local cameraPos = center + Vector3.new(
-			0,
-			dist * math.sin(elevRad),
-			-dist * math.cos(elevRad)
-		)
+		local distMult = props.CameraDistanceMultiplier or 1
+		local dist = maxDim * 2.5 * distMult
+		local focusCenter = center + (props.FocusOffset or Vector3.zero)
+		local cameraPos = focusCenter + Vector3.new(0, dist * math.sin(elevRad), -dist * math.cos(elevRad))
 
 		local camera = Instance.new("Camera")
 		camera.FieldOfView = props.FieldOfView or 45
-		camera.CFrame = CFrame.lookAt(cameraPos, center)
+		camera.CFrame = CFrame.lookAt(cameraPos, focusCenter)
 		camera.Parent = viewport
 		viewport.CurrentCamera = camera
 
@@ -78,7 +78,7 @@ return function(props: Props)
 			worldModel:Destroy()
 			camera:Destroy()
 		end
-	end, { props.Model, props.ModelRotation })
+	end, { props.Model, props.ModelRotation, props.CameraDistanceMultiplier, props.FocusOffset } :: { any })
 
 	return c("ViewportFrame", {
 		ref = viewportRef,

@@ -41,7 +41,11 @@ function BobaBuddyUpsellService:KnitStart()
 	end
 
 	-- Listen for stations restocked by a player (Stocker trigger)
-	if kitchenService and (kitchenService :: any).StationRestocked then
+	if
+		kitchenService
+		and (kitchenService :: any).StationRestocked
+		and typeof((kitchenService :: any).StationRestocked.Connect) == "function"
+	then
 		(kitchenService :: any).StationRestocked:Connect(function(player: Player, _model: Model)
 			if player and player:IsA("Player") then
 				self:OnChoreCompleted(player, "Stocker")

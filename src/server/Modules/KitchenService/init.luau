@@ -15,6 +15,7 @@ local Packages = ReplicatedStorage:WaitForChild("Packages")
 ---> Requires
 
 local Knit = require(Packages.Knit)
+local GoodSignal = require(Packages.GoodSignal)
 local ActionRegistry = require(script.ActionRegistry)
 local InteractionRunner = require(script.InteractionRunner)
 local PourMoments = require(script.PourMoments)
@@ -50,7 +51,7 @@ local KitchenService = Knit.CreateService({
 	_activeBoxTracks = {} :: { [Player]: AnimationTrack },
 	_restockPromptShown = {} :: { [number]: boolean },
 	_shiftService = nil :: any,
-	StationRestocked = Knit.CreateSignal(),
+	StationRestocked = GoodSignal.new(),
 })
 
 ---> Private Helper Functions

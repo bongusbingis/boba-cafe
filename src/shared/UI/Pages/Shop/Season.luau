@@ -26,7 +26,7 @@ local usePx = require(UI.Hooks.usePx)
 local c = React.createElement
 
 local HEADER_HEIGHT = 120
-local ROW_HEIGHT = 62
+local ROW_HEIGHT = 72
 
 local PERK_NAMES = {
 	QuestSlot = "+1 Quest Slot",
@@ -173,7 +173,7 @@ local function TierRow(props)
 			Size = UDim2.new(1, 0, 0, px(20)),
 			Text = "No Reward",
 			TextColor3 = Styles.GRAY,
-			TextSize = 14,
+			TextSize = 16,
 			TextXAlignment = Enum.TextXAlignment.Left,
 		})
 	else
@@ -199,7 +199,7 @@ local function TierRow(props)
 					Native = {
 						BackgroundColor3 = Styles.GREEN_LIGHT,
 						BackgroundTransparency = 0,
-						Size = UDim2.fromOffset(px(46), px(18)),
+						Size = UDim2.fromOffset(px(52), px(22)),
 					},
 				}, {
 					Label = c("TextLabel", {
@@ -208,16 +208,16 @@ local function TierRow(props)
 						Size = UDim2.fromScale(1, 1),
 						Text = "FREE",
 						TextColor3 = Styles.GREEN_DEEP,
-						TextSize = 11,
+						TextSize = 12,
 					}),
 				}),
 				Text = c("TextLabel", {
 					BackgroundTransparency = 1,
 					FontFace = Styles.FONT_FREDOKA,
-					Size = UDim2.new(1, -px(54), 1, 0),
+					Size = UDim2.new(1, -px(60), 1, 0),
 					Text = rewardText(freeReward),
 					TextColor3 = if dimmed then Styles.GRAY else Styles.GREEN_DEEP,
-					TextSize = 14,
+					TextSize = 16,
 					TextTruncate = Enum.TextTruncate.AtEnd,
 					TextXAlignment = Enum.TextXAlignment.Left,
 				}),
@@ -246,7 +246,7 @@ local function TierRow(props)
 					Native = {
 						BackgroundColor3 = Styles.CREAM,
 						BackgroundTransparency = 0,
-						Size = UDim2.fromOffset(px(64), px(18)),
+						Size = UDim2.fromOffset(px(76), px(22)),
 					},
 				}, {
 					Label = c("TextLabel", {
@@ -255,16 +255,16 @@ local function TierRow(props)
 						Size = UDim2.fromScale(1, 1),
 						Text = "PREMIUM",
 						TextColor3 = Styles.GOLD_DEEP,
-						TextSize = 11,
+						TextSize = 12,
 					}),
 				}),
 				Text = c("TextLabel", {
 					BackgroundTransparency = 1,
 					FontFace = Styles.FONT_FREDOKA,
-					Size = UDim2.new(1, -px(72), 1, 0),
+					Size = UDim2.new(1, -px(84), 1, 0),
 					Text = rewardText(premiumReward),
 					TextColor3 = if dimmed then Styles.GRAY else Styles.GOLD_DEEP,
-					TextSize = 14,
+					TextSize = 16,
 					TextTruncate = Enum.TextTruncate.AtEnd,
 					TextXAlignment = Enum.TextXAlignment.Left,
 				}),
@@ -316,8 +316,8 @@ local function TierRow(props)
 			Native = {
 				AnchorPoint = Vector2.new(0, 0.5),
 				BackgroundTransparency = 1,
-				Position = UDim2.new(0, px(80), 0.5, 0),
-				Size = UDim2.new(1, -px(200), 1, 0),
+				Position = UDim2.new(0, px(86), 0.5, 0),
+				Size = UDim2.new(1, -px(216), 1, 0),
 			},
 		}, rewardElements),
 
@@ -527,6 +527,13 @@ return function()
 			Size = UDim2.fromScale(1, 0.888),
 			Visible = state ~= nil,
 		}, {
+			Padding = c("UIPadding", {
+				PaddingTop = UDim.new(0, px(4)),
+				PaddingBottom = UDim.new(0, px(8)),
+				PaddingLeft = UDim.new(0, px(4)),
+				PaddingRight = UDim.new(0, px(6)),
+			}),
+
 			UIListLayout = c("UIListLayout", {
 				Padding = UDim.new(0.02, 0),
 				SortOrder = Enum.SortOrder.LayoutOrder,

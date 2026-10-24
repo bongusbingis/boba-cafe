@@ -2,7 +2,7 @@
 --[[
 	Character.luau
 	Inventory tab for Character customization:
-	  - Cafe Uniforms (Default, Star Employee)
+	  - Cafe Uniforms (Default, Star Employee) with 3D player Viewport preview
 	  - Costumes (Boba Buddy Costume with 3D player Viewport preview)
 --]]
 
@@ -119,14 +119,7 @@ local function ItemCardRow(props: {
 				Size = UDim2.fromOffset(80, 80),
 			},
 		}, {
-			Content = props.CustomPreview or c("TextLabel", {
-				BackgroundTransparency = 1,
-				FontFace = Styles.FONT_FREDOKA,
-				Size = UDim2.fromScale(1, 1),
-				Text = "👔",
-				TextColor3 = Color3.new(1, 1, 1),
-				TextScaled = true,
-			}),
+			Content = props.CustomPreview,
 		}),
 
 		Info = c(Pane, {
@@ -134,42 +127,35 @@ local function ItemCardRow(props: {
 			ListLayout = {
 				FillDirection = Enum.FillDirection.Vertical,
 				VerticalAlignment = Enum.VerticalAlignment.Center,
-				Padding = UDim.new(0.04, 0),
+				Padding = UDim.new(0, 4),
 			},
 			Native = {
 				BackgroundTransparency = 1,
 				LayoutOrder = 2,
-				Size = UDim2.fromScale(0.5, 0.85),
+				Size = UDim2.fromScale(0.52, 0.9),
 			},
 		}, {
-			Title = c(Pane, {
-				ClassName = "TextLabel",
-				MaxTextSize = 20,
-				Native = {
-					BackgroundTransparency = 1,
-					FontFace = Styles.FONT_FREDOKA,
-					LayoutOrder = 1,
-					Size = UDim2.fromScale(1, 0.35),
-					Text = props.Title,
-					TextColor3 = Color3.new(1, 1, 1),
-					TextScaled = true,
-					TextXAlignment = Enum.TextXAlignment.Left,
-				},
+			Title = c("TextLabel", {
+				BackgroundTransparency = 1,
+				FontFace = Styles.FONT_FREDOKA,
+				LayoutOrder = 1,
+				Size = UDim2.new(1, 0, 0, 22),
+				Text = props.Title,
+				TextColor3 = Color3.new(1, 1, 1),
+				TextSize = 18,
+				TextXAlignment = Enum.TextXAlignment.Left,
 			}),
-			Desc = c(Pane, {
-				ClassName = "TextLabel",
-				MaxTextSize = 13,
-				Native = {
-					BackgroundTransparency = 1,
-					FontFace = Styles.FONT_FREDOKA,
-					LayoutOrder = 2,
-					Size = UDim2.fromScale(1, 0.3),
-					Text = props.Description,
-					TextColor3 = Styles.OFFWHITE,
-					TextScaled = true,
-					TextWrapped = true,
-					TextXAlignment = Enum.TextXAlignment.Left,
-				},
+			Desc = c("TextLabel", {
+				BackgroundTransparency = 1,
+				FontFace = Styles.FONT_FREDOKA,
+				LayoutOrder = 2,
+				Size = UDim2.new(1, 0, 0, 32),
+				Text = props.Description,
+				TextColor3 = Color3.fromRGB(240, 245, 240),
+				TextSize = 13,
+				TextWrapped = true,
+				TextXAlignment = Enum.TextXAlignment.Left,
+				TextYAlignment = Enum.TextYAlignment.Top,
 			}),
 			Badge = if props.StatusBadge
 				then c(Pane, {
@@ -180,10 +166,10 @@ local function ItemCardRow(props: {
 						BackgroundTransparency = 0.1,
 						FontFace = Styles.FONT_FREDOKA,
 						LayoutOrder = 3,
-						Size = UDim2.fromOffset(80, 18),
+						Size = UDim2.fromOffset(80, 20),
 						Text = props.StatusBadge,
 						TextColor3 = Color3.new(1, 1, 1),
-						TextScaled = true,
+						TextSize = 12,
 					},
 				})
 				else nil,
@@ -242,23 +228,35 @@ return function()
 
 		if localPlayer then
 			pcall(function()
-				local owns = GamepassUtil:PlayerOwnsPassAsync(localPlayer, STAR_EMPLOYEE_PASS_ID)
+				local owns = (GamepassUtil :: any):PlayerOwnsPassAsync(localPlayer, STAR_EMPLOYEE_PASS_ID)
 				setOwnsStarEmployee(owns == true)
 			end)
 
-			setIsClockedIn(localPlayer:GetAttribute("ClockedIn") == true)
+			local shiftService = Knit.GetService("ShiftService")
+			if shiftService and shiftService.IsClockedIn then
+				setIsClockedIn(shiftService:IsClockedIn(localPlayer))
+			else
+				setIsClockedIn(localPlayer:GetAttribute("ClockedIn") == true)
+			end
 		end
 	end
 
 	React.useEffect(function()
 		refresh()
 
+		if not RunService:IsRunning() then
+			return
+		end
+
 		local charService = Knit.GetService("CharacterCustomizationService")
-		local conn = charService.CharacterCustomizationChanged:Connect(function(player, state)
-			if player == localPlayer and state then
-				setCharData(state)
-			end
-		end)
+		local conn
+		if charService and charService.CharacterCustomizationChanged then
+			conn = charService.CharacterCustomizationChanged:Connect(function(state)
+				if state then
+					setCharData(state)
+				end
+			end)
+		end
 
 		local passConn = MarketplaceService.PromptGamePassPurchaseFinished:Connect(
 			function(player, passId, wasPurchased)
@@ -269,7 +267,9 @@ return function()
 		)
 
 		return function()
-			conn:Disconnect()
+			if conn then
+				conn:Disconnect()
+			end
 			passConn:Disconnect()
 		end
 	end, {})
@@ -340,23 +340,26 @@ return function()
 
 	local isDefaultEquipped = charData.EquippedUniform == "Default"
 	local isStarEquipped = charData.EquippedUniform == "StarEmployee"
-	local isBobaCostumeEquipped = charData.EquippedCostume == "BobaCostume"
 	local ownsBobaCostume = charData.OwnedCostumes and charData.OwnedCostumes["BobaCostume"] == true
+	local isBobaCostumeEquipped = charData.EquippedCostume == "BobaCostume"
 
 	return c("ScrollingFrame", {
-		BackgroundTransparency = 1,
-		BorderSizePixel = 0,
-		CanvasSize = UDim2.fromScale(0, 0),
+		Active = true,
 		AutomaticCanvasSize = Enum.AutomaticSize.Y,
-		ScrollBarImageColor3 = Styles.GREEN_DEEP,
-		ScrollBarThickness = 6,
+		BackgroundTransparency = 1,
+		CanvasSize = UDim2.new(),
+		Position = UDim2.fromScale(0, 0),
+		ScrollBarImageColor3 = Color3.new(),
+		ScrollBarImageTransparency = 1,
+		ScrollBarThickness = 5,
+		ScrollingDirection = Enum.ScrollingDirection.Y,
 		Size = UDim2.fromScale(1, 1),
 	}, {
 		Padding = c("UIPadding", {
-			PaddingTop = UDim.new(0, 10),
-			PaddingBottom = UDim.new(0, 20),
-			PaddingLeft = UDim.new(0, 15),
-			PaddingRight = UDim.new(0, 15),
+			PaddingTop = UDim.new(0, 8),
+			PaddingBottom = UDim.new(0, 16),
+			PaddingLeft = UDim.new(0, 4),
+			PaddingRight = UDim.new(0, 4),
 		}),
 		List = c("UIListLayout", {
 			FillDirection = Enum.FillDirection.Vertical,
@@ -378,6 +381,10 @@ return function()
 			BadgeColor = Styles.GREEN,
 			ButtonText = if isDefaultEquipped then "Unequip" else "Equip",
 			ButtonColor = if isDefaultEquipped then Styles.CORAL else Styles.GREEN,
+			CustomPreview = c(ViewportCostumePreview, {
+				Uniform = "Default",
+				Size = UDim2.fromScale(1, 1),
+			}),
 			LayoutOrder = 11,
 			OnClick = function()
 				if isDefaultEquipped then
@@ -391,10 +398,14 @@ return function()
 		StarUniform = c(ItemCardRow, {
 			Title = "Star Employee Uniform",
 			Description = "Gold-accented attire for Star Employee gamepass owners.",
-			StatusBadge = if isStarEquipped then "Equipped" elseif not ownsStarEmployee then "Pass Required" else nil,
-			BadgeColor = if isStarEquipped then Styles.GREEN else Styles.GOLD,
+			StatusBadge = if isStarEquipped then "Equipped" else nil,
+			BadgeColor = Styles.GREEN,
 			ButtonText = if isStarEquipped then "Unequip" elseif ownsStarEmployee then "Equip" else "Unlock",
 			ButtonColor = if isStarEquipped then Styles.CORAL elseif ownsStarEmployee then Styles.GREEN else Styles.GOLD,
+			CustomPreview = c(ViewportCostumePreview, {
+				Uniform = "StarEmployee",
+				Size = UDim2.fromScale(1, 1),
+			}),
 			LayoutOrder = 12,
 			OnClick = function()
 				if not ownsStarEmployee then
@@ -420,34 +431,27 @@ return function()
 		BobaBuddyCostume = c(ItemCardRow, {
 			Title = "Boba Buddy Costume",
 			Description = "Become a giant wearable boba cup companion!",
-			StatusBadge = if isBobaCostumeEquipped
-				then "Equipped"
-				elseif ownsBobaCostume then "Owned"
-				else "Season 1 / Shop",
-			BadgeColor = if isBobaCostumeEquipped
-				then Styles.GREEN
-				elseif ownsBobaCostume then Styles.GREEN_DIM
-				else Styles.GOLD,
+			StatusBadge = if isBobaCostumeEquipped then "Equipped" elseif ownsBobaCostume then "Owned" else nil,
+			BadgeColor = Styles.GREEN,
 			ButtonText = if isBobaCostumeEquipped then "Unequip" elseif ownsBobaCostume then "Equip" else "Buy",
 			ButtonColor = if isBobaCostumeEquipped
 				then Styles.CORAL
 				elseif ownsBobaCostume then Styles.GREEN
 				else Styles.GREEN,
 			CustomPreview = c(ViewportCostumePreview, {
+				Costume = "BobaCostume",
 				Size = UDim2.fromScale(1, 1),
 			}),
 			LayoutOrder = 21,
 			OnClick = function()
-				if ownsBobaCostume then
-					if isBobaCostumeEquipped then
-						equipCostume(nil)
-					else
-						equipCostume("BobaCostume")
-					end
+				if isBobaCostumeEquipped then
+					equipCostume(nil)
+				elseif ownsBobaCostume then
+					equipCostume("BobaCostume")
 				else
-					local costumeDevProductId = ProductIds.BobaBuddyCostume
-					if costumeDevProductId and localPlayer then
-						MarketplaceService:PromptProductPurchase(localPlayer, costumeDevProductId)
+					local id = ProductIds.BobaBuddyCostume
+					if id ~= nil and localPlayer then
+						MarketplaceService:PromptProductPurchase(localPlayer, id)
 					end
 				end
 			end,
