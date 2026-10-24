@@ -74,6 +74,16 @@ return function()
 
 			-- Mock DataService in Knit
 			local mockDataService = {
+				GetDataAsync = function(_self, _player)
+					return {
+						timeout = function(self)
+							return self
+						end,
+						await = function(_self)
+							return true, fakeProfile
+						end,
+					}
+				end,
 				GetProfile = function(_self, _player)
 					return fakeProfile
 				end,

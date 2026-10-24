@@ -31,11 +31,72 @@ local CharacterCustomizationService = Knit.CreateService({
 })
 
 local function getPlayerData(player: Player): any
-	local dataService = Knit.GetService("DataService")
-	if not dataService then
+	local ok, dataService = pcall(function()
+		return Knit.GetService("DataService")
+	end)
+	if not ok or not dataService then
 		return nil
 	end
-	return dataService:GetProfile(player)
+
+	if typeof((dataService :: any).GetDataAsync) == "function" then
+		local dataOk, res1, res2 = pcall(function()
+			local promise = (dataService :: any):GetDataAsync(player)
+			if promise and typeof(promise.timeout) == "function" then
+				return promise:timeout(5):await()
+			elseif promise and typeof(promise.await) == "function" then
+				return promise:await()
+			else
+				return true, promise
+			end
+		end)
+		if dataOk then
+			local success = res1
+			local data = res2
+			if success == true and data ~= nil then
+				return data
+			elseif success ~= false and res1 ~= nil then
+				return res1
+			end
+		end
+	end
+
+	if typeof((dataService :: any).GetProfile) == "function" then
+		local profOk, prof = pcall(function()
+			return (dataService :: any):GetProfile(player)
+		end)
+		if profOk and prof then
+			return prof
+		end
+	end
+
+	return nil
+end
+
+local function getCharacterBlock(playerData: any): any?
+	if not playerData then
+		return nil
+	end
+	if playerData.Character ~= nil and typeof(playerData.Character) == "table" then
+		return playerData.Character
+	elseif playerData.Data ~= nil and typeof(playerData.Data) == "table" and playerData.Data.Character ~= nil then
+		return playerData.Data.Character
+	end
+	return nil
+end
+
+local function ensureCharacterBlock(playerData: any): any
+	local targetTable = if playerData.Data ~= nil and typeof(playerData.Data) == "table"
+		then playerData.Data
+		else playerData
+
+	if not targetTable.Character or typeof(targetTable.Character) ~= "table" then
+		targetTable.Character = {
+			EquippedUniform = "Default",
+			OwnedCostumes = {},
+			EquippedCostume = nil,
+		}
+	end
+	return targetTable.Character
 end
 
 local function getCostumeTemplate(costumeId: string): Model?
@@ -62,72 +123,64 @@ function CharacterCustomizationService:_applyCostume(player: Player, costumeId: 
 		return
 	end
 
-	-- Remove existing costume if present
-	local existing = character:FindFirstChild("BobaCostume")
-	if existing then
-		existing:Destroy()
-	end
+	self:_removeCostume(player)
 
 	local template = getCostumeTemplate(costumeId)
 	if not template then
 		return
 	end
 
-	local costume = template:Clone()
-	costume.Name = "BobaCostume"
+	local buddy = template.Parent
+	local templateHrp = buddy and buddy:FindFirstChild("HumanoidRootPart") :: BasePart?
 
-	-- Remove any client scripts or conflicting objects inside the cloned costume
-	local costumeWeldScript = costume:FindFirstChild("CostumeWeld")
-	if costumeWeldScript then
-		costumeWeldScript:Destroy()
-	end
+	local costumeClone = template:Clone()
+	costumeClone.Name = "EquippedCostume"
 
-	-- Find template HumanoidRootPart to compute relative offsets
-	local templateRig = template.Parent :: Model?
-	local templateHrp = templateRig and templateRig:FindFirstChild("HumanoidRootPart") :: BasePart?
-	local templateRefCF = if templateHrp then templateHrp.CFrame else costume:GetPivot()
-
-	-- Position and weld each part to player's HumanoidRootPart
-	for _, desc in costume:GetDescendants() do
-		if desc:IsA("BasePart") then
-			desc.CanCollide = false
-			desc.Massless = true
-			desc.Anchored = false
-
-			local relCF = templateRefCF:ToObjectSpace(desc.CFrame)
-			desc.CFrame = hrp.CFrame:ToWorldSpace(relCF)
-
-			local weld = desc:FindFirstChildOfClass("WeldConstraint")
-			if not weld then
-				weld = Instance.new("WeldConstraint")
-				weld.Name = `{desc.Name}Weld`
-				weld.Part0 = hrp
-				weld.Part1 = desc
-				weld.Parent = desc
-			else
-				weld.Part0 = hrp
-				weld.Part1 = desc
-			end
+	-- Remove scripts inside costume for safety
+	for _, child in costumeClone:GetDescendants() do
+		if child:IsA("LuaSourceContainer") then
+			child:Destroy()
 		end
 	end
 
-	costume.Parent = character
+	-- Weld parts
+	for _, part in costumeClone:GetDescendants() do
+		if part:IsA("BasePart") then
+			part.CanCollide = false
+			part.Massless = true
+			part.Anchored = false
+
+			if templateHrp then
+				local rel = templateHrp.CFrame:ToObjectSpace(part.CFrame)
+				part.CFrame = hrp.CFrame:ToWorldSpace(rel)
+			end
+
+			local weld = Instance.new("WeldConstraint")
+			weld.Name = `{part.Name}Weld`
+			weld.Part0 = hrp
+			weld.Part1 = part
+			weld.Parent = part
+		end
+	end
+
+	costumeClone.Parent = character
 end
 
 function CharacterCustomizationService:_removeCostume(player: Player)
 	local character = player.Character
-	if character then
-		local existing = character:FindFirstChild("BobaCostume")
-		if existing then
-			existing:Destroy()
-		end
+	if not character then
+		return
+	end
+	local existing = character:FindFirstChild("EquippedCostume")
+	if existing then
+		existing:Destroy()
 	end
 end
 
 function CharacterCustomizationService:GetCharacterState(player: Player): CharacterCustomizationData
-	local profile = getPlayerData(player)
-	if profile and profile.Data and profile.Data.Character then
-		local charData = profile.Data.Character
+	local playerData = getPlayerData(player)
+	local charData = getCharacterBlock(playerData)
+	if charData then
 		return {
 			EquippedUniform = charData.EquippedUniform,
 			OwnedCostumes = charData.OwnedCostumes or {},
@@ -147,8 +200,8 @@ function CharacterCustomizationService:GetEquippedUniform(player: Player): strin
 end
 
 function CharacterCustomizationService:EquipUniform(player: Player, uniformId: string?): (boolean, string?)
-	local profile = getPlayerData(player)
-	if not profile or not profile.Data then
+	local playerData = getPlayerData(player)
+	if not playerData then
 		return false, "DataNotLoaded"
 	end
 
@@ -172,15 +225,8 @@ function CharacterCustomizationService:EquipUniform(player: Player, uniformId: s
 		end
 	end
 
-	if not profile.Data.Character then
-		profile.Data.Character = {
-			EquippedUniform = "Default",
-			OwnedCostumes = {},
-			EquippedCostume = nil,
-		}
-	end
-
-	profile.Data.Character.EquippedUniform = uniformId
+	local charData = ensureCharacterBlock(playerData)
+	charData.EquippedUniform = uniformId
 
 	if self._uniformService and self._uniformService._apply then
 		if uniformId == nil then
@@ -196,28 +242,22 @@ function CharacterCustomizationService:EquipUniform(player: Player, uniformId: s
 end
 
 function CharacterCustomizationService:EquipCostume(player: Player, costumeId: string?): (boolean, string?)
-	local profile = getPlayerData(player)
-	if not profile or not profile.Data then
+	local playerData = getPlayerData(player)
+	if not playerData then
 		return false, "DataNotLoaded"
 	end
 
-	if not profile.Data.Character then
-		profile.Data.Character = {
-			EquippedUniform = "Default",
-			OwnedCostumes = {},
-			EquippedCostume = nil,
-		}
-	end
+	local charData = ensureCharacterBlock(playerData)
 
 	if costumeId ~= nil and costumeId ~= "" then
-		local owned = profile.Data.Character.OwnedCostumes and profile.Data.Character.OwnedCostumes[costumeId]
+		local owned = charData.OwnedCostumes and charData.OwnedCostumes[costumeId]
 		if not owned then
 			return false, "CostumeNotOwned"
 		end
-		profile.Data.Character.EquippedCostume = costumeId
+		charData.EquippedCostume = costumeId
 		self:_applyCostume(player, costumeId)
 	else
-		profile.Data.Character.EquippedCostume = nil
+		charData.EquippedCostume = nil
 		self:_removeCostume(player)
 	end
 
@@ -227,24 +267,17 @@ function CharacterCustomizationService:EquipCostume(player: Player, costumeId: s
 end
 
 function CharacterCustomizationService:GrantCostume(player: Player, costumeId: string): (boolean, string?)
-	local profile = getPlayerData(player)
-	if not profile or not profile.Data then
+	local playerData = getPlayerData(player)
+	if not playerData then
 		return false, "DataNotLoaded"
 	end
 
-	if not profile.Data.Character then
-		profile.Data.Character = {
-			EquippedUniform = "Default",
-			OwnedCostumes = {},
-			EquippedCostume = nil,
-		}
+	local charData = ensureCharacterBlock(playerData)
+	if not charData.OwnedCostumes then
+		charData.OwnedCostumes = {}
 	end
 
-	if not profile.Data.Character.OwnedCostumes then
-		profile.Data.Character.OwnedCostumes = {}
-	end
-
-	profile.Data.Character.OwnedCostumes[costumeId] = true
+	charData.OwnedCostumes[costumeId] = true
 
 	local state = self:GetCharacterState(player)
 	self.Client.CharacterCustomizationChanged:Fire(player, state)
