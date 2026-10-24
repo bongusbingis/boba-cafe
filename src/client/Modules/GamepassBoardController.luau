@@ -17,6 +17,13 @@ local GamepassBoardController = Knit.CreateController({
 	Name = "GamepassBoardController",
 })
 
+local CANONICAL_BOARD_PASSES: { [string]: number } = {
+	["Headless Head"] = 14067340,
+	["MopWhack"] = 40973940,
+	["Rainbow Pack"] = 12385796,
+	["UnlimitedStock"] = 219650999, -- Star Employee pass is hosted on the UnlimitedStock board model
+}
+
 -- The boards stream (Workspace.StreamingEnabled): a board's Part/Union can arrive
 -- after the Model, and are re-created after streaming out, without the cloned GUIs.
 local function getBoardParts(board: Model): (BasePart?, BasePart?)
@@ -60,10 +67,10 @@ local function setupGamepassBoard(board: Model, passId: number, templatesFolder:
 	local def = PassCatalog[passId]
 	local description = if def then def.Description else nil
 	local icon = if def then def.Icon else nil
-	if not def or description == nil or icon == nil then
+	if not def or description == nil or icon == nil or def.Listed == false then
 		warn(
 			string.format(
-				"[GamepassBoardController] No display data found for PassId %d on board %s",
+				"[GamepassBoardController] PassId %d on board %s is unlisted or missing display data",
 				passId,
 				board.Name
 			)
@@ -326,7 +333,8 @@ local function setupBoard(board: Instance, templatesFolder: Instance)
 	end
 
 	local boardType = board:GetAttribute("BoardType")
-	if boardType == "Products" then
+	local isProducts = boardType == "Products" or board.Name == "Cafe Events"
+	if isProducts then
 		local function buildProducts()
 			setupProductsBoard(board, templatesFolder)
 		end
@@ -349,6 +357,18 @@ local function setupBoard(board: Instance, templatesFolder: Instance)
 			passId = board:GetAttribute("PassId")
 		end
 	end
+
+	-- Fall back to canonical listed pass if passId is missing, invalid, or unlisted
+	if not isDonation then
+		local def = if typeof(passId) == "number" then PassCatalog[passId] else nil
+		if def == nil or def.Listed == false then
+			local canonical = CANONICAL_BOARD_PASSES[board.Name]
+			if canonical and PassCatalog[canonical] and PassCatalog[canonical].Listed then
+				passId = canonical
+			end
+		end
+	end
+
 	if not isDonation and not (typeof(passId) == "number" and passId > 0) then
 		return
 	end
