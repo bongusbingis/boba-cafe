@@ -19,7 +19,7 @@ local PlayerSetup = require(script.PlayerSetup)
 
 ---> constants
 local SAVE_TIMEOUT_SECONDS = 15
-local IS_MOCK_STORE_ENABLED = false
+local IS_MOCK_STORE_ENABLED = true
 local PROFILE_STORE_NAME = "PlayerStore_0006"
 local REPLICA_CLASS_TOKEN = ReplicaService.NewClassToken("PlayerProfile")
 local PROFILE_TEMPLATE = require(Config:WaitForChild("ProfileTemplate"))

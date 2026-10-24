@@ -96,6 +96,18 @@ return function()
 		end
 	end)
 
+	it("does not grant an already-claimed bundle", function()
+		local actions = StarterBundleReceipts.BuildActions()
+		local data = makePlayerData()
+		data.StarterBundleClaimed = true
+		local ok, reason = actions[FAKE_ID].Grant({ UserId = 1 }, { ProductId = FAKE_ID }, data)
+		expect(ok).to.equal(false)
+		expect(reason).to.equal("Starter Bundle already claimed")
+		expect(data.Currency.BobaBucks).to.equal(10)
+		expect(#calls).to.equal(0)
+		expect(#data.Inventory.Items.Capsules).to.equal(0)
+	end)
+
 	it("grants nothing when the profile has no capsule inventory", function()
 		local actions = StarterBundleReceipts.BuildActions()
 		local data = makePlayerData()

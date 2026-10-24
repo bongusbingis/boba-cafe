@@ -12,6 +12,8 @@ local FollowBehavior = {}
 local FOLLOW_DISTANCE_MIN = 4
 local FOLLOW_DISTANCE_MAX = 8
 local TELEPORT_DISTANCE = 45
+local FOLLOW_POLL_SECONDS = 0.1
+local REPATH_DISTANCE = 3
 
 function FollowBehavior.Start(model: Model, owner: Player, isBusy: () -> boolean): () -> ()
 	local running = true
@@ -27,7 +29,7 @@ function FollowBehavior.Start(model: Model, owner: Player, isBusy: () -> boolean
 
 	task.spawn(function()
 		while running and model.Parent do
-			task.wait(0.3)
+			task.wait(FOLLOW_POLL_SECONDS)
 			if not running or not model.Parent then
 				break
 			end
@@ -53,12 +55,24 @@ function FollowBehavior.Start(model: Model, owner: Player, isBusy: () -> boolean
 
 			-- Walk towards owner if beyond follow distance using PathfindingService
 			if dist > FOLLOW_DISTANCE_MAX then
-				local direction = (root.Position - ownerRoot.Position).Unit
-				local targetPos = ownerRoot.Position + direction * FOLLOW_DISTANCE_MIN
+				local targetPosition = ownerRoot.Position
+				local function getFollowPosition(): Vector3
+					local offset = root.Position - ownerRoot.Position
+					local direction = if offset.Magnitude > 0.001 then offset.Unit else Vector3.zAxis
+					return ownerRoot.Position + direction * FOLLOW_DISTANCE_MIN
+				end
 
-				Navigator.WalkTo(model, targetPos, {
+				Navigator.WalkTo(model, getFollowPosition(), {
 					ArriveRadius = FOLLOW_DISTANCE_MAX,
-					Timeout = 3,
+					Timeout = 1,
+					ShouldRepath = function()
+						local newTargetPosition = ownerRoot.Position
+						local moved = (newTargetPosition - targetPosition).Magnitude >= REPATH_DISTANCE
+						if moved then
+							targetPosition = newTargetPosition
+						end
+						return moved
+					end,
 					ShouldAbort = function()
 						if not running or not model.Parent or isBusy() or not ownerRoot.Parent then
 							return true
@@ -66,6 +80,7 @@ function FollowBehavior.Start(model: Model, owner: Player, isBusy: () -> boolean
 						local newDist = (ownerRoot.Position - root.Position).Magnitude
 						return newDist <= FOLLOW_DISTANCE_MAX or newDist > TELEPORT_DISTANCE
 					end,
+					WaypointRadius = 2.5,
 				})
 			elseif dist < FOLLOW_DISTANCE_MIN then
 				-- Close enough: idle

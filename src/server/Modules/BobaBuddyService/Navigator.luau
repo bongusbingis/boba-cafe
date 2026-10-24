@@ -21,8 +21,10 @@ local Navigator = {}
 
 export type NavigateOptions = {
 	ArriveRadius: number?,
+	WaypointRadius: number?,
 	Timeout: number?,
 	ShouldAbort: (() -> boolean)?,
+	ShouldRepath: (() -> boolean)?,
 }
 
 function Navigator.WalkTo(model: Model, targetPos: Vector3, options: NavigateOptions?): boolean
@@ -33,7 +35,9 @@ function Navigator.WalkTo(model: Model, targetPos: Vector3, options: NavigateOpt
 	end
 
 	local arriveRadius = (options and options.ArriveRadius) or ARRIVE_RADIUS_STUDS
+	local waypointRadius = (options and options.WaypointRadius) or arriveRadius
 	local shouldAbort = options and options.ShouldAbort
+	local shouldRepath = options and options.ShouldRepath
 
 	local start = root.Position
 	local flatOffset = (start - targetPos) * Vector3.new(1, 0, 1)
@@ -61,6 +65,9 @@ function Navigator.WalkTo(model: Model, targetPos: Vector3, options: NavigateOpt
 		local deadline = os.clock() + maxWait
 		while not finished and os.clock() < deadline and model.Parent do
 			if shouldAbort and shouldAbort() then
+				break
+			end
+			if shouldRepath and shouldRepath() then
 				break
 			end
 			local currentFlat = ((root.Position - targetPos) * Vector3.new(1, 0, 1)).Magnitude
@@ -105,9 +112,12 @@ function Navigator.WalkTo(model: Model, targetPos: Vector3, options: NavigateOpt
 			if shouldAbort and shouldAbort() then
 				break
 			end
+			if shouldRepath and shouldRepath() then
+				break
+			end
 			local flatDist = ((root.Position - wpPos) * Vector3.new(1, 0, 1)).Magnitude
 			-- Early advance to next waypoint if close enough
-			if i < #waypoints and flatDist <= arriveRadius then
+			if i < #waypoints and flatDist <= waypointRadius then
 				break
 			end
 			task.wait(WALK_POLL_SECONDS)

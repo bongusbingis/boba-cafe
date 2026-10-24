@@ -43,6 +43,9 @@ local function grant(player: Player, receiptInfo: { [string]: any }, playerData:
 	if not StarterBundleReceipts.IsStarterBundle(receiptInfo.ProductId) then
 		return false, "not the Starter Bundle"
 	end
+	if playerData.StarterBundleClaimed == true then
+		return false, "Starter Bundle already claimed"
+	end
 	if typeof(playerData.Currency) ~= "table" or typeof(playerData.Currency.BobaBucks) ~= "number" then
 		return false, "no BobaBucks balance"
 	end

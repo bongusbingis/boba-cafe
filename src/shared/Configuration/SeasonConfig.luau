@@ -42,8 +42,8 @@ SeasonConfig.PREVIEW_SEASON_ID = nil :: number?
 
 SeasonConfig.TIER_COUNT = 30
 SeasonConfig.SEASON_LENGTH_SECONDS = 28 * 86400
--- First Monday after release (2026-10-26), per Jack 2026-10-23.
-SeasonConfig.SEASON_1_START_EPOCH = 1792972800 -- 2026-10-26 00:00 UTC
+-- Release-day start (2026-10-24 08:00 UTC), per Jack 2026-10-24.
+SeasonConfig.SEASON_1_START_EPOCH = 1792828800 -- 2026-10-24 08:00 UTC
 
 -- PROPOSED (Jack): tier requirement curve.
 function SeasonConfig.XpRequired(tier: number): number

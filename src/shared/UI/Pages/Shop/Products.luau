@@ -170,7 +170,7 @@ return function()
 					return MarketplaceService:GetProductInfoAsync(id, Enum.InfoType.Product)
 				end)
 				if mounted and ok and typeof(info) == "table" and info.PriceInRobux ~= nil then
-					setStarterPrice(`\u{e002} {info.PriceInRobux}`)
+					setStarterPrice(`{info.PriceInRobux}`)
 				end
 			end
 			local okC, dataController = pcall(function()

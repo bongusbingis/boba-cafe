@@ -237,6 +237,7 @@ return function()
 
 	React.useEffect(function()
 		local mounted = true
+		local starterDataConn
 		task.spawn(function()
 			-- Fetch Headless Head gamepass info
 			local ok, info = pcall(function()
@@ -317,6 +318,16 @@ return function()
 							if data.StarterBundleClaimed == true then
 								setStarterClaimed(true)
 							end
+							local listenOk, connection = pcall(function()
+								return data:ListenToChange({ "StarterBundleClaimed" }, function(value)
+									if mounted and value == true then
+										setStarterClaimed(true)
+									end
+								end)
+							end)
+							if listenOk then
+								starterDataConn = connection
+							end
 							if
 								data.Character
 								and data.Character.OwnedCostumes
@@ -377,7 +388,9 @@ return function()
 		local prodConn = MarketplaceService.PromptProductPurchaseFinished:Connect(
 			function(userId, productId, wasPurchased)
 				if wasPurchased and localPlayer and userId == localPlayer.UserId and mounted then
-					if productId == ProductIds.BobaBuddyCostume then
+					if productId == ProductIds.StarterBundle then
+						setStarterClaimed(true)
+					elseif productId == ProductIds.BobaBuddyCostume then
 						setCostumeOwned(true)
 					end
 				end
@@ -400,6 +413,9 @@ return function()
 			mounted = false
 			conn:Disconnect()
 			prodConn:Disconnect()
+			if starterDataConn then
+				starterDataConn:Disconnect()
+			end
 			if charConn then
 				charConn:Disconnect()
 			end
@@ -679,7 +695,7 @@ return function()
 		})
 	end
 
-	local starterAvailable = ProductIds.StarterBundle ~= nil and not starterClaimed
+	local starterAvailable = ProductIds.StarterBundle ~= nil
 	local seasonAvailable = SeasonConfig.ENABLED and ProductIds.SeasonPass ~= nil
 	local costumeAvailable = ProductIds.BobaBuddyCostume ~= nil
 
@@ -722,12 +738,16 @@ return function()
 					Title = "Starter Bundle",
 					Lines = { "• 300 Boba Bucks", "• 1 Regular Pet Capsule", "• 1 Nametag Capsule" },
 					Image = "rbxassetid://6073658218",
-					Tag = "One-Time Offer",
-					TagColor = Styles.GOLD_MID,
-					Price = starterPrice,
-					ButtonText = "Buy",
-					ButtonColor = Styles.GREEN_DEEP,
-					OnClick = promptStarterPurchase,
+					Tag = if starterClaimed then "Owned" else "One-Time Offer",
+					TagColor = if starterClaimed then Styles.GREEN_BADGE else Styles.GOLD_MID,
+					Price = if starterClaimed then "Owned" else starterPrice,
+					ButtonText = if starterClaimed then "Owned" else "Buy",
+					ButtonColor = if starterClaimed then Styles.GREEN_BADGE else Styles.GREEN_DEEP,
+					OnClick = function()
+						if not starterClaimed then
+							promptStarterPurchase()
+						end
+					end,
 				})
 				else nil,
 

@@ -238,6 +238,19 @@ function BobaBuddyService:SpawnBuddyForPlayer(player: Player, chore: "Cleaner" |
 	end
 	model.Parent = self._buddiesFolder
 
+	local humanoid = model:FindFirstChildOfClass("Humanoid")
+	if humanoid then
+		humanoid.WalkSpeed = if chore == "Cleaner"
+			then BobaBuddyConfig.CLEANER.WALK_SPEED
+			else BobaBuddyConfig.STOCKER.WALK_SPEED
+	end
+	local rootPart = model:FindFirstChild("HumanoidRootPart") :: BasePart?
+	if rootPart then
+		pcall(function()
+			rootPart:SetNetworkOwner(nil)
+		end)
+	end
+
 	local expiresAt = os.clock() + BobaBuddyConfig.LIFESPAN_SECONDS
 	local isBusy = false
 
@@ -253,13 +266,6 @@ function BobaBuddyService:SpawnBuddyForPlayer(player: Player, chore: "Cleaner" |
 	else
 		stopChore = StockerBehavior.Start(model, player, function(busy: boolean)
 			isBusy = busy
-		end)
-	end
-
-	local rootPart = model:FindFirstChild("HumanoidRootPart") :: BasePart?
-	if rootPart then
-		pcall(function()
-			rootPart:SetNetworkOwner(nil)
 		end)
 	end
 

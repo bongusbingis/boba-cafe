@@ -59,9 +59,6 @@ end
 
 local FoodTable = buildLaunchFoodTable()
 
----> utility
-local RankUtil = require(Shared.Utility.RankUtil)
-
 ---> styles
 local Styles = require(UI.Styles)
 
@@ -385,7 +382,16 @@ return function(props: {
 	end)
 
 	---> barista info (local player, loaded async)
-	local staffRole, setStaffRole = React.useState("Staff")
+	local function readPlayerLevel(): number
+		local localPlayer = Players.LocalPlayer
+		local val = localPlayer and localPlayer:GetAttribute("Level")
+		if typeof(val) == "number" then
+			return val
+		end
+		return 1
+	end
+
+	local staffLevel, setStaffLevel = React.useState(readPlayerLevel)
 	local staffAvatarUrl, setStaffAvatarUrl = React.useState("rbxasset://textures/ui/GuiImagePlaceholder.png")
 
 	---> load local player info once on mount
@@ -405,10 +411,35 @@ return function(props: {
 			end
 		end)
 
-		task.spawn(function()
-			local role = RankUtil:GetRoleAsync(localPlayer)
-			setStaffRole(role)
+		local function updateLevel()
+			local val = localPlayer and localPlayer:GetAttribute("Level")
+			if typeof(val) == "number" then
+				setStaffLevel(val)
+			end
+		end
+
+		updateLevel()
+		local levelConn = localPlayer and localPlayer:GetAttributeChangedSignal("Level"):Connect(updateLevel)
+
+		local dataOk, dataController = pcall(function()
+			return Knit.GetController("DataController")
 		end)
+		if dataOk and dataController then
+			dataController
+				:GetDataAsync()
+				:andThen(function(data)
+					if typeof(data) == "table" and typeof(data.Level) == "number" then
+						setStaffLevel(data.Level)
+					end
+				end)
+				:catch(function() end)
+		end
+
+		return function()
+			if levelConn then
+				levelConn:Disconnect()
+			end
+		end
 	end, {})
 
 	---> computed TopBar props based on current page
@@ -1137,7 +1168,8 @@ return function(props: {
 						OrderItems = orderItems,
 						MaxOrderItems = MAX_ORDER_ITEMS,
 						StaffAvatarUrl = staffAvatarUrl,
-						StaffRole = staffRole,
+						StaffLevel = staffLevel,
+						StaffRole = `Level {staffLevel}`,
 						ResolveItemName = resolveItemName,
 						ResolveItemDescription = resolveItemDescription,
 						OnOrderItemRemoved = onOrderItemRemoved,

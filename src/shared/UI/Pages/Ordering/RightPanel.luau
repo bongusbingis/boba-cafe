@@ -146,7 +146,7 @@ return function(props)
 					FontFace = Styles.FONT_FREDOKA,
 					Position = UDim2.fromScale(0.5, 0.19),
 					Size = UDim2.fromScale(0.89, 0.23),
-					Text = "Ordering as:",
+					Text = "Serving as:",
 					TextColor3 = ORANGE,
 					TextScaled = true,
 					TextXAlignment = Enum.TextXAlignment.Left,
@@ -205,7 +205,11 @@ return function(props)
 						FontFace = Styles.FONT_FREDOKA,
 						LayoutOrder = 2,
 						Size = UDim2.fromScale(1, 0.363022),
-						Text = props.StaffRole,
+						Text = if props.StaffLevel ~= nil
+							then `Level {props.StaffLevel}`
+							elseif props.StaffRole ~= nil
+							then props.StaffRole
+							else "Level 1",
 						TextColor3 = Color3.new(),
 						TextScaled = true,
 						TextXAlignment = Enum.TextXAlignment.Left,
