@@ -26,8 +26,6 @@ local PAGES: { OpenableMenu.Page } = {
 		Key = "Character",
 		Label = "Character",
 		Content = c(require(script.Character)),
-		ButtonColor = Styles.GREEN_MID,
-		ButtonTextColor = Color3.new(1, 1, 1),
 	},
 	{
 		Key = "Capsules",
