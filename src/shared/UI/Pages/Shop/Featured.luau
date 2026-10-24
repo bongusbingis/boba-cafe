@@ -545,24 +545,6 @@ return function()
 			OnClick = promptStockerPurchase,
 		},
 		{
-			Key = "PumpkinLauncher",
-			Name = "Pumpkin Launcher",
-			Owned = pumpkinOwned,
-			Price = pumpkinPrice or (if ProductIds.PumpkinLauncherPass == nil then "Coming Soon" else nil),
-			Image = "rbxassetid://16728123607",
-			TopBanner = {
-				Color = if pumpkinOwned then Styles.GREEN_BADGE else Color3.fromRGB(240, 110, 25),
-				Text = if pumpkinOwned then "Owned" else "Halloween",
-				Size = UDim2.fromScale(1.05, 0.28),
-			},
-			LayoutOrder = 3,
-			OnClick = function()
-				if localPlayer and ProductIds.PumpkinLauncherPass ~= nil then
-					MarketplaceService:PromptGamePassPurchase(localPlayer, ProductIds.PumpkinLauncherPass)
-				end
-			end,
-		},
-		{
 			Key = "HeadlessHead",
 			Name = "Headless Head",
 			Owned = headlessOwned,
@@ -573,7 +555,7 @@ return function()
 				Text = if headlessOwned then "Owned" else "New Pass",
 				Size = UDim2.fromScale(1.05, 0.28),
 			},
-			LayoutOrder = 4,
+			LayoutOrder = 3,
 			OnClick = function()
 				if localPlayer then
 					MarketplaceService:PromptGamePassPurchase(localPlayer, HEADLESS_PASS_ID)
@@ -590,7 +572,7 @@ return function()
 				Text = "Event",
 				Size = UDim2.fromScale(1.05, 0.28),
 			},
-			LayoutOrder = 5,
+			LayoutOrder = 4,
 			OnClick = function()
 				local partyProduct = nil
 				for _, prod in EventProducts.Products do
@@ -618,7 +600,7 @@ return function()
 				Text = "Featured",
 				Size = UDim2.fromScale(1.05, 0.28),
 			},
-			LayoutOrder = 6,
+			LayoutOrder = 5,
 			OnClick = function()
 				promptPetPurchase("Epic Pet Capsule", "1,200 Boba Bucks")
 			end,
@@ -629,7 +611,7 @@ return function()
 			Price = " 250",
 			Image = "rbxassetid://7621095542",
 			Tier = "Rare",
-			LayoutOrder = 7,
+			LayoutOrder = 6,
 			OnClick = function()
 				promptPetPurchase("Rare Pet Capsule", "250 Boba Bucks")
 			end,
@@ -640,7 +622,7 @@ return function()
 			Price = " 75",
 			Image = "rbxassetid://6073658218",
 			Tier = "Basic",
-			LayoutOrder = 8,
+			LayoutOrder = 7,
 			OnClick = function()
 				promptPetPurchase("Regular Pet Capsule", "75 Boba Bucks")
 			end,
@@ -655,7 +637,7 @@ return function()
 				Text = "Best Value",
 				Size = UDim2.fromScale(1.05, 0.28),
 			},
-			LayoutOrder = 9,
+			LayoutOrder = 8,
 			OnClick = function()
 				promptNametagPurchase("10 Nametag Capsules", 10, "1,350 Boba Bucks")
 			end,
@@ -665,7 +647,7 @@ return function()
 			Name = "Nametag Capsule",
 			Price = " 150",
 			Image = "rbxassetid://6073658218",
-			LayoutOrder = 10,
+			LayoutOrder = 9,
 			OnClick = function()
 				promptNametagPurchase("Nametag Capsule", 1, "150 Boba Bucks")
 			end,
@@ -762,18 +744,45 @@ return function()
 						"• Free track for everyone",
 					},
 					Image = "rbxassetid://16728139086",
-					Tag = "New Season",
-					TagColor = Styles.ROSE_MID,
+					Tag = "Season Pass",
+					TagColor = Styles.GOLD_MID,
 					Price = seasonPrice,
 					ButtonText = "View Season",
-					ButtonColor = Styles.GREEN,
+					ButtonColor = Styles.GREEN_DEEP,
 					OnClick = openSeasonTab,
 				})
 				else nil,
 
+			PumpkinHero = c(HeroCard, {
+				LayoutOrder = 3,
+				Fill = Color3.fromRGB(240, 110, 25),
+				Title = "Pumpkin Launcher",
+				TitleColor = Color3.new(1, 1, 1),
+				LinesColor = Styles.OFFWHITE,
+				PriceColor = Styles.CREAM,
+				Lines = {
+					"• Launch festive pumpkins at friends!",
+					"• Fun physics knockback & effects",
+					"• Limited-time Halloween special",
+				},
+				Image = "rbxassetid://16728123607",
+				Tag = if pumpkinOwned then "Owned" else "Halloween Special",
+				TagColor = if pumpkinOwned then Styles.GREEN_BADGE else Color3.fromRGB(180, 70, 10),
+				Price = if pumpkinOwned
+					then "Owned"
+					else (pumpkinPrice or (if ProductIds.PumpkinLauncherPass == nil then "Coming Soon" else nil)),
+				ButtonText = if pumpkinOwned then "Owned" else "Buy",
+				ButtonColor = if pumpkinOwned then Styles.GREEN_BADGE else Color3.fromRGB(180, 70, 10),
+				OnClick = function()
+					if localPlayer and ProductIds.PumpkinLauncherPass ~= nil then
+						MarketplaceService:PromptGamePassPurchase(localPlayer, ProductIds.PumpkinLauncherPass)
+					end
+				end,
+			}),
+
 			CostumeHero = if costumeAvailable
 				then c(HeroCard, {
-					LayoutOrder = 3,
+					LayoutOrder = 4,
 					Fill = Styles.ROSE,
 					TitleColor = Styles.ROSE_TEXT,
 					LinesColor = Styles.ROSE_TEXT,
@@ -799,7 +808,7 @@ return function()
 			MoreTitle = c("TextLabel", {
 				BackgroundTransparency = 1,
 				FontFace = Styles.FONT_FREDOKA,
-				LayoutOrder = 4,
+				LayoutOrder = 5,
 				Size = UDim2.fromScale(0.96, 0.05),
 				Text = "More to Collect",
 				TextColor3 = Styles.GREEN,
@@ -820,7 +829,7 @@ return function()
 				Native = {
 					AutomaticSize = Enum.AutomaticSize.Y,
 					BackgroundTransparency = 1,
-					LayoutOrder = 5,
+					LayoutOrder = 6,
 					Size = UDim2.fromScale(0.98, 0),
 				},
 			}, gridChildren),

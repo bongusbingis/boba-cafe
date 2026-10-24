@@ -26,7 +26,7 @@ local usePx = require(UI.Hooks.usePx)
 local c = React.createElement
 
 local HEADER_HEIGHT = 120
-local ROW_HEIGHT = 72
+local ROW_HEIGHT = 96
 
 local PERK_NAMES = {
 	QuestSlot = "+1 Quest Slot",
@@ -170,10 +170,10 @@ local function TierRow(props)
 			BackgroundTransparency = 1,
 			FontFace = Styles.FONT_FREDOKA,
 			LayoutOrder = 1,
-			Size = UDim2.new(1, 0, 0, px(20)),
+			Size = UDim2.new(1, 0, 0, px(32)),
 			Text = "No Reward",
 			TextColor3 = Styles.GRAY,
-			TextSize = 16,
+			TextSize = 22,
 			TextXAlignment = Enum.TextXAlignment.Left,
 		})
 	else
@@ -185,12 +185,12 @@ local function TierRow(props)
 					FillDirection = Enum.FillDirection.Horizontal,
 					SortOrder = Enum.SortOrder.LayoutOrder,
 					VerticalAlignment = Enum.VerticalAlignment.Center,
-					Padding = UDim.new(0, px(8)),
+					Padding = UDim.new(0, px(10)),
 				},
 				Native = {
 					BackgroundTransparency = 1,
 					LayoutOrder = order,
-					Size = UDim2.new(1, 0, 0, px(20)),
+					Size = UDim2.new(1, 0, 0, px(32)),
 				},
 			}, {
 				Pill = c(Pane, {
@@ -199,7 +199,7 @@ local function TierRow(props)
 					Native = {
 						BackgroundColor3 = Styles.GREEN_LIGHT,
 						BackgroundTransparency = 0,
-						Size = UDim2.fromOffset(px(52), px(22)),
+						Size = UDim2.fromOffset(px(70), px(30)),
 					},
 				}, {
 					Label = c("TextLabel", {
@@ -208,16 +208,16 @@ local function TierRow(props)
 						Size = UDim2.fromScale(1, 1),
 						Text = "FREE",
 						TextColor3 = Styles.GREEN_DEEP,
-						TextSize = 12,
+						TextSize = 16,
 					}),
 				}),
 				Text = c("TextLabel", {
 					BackgroundTransparency = 1,
 					FontFace = Styles.FONT_FREDOKA,
-					Size = UDim2.new(1, -px(60), 1, 0),
+					Size = UDim2.new(1, -px(82), 1, 0),
 					Text = rewardText(freeReward),
 					TextColor3 = if dimmed then Styles.GRAY else Styles.GREEN_DEEP,
-					TextSize = 16,
+					TextSize = 22,
 					TextTruncate = Enum.TextTruncate.AtEnd,
 					TextXAlignment = Enum.TextXAlignment.Left,
 				}),
@@ -232,12 +232,12 @@ local function TierRow(props)
 					FillDirection = Enum.FillDirection.Horizontal,
 					SortOrder = Enum.SortOrder.LayoutOrder,
 					VerticalAlignment = Enum.VerticalAlignment.Center,
-					Padding = UDim.new(0, px(8)),
+					Padding = UDim.new(0, px(10)),
 				},
 				Native = {
 					BackgroundTransparency = 1,
 					LayoutOrder = order,
-					Size = UDim2.new(1, 0, 0, px(20)),
+					Size = UDim2.new(1, 0, 0, px(32)),
 				},
 			}, {
 				Pill = c(Pane, {
@@ -246,7 +246,7 @@ local function TierRow(props)
 					Native = {
 						BackgroundColor3 = Styles.CREAM,
 						BackgroundTransparency = 0,
-						Size = UDim2.fromOffset(px(76), px(22)),
+						Size = UDim2.fromOffset(px(104), px(30)),
 					},
 				}, {
 					Label = c("TextLabel", {
@@ -255,16 +255,16 @@ local function TierRow(props)
 						Size = UDim2.fromScale(1, 1),
 						Text = "PREMIUM",
 						TextColor3 = Styles.GOLD_DEEP,
-						TextSize = 12,
+						TextSize = 16,
 					}),
 				}),
 				Text = c("TextLabel", {
 					BackgroundTransparency = 1,
 					FontFace = Styles.FONT_FREDOKA,
-					Size = UDim2.new(1, -px(84), 1, 0),
+					Size = UDim2.new(1, -px(116), 1, 0),
 					Text = rewardText(premiumReward),
 					TextColor3 = if dimmed then Styles.GRAY else Styles.GOLD_DEEP,
-					TextSize = 16,
+					TextSize = 22,
 					TextTruncate = Enum.TextTruncate.AtEnd,
 					TextXAlignment = Enum.TextXAlignment.Left,
 				}),
@@ -278,10 +278,10 @@ local function TierRow(props)
 		CornerRadius = Styles.CORNER_CARD,
 		Stroke = { Color = strokeColor, Thickness = strokeThickness },
 		Padding = {
-			PaddingLeft = UDim.new(0, px(14)),
-			PaddingRight = UDim.new(0, px(14)),
-			PaddingTop = UDim.new(0, px(8)),
-			PaddingBottom = UDim.new(0, px(8)),
+			PaddingLeft = UDim.new(0, px(16)),
+			PaddingRight = UDim.new(0, px(16)),
+			PaddingTop = UDim.new(0, px(10)),
+			PaddingBottom = UDim.new(0, px(10)),
 		},
 		Native = {
 			BackgroundColor3 = cardBg,
@@ -298,7 +298,7 @@ local function TierRow(props)
 				BackgroundColor3 = tierBadgeBg,
 				BackgroundTransparency = 0,
 				Position = UDim2.fromScale(0, 0.5),
-				Size = UDim2.fromOffset(px(68), px(34)),
+				Size = UDim2.fromOffset(px(94), px(46)),
 			},
 		}, {
 			Label = c("TextLabel", {
@@ -307,7 +307,7 @@ local function TierRow(props)
 				Size = UDim2.fromScale(1, 1),
 				Text = `Tier {tier}`,
 				TextColor3 = tierBadgeTextColor,
-				TextSize = 14,
+				TextSize = 22,
 			}),
 		}),
 
@@ -316,8 +316,8 @@ local function TierRow(props)
 			Native = {
 				AnchorPoint = Vector2.new(0, 0.5),
 				BackgroundTransparency = 1,
-				Position = UDim2.new(0, px(86), 0.5, 0),
-				Size = UDim2.new(1, -px(216), 1, 0),
+				Position = UDim2.new(0, px(112), 0.5, 0),
+				Size = UDim2.new(1, -px(260), 1, 0),
 			},
 		}, rewardElements),
 
@@ -328,19 +328,19 @@ local function TierRow(props)
 				HorizontalAlignment = Enum.HorizontalAlignment.Right,
 				VerticalAlignment = Enum.VerticalAlignment.Center,
 				SortOrder = Enum.SortOrder.LayoutOrder,
-				Padding = UDim.new(0, px(2)),
+				Padding = UDim.new(0, px(4)),
 			},
 			Native = {
 				AnchorPoint = Vector2.new(1, 0.5),
 				BackgroundTransparency = 1,
 				Position = UDim2.fromScale(1, 0.5),
-				Size = UDim2.new(0, px(110), 1, 0),
+				Size = UDim2.new(0, px(130), 1, 0),
 			},
 		}, {
 			Button = c(PromptButton, {
 				Text = buttonText,
 				Color = buttonColor,
-				Size = UDim2.new(1, 0, 0, px(34)),
+				Size = UDim2.new(1, 0, 0, px(42)),
 				Disabled = buttonDisabled,
 				OnClick = onClick,
 			}),
@@ -351,10 +351,10 @@ local function TierRow(props)
 					BackgroundTransparency = 1,
 					FontFace = Styles.FONT_FREDOKA,
 					LayoutOrder = 2,
-					Size = UDim2.new(1, 0, 0, px(14)),
+					Size = UDim2.new(1, 0, 0, px(16)),
 					Text = `{xpNeeded} XP needed`,
 					TextColor3 = Styles.GRAY,
-					TextSize = 11,
+					TextSize = 14,
 					TextXAlignment = Enum.TextXAlignment.Right,
 				})
 				else nil,
@@ -609,6 +609,10 @@ return function()
 							Size = UDim2.fromScale(1, 0.18),
 						},
 					}, {
+						UIStroke = c("UIStroke", {
+							Color = Color3.fromRGB(220, 226, 220),
+							Thickness = 1.5,
+						}),
 						Fill = c(Pane, {
 							ClassName = "Frame",
 							CornerRadius = 1,
