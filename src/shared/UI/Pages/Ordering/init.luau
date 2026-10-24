@@ -127,10 +127,10 @@ end
 
 local function resolveItemName(orderItem: { [string]: any }): string
 	local name: string = orderItem.DefaultInfo.ItemName
-	if orderItem.DefaultInfo.Select then
+	if orderItem.DefaultInfo.Select and typeof(orderItem.CustomInfo) == "table" then
 		for variantType in orderItem.DefaultInfo.Select do
 			local chosen = orderItem.CustomInfo[variantType]
-			if chosen then
+			if typeof(chosen) == "string" then
 				name = chosen .. " " .. name
 			end
 		end
@@ -228,8 +228,8 @@ local function prefillFromNpc(npcOrderData: any): { any }
 	return items
 end
 
-local function validateSubmittedOrder(submittedList: { any }, expectedList: { any }): boolean
-	if #submittedList ~= #expectedList then
+local function validateSubmittedOrder(submittedList: { any }, expectedList: { any }?): boolean
+	if typeof(expectedList) ~= "table" or #submittedList ~= #expectedList then
 		return false
 	end
 	local used = table.create(#expectedList, false)
@@ -250,7 +250,10 @@ local function validateSubmittedOrder(submittedList: { any }, expectedList: { an
 end
 
 -- AUDIT-FIX D1.3: names the first field that differs, e.g. "Wrong size: they wanted Medium".
-local function describeMismatch(submittedList: { any }, expectedList: { any }): string
+local function describeMismatch(submittedList: { any }, expectedList: { any }?): string
+	if typeof(expectedList) ~= "table" then
+		return MistakeText.Field(nil, nil)
+	end
 	if #submittedList ~= #expectedList then
 		return MistakeText.Field("Count", #expectedList)
 	end
@@ -422,7 +425,12 @@ return function(props: {
 		local stepName = reqSelQueue[reqSelIdx].name
 		topBarTitle = if stepName == "Syrup Flavor" then "Boba Tea Flavor" else stepName
 	elseif page == "SizeOptions" then
-		topBarTitle = if #reqSelQueue > 0 then "Select Size" else "Add to Order"
+		local itemDef = if selCategory
+				and selItemKey
+				and FoodTable[selCategory]
+			then FoodTable[selCategory].Items[selItemKey]
+			else nil
+		topBarTitle = if itemDef and itemDef.Select and itemDef.Select.Size then "Select Size" else "Add to Order"
 	end
 
 	---> navigation handlers
@@ -430,22 +438,34 @@ return function(props: {
 	local function goBack()
 		if page == "ItemSelect" then
 			setPage("CategorySelect")
-		elseif page == "SizeOptions" then
-			setSelItemKey(nil)
-			setCustomInfo({})
-			setReqSelQueue({})
-			setReqSelIdx(1)
-			setPage("ItemSelect")
 		elseif page == "RequiredSelection" then
 			if reqSelIdx > 1 then
 				setReqSelIdx(reqSelIdx - 1)
 			else
-				setPage("SizeOptions")
+				setSelCategory(nil)
+				setSelItemKey(nil)
+				setCustomInfo({})
+				setReqSelQueue({})
+				setReqSelIdx(1)
+				setPage("ItemSelect")
+			end
+		elseif page == "SizeOptions" then
+			if #reqSelQueue > 0 then
+				setReqSelIdx(#reqSelQueue)
+				setPage("RequiredSelection")
+			else
+				setSelCategory(nil)
+				setSelItemKey(nil)
+				setCustomInfo({})
+				setReqSelQueue({})
+				setReqSelIdx(1)
+				setPage("ItemSelect")
 			end
 		end
 	end
 
 	local function cancelItemConfig()
+		setSelCategory(nil)
 		setSelItemKey(nil)
 		setCustomInfo({})
 		setReqSelQueue({})
@@ -492,7 +512,7 @@ return function(props: {
 		setCustomInfo(info)
 		setReqSelQueue(queue)
 		setReqSelIdx(1)
-		setPage("SizeOptions")
+		setPage(if #queue > 0 then "RequiredSelection" else "SizeOptions")
 	end
 
 	local function onAddToOrder(overrideInfo: { [string]: any }?)
@@ -503,7 +523,7 @@ return function(props: {
 			return
 		end
 		local item = FoodTable[selCategory :: string].Items[selItemKey :: string]
-		local finalInfo = overrideInfo or customInfo
+		local finalInfo = if typeof(overrideInfo) == "table" then overrideInfo else customInfo
 
 		local newOrder = table.clone(orderItems)
 		table.insert(newOrder, {
@@ -514,6 +534,7 @@ return function(props: {
 		})
 		setOrderItems(newOrder)
 
+		setSelCategory(nil)
 		setSelItemKey(nil)
 		setCustomInfo({})
 		setReqSelQueue({})
@@ -529,7 +550,7 @@ return function(props: {
 		if reqSelIdx < #reqSelQueue then
 			setReqSelIdx(reqSelIdx + 1)
 		else
-			onAddToOrder(newInfo)
+			setPage("SizeOptions")
 		end
 	end
 
@@ -687,11 +708,6 @@ return function(props: {
 			CustomInfo = customInfo,
 			OrderItemsCount = #orderItems,
 			MaxOrderItems = MAX_ORDER_ITEMS,
-			HasNextStep = #reqSelQueue > 0,
-			OnNext = function()
-				setPage("RequiredSelection")
-				setReqSelIdx(1)
-			end,
 			OnCustomInfoChanged = setCustomInfo,
 			OnAddToOrder = onAddToOrder,
 			OnCancel = cancelItemConfig,
@@ -712,8 +728,8 @@ return function(props: {
 					local iced = cInfo.Iced == true or cInfo.Ice == true
 					local sugar = cInfo.Sugar == true
 
-					local name = order.Item
-					if order.Category == "Boba Teas" or string.find(name, "Boba") then
+					local name = order.Item or "Item"
+					if order.Category == "Boba Teas" or string.find(tostring(name), "Boba") then
 						if syrup ~= nil then
 							name = syrup .. " Boba"
 						else

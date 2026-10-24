@@ -1,4 +1,3 @@
-local AppStorageService = game:GetService("AppStorageService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Packages = ReplicatedStorage:WaitForChild("Packages")
@@ -33,6 +32,8 @@ return function(props)
 			end,
 		})
 	end
+
+	local hasRequestText = typeof(props.NpcOrderText) == "string" and #props.NpcOrderText > 0
 
 	return c(Pane, {
 		ClassName = "Frame",
@@ -133,7 +134,7 @@ return function(props)
 			}),
 		}),
 
-		CustomerRequest = props.NpcOrderText and c(Pane, {
+		CustomerRequest = hasRequestText and c(Pane, {
 			ClassName = "Frame",
 			Native = {
 				BackgroundTransparency = 1,
@@ -185,7 +186,7 @@ return function(props)
 			Native = {
 				BackgroundTransparency = 1,
 				LayoutOrder = 3,
-				Size = if props.NpcOrderText then UDim2.fromScale(1, 0.52) else UDim2.fromScale(1, 0.65),
+				Size = if hasRequestText then UDim2.fromScale(1, 0.52) else UDim2.fromScale(1, 0.65),
 			},
 			ListLayout = {
 				FillDirection = Enum.FillDirection.Vertical,

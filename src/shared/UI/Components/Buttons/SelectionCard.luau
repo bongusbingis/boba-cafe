@@ -53,10 +53,6 @@ return function(props: {
 		config = SPRING_CONFIG,
 	})
 
-	local isLightColor = props.Color and (0.299 * props.Color.R + 0.587 * props.Color.G + 0.114 * props.Color.B) > 0.75
-	local textColor = if isLightColor then Color3.fromRGB(40, 40, 40) else Color3.new(1, 1, 1)
-	local textStrokeTransparency = if isLightColor then 1 else 0.55
-
 	return c(Pane, {
 		ClassName = "TextButton",
 		Stroke = if props.Highlighted
@@ -123,9 +119,9 @@ return function(props: {
 					Position = props.Icon and UDim2.fromScale(0.5, 0.97) or UDim2.fromScale(0.5, 0.75),
 					Size = UDim2.fromScale(0.9, if props.Icon then 0.28 else 0.52),
 					Text = props.Text,
-					TextColor3 = textColor,
+					TextColor3 = Color3.new(1, 1, 1),
 					TextScaled = true,
-					TextStrokeTransparency = textStrokeTransparency,
+					TextStrokeTransparency = 0.55,
 					TextWrapped = true,
 				},
 			}),

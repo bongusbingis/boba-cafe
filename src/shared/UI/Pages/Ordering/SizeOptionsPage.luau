@@ -257,12 +257,16 @@ return function(props)
 			},
 		}, {
 			AddToOrder = canAdd and c(ActionButton, {
-				Text = if props.HasNextStep then "Next" else "Add to Order",
+				Text = "Add to Order",
 				Color = ORANGE,
 				AnchorPoint = Vector2.new(0, 0.5),
 				Position = UDim2.fromScale(0.05, 0.5),
 				Size = UDim2.fromScale(0.4, 1),
-				OnClick = if props.HasNextStep then props.OnNext else props.OnAddToOrder,
+				OnClick = function()
+					if props.OnAddToOrder then
+						props.OnAddToOrder()
+					end
+				end,
 			}) or c(Pane, {
 				ClassName = "TextLabel",
 				Native = {

@@ -27,6 +27,9 @@ return function(props)
 		table.insert(sortedKeys, optionKey)
 	end
 	table.sort(sortedKeys, function(a, b)
+		if a == b then
+			return false
+		end
 		if a == "Normal" then
 			return true
 		elseif b == "Normal" then
