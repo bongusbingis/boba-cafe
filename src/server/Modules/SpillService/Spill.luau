@@ -410,6 +410,7 @@ function Spill:_Build()
 	end
 
 	self.Prompt = Instance.new("ProximityPrompt")
+	self.Prompt.Style = Enum.ProximityPromptStyle.Custom
 	self.Prompt.Parent = self.Object.PrimaryPart
 	self.Prompt.RequiresLineOfSight = false
 	self.Prompt.HoldDuration = 1
@@ -426,6 +427,7 @@ function Spill:_Build()
 		-- Templates without a sign (e.g. MeltedPopsicle, Donut) still spill and clean normally; only the sign and its trip zone are skipped.
 		if self.Object:FindFirstChild("SignStartPosition") then
 			self.SignPrompt = Instance.new("ProximityPrompt")
+			self.SignPrompt.Style = Enum.ProximityPromptStyle.Custom
 			self.SignPrompt.Parent = self.Object.SignStartPosition
 			self.SignPrompt.RequiresLineOfSight = false
 			self.SignPrompt.ObjectText = "Sign"

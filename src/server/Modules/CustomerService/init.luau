@@ -1239,6 +1239,7 @@ function CustomerService:_ensureNpcPrompt(npc: Npc.Npc, actionText: string, obje
 	if prompt == nil then
 		prompt = Instance.new("ProximityPrompt")
 		prompt.Name = "CustomerPrompt"
+		prompt.Style = Enum.ProximityPromptStyle.Custom
 		prompt.HoldDuration = 0
 		prompt.MaxActivationDistance = 15
 		prompt.RequiresLineOfSight = false
@@ -1954,6 +1955,7 @@ function CustomerService:_startCounterCustomer(customer: Player, areaIndex: numb
 	end
 	local prompt = Instance.new("ProximityPrompt")
 	prompt.Name = COUNTER_PROMPT_NAME
+	prompt.Style = Enum.ProximityPromptStyle.Custom
 	prompt.ActionText = "Take Order"
 	prompt.ObjectText = customer.DisplayName
 	prompt.HoldDuration = 0

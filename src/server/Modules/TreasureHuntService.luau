@@ -56,6 +56,7 @@ function TreasureHuntService:_createChestInstance(node: BasePart): (BasePart, Pr
 	chest:SetAttribute("BuiltBy", BUILT_BY)
 
 	local prompt = Instance.new("ProximityPrompt")
+	prompt.Style = Enum.ProximityPromptStyle.Custom
 	prompt.ObjectText = "Treasure Chest"
 	prompt.ActionText = "Open"
 	prompt.HoldDuration = TreasureHuntConfig.PROMPT_HOLD_DURATION

@@ -267,6 +267,7 @@ function Builders.Board(cf: CFrame): (Model, ProximityPrompt, TextLabel)
 	list.Parent = frame
 
 	local prompt = Instance.new("ProximityPrompt")
+	prompt.Style = Enum.ProximityPromptStyle.Custom
 	prompt.ObjectText = "Cafe Upgrades"
 	prompt.ActionText = "Upgrade"
 	prompt.HoldDuration = 0

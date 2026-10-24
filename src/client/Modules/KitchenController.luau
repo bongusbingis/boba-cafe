@@ -4,6 +4,7 @@ local ContextActionService = game:GetService("ContextActionService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local StarterGui = game:GetService("StarterGui")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 
@@ -1202,6 +1203,15 @@ function KitchenController:GetCurrentChoice(): string?
 end
 
 function KitchenController:KnitStart()
+	local kitchenService = Knit.GetService("KitchenService")
+	if kitchenService and kitchenService.SetBackpackEnabled then
+		kitchenService.SetBackpackEnabled:Connect(function(enabled: boolean)
+			pcall(function()
+				StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Backpack, enabled)
+			end)
+		end)
+	end
+
 	local promptElapsed = 0
 	RunService.Heartbeat:Connect(function(dt)
 		promptElapsed += dt

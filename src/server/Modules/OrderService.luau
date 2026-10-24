@@ -1125,6 +1125,7 @@ function OrderService:_ensureHandoffPrompt(order: Order, customer: Player, custo
 	if prompt == nil then
 		prompt = Instance.new("ProximityPrompt")
 		prompt.Name = HANDOFF_PROMPT_NAME
+		prompt.Style = Enum.ProximityPromptStyle.Custom
 		prompt.HoldDuration = 0
 		prompt.MaxActivationDistance = HANDOFF_TRIGGER_DISTANCE_STUDS
 		prompt.RequiresLineOfSight = false
@@ -1560,6 +1561,7 @@ function OrderService:_setupOrderingSystem(orderingSystem: Instance)
 			ownerValue.Parent = node
 
 			local prompt = Instance.new("ProximityPrompt")
+			prompt.Style = Enum.ProximityPromptStyle.Custom
 			prompt.HoldDuration = 0
 			prompt.UIOffset = Vector2.new(0, 25)
 			prompt.ObjectText = "Pick Up Area"
