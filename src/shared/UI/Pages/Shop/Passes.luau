@@ -128,18 +128,6 @@ return function()
 		})
 	end
 
-	-- Limited-time Halloween Pumpkin Launcher stub while Gamepass ID is nil
-	if ProductIds.PumpkinLauncherPass == nil then
-		table.insert(passList, {
-			PassId = -999,
-			Name = "Pumpkin Launcher",
-			Image = "rbxassetid://16728123607",
-			Price = "Coming Soon",
-			OffSale = true,
-			IsOwned = false,
-		})
-	end
-
 	-- Sorting rules:
 	-- 1. Unowned and on-sale passes appear first
 	-- 2. Off-sale unowned passes
@@ -148,8 +136,10 @@ return function()
 		if a.IsOwned ~= b.IsOwned then
 			return not a.IsOwned
 		end
-		if a.OffSale ~= b.OffSale then
-			return not a.OffSale
+		local aOffSale = a.OffSale and not (a.PassId == 2055509330 or a.Name == "Pumpkin Launcher")
+		local bOffSale = b.OffSale and not (b.PassId == 2055509330 or b.Name == "Pumpkin Launcher")
+		if aOffSale ~= bOffSale then
+			return not aOffSale
 		end
 		return a.Name < b.Name
 	end)
@@ -182,7 +172,7 @@ return function()
 		elseif isPumpkin then
 			topBanner = {
 				Color = Color3.fromRGB(240, 110, 25),
-				Text = "Halloween",
+				Text = if pass.Price then pass.Price else "Halloween",
 				Size = UDim2.fromScale(1.05, 0.28),
 			}
 		elseif pass.OffSale then

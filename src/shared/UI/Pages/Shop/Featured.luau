@@ -743,7 +743,7 @@ return function()
 						"• 550 Boba Bucks + capsules + nametag",
 						"• Free track for everyone",
 					},
-					Image = "rbxassetid://16728139086",
+					Image = "rbxassetid://16709481934",
 					Tag = "Season Pass",
 					TagColor = Styles.GOLD_MID,
 					Price = seasonPrice,
@@ -765,12 +765,10 @@ return function()
 					"• Fun physics knockback & effects",
 					"• Limited-time Halloween special",
 				},
-				Image = "rbxassetid://16728123607",
+				Image = "rbxassetid://15112095968",
 				Tag = if pumpkinOwned then "Owned" else "Halloween Special",
 				TagColor = if pumpkinOwned then Styles.GREEN_BADGE else Color3.fromRGB(180, 70, 10),
-				Price = if pumpkinOwned
-					then "Owned"
-					else (pumpkinPrice or (if ProductIds.PumpkinLauncherPass == nil then "Coming Soon" else nil)),
+				Price = if pumpkinOwned then "Owned" else (pumpkinPrice or "Buy Now"),
 				ButtonText = if pumpkinOwned then "Owned" else "Buy",
 				ButtonColor = if pumpkinOwned then Styles.GREEN_BADGE else Color3.fromRGB(180, 70, 10),
 				OnClick = function()

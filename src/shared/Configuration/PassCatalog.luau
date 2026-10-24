@@ -16,8 +16,6 @@
 	empty for display-only passes that grant nothing yet.
 ]]
 
-local ProductIds = require(script.Parent.ProductIds)
-
 export type PassEntry = {
 	Name: string,
 	Description: string?,
@@ -58,7 +56,7 @@ local PassCatalog: { [number]: PassEntry } = {
 	[219650999] = {
 		Name = "Star Employee",
 		Description = "Unlock an exclusive benefits package to make your job easier!",
-		Icon = "rbxassetid://16728123956",
+		Icon = "rbxassetid://16728123417", -- verified
 		Perks = { "QuestSlot", "QuestReroll" },
 		Listed = true,
 		Legacy = false,
@@ -100,10 +98,10 @@ local PassCatalog: { [number]: PassEntry } = {
 		Listed = true,
 		Legacy = false,
 	},
-	[219651224] = {
+	[16728123325] = {
 		Name = "Uniform Remover",
 		Description = "Remove your uniform and wear your own style in the cafe!",
-		Icon = "rbxassetid://16728123822",
+		Icon = "rbxassetid://16728123822", -- verified
 		Perks = { "UniformRemover" },
 		Listed = true,
 		Legacy = false,
@@ -111,16 +109,23 @@ local PassCatalog: { [number]: PassEntry } = {
 	[219651061] = {
 		Name = "Emote Pack",
 		Description = "Enjoy a set of popular dances that make you stand out from the crowd!",
-		Icon = "rbxassetid://16728123417",
+		Icon = "rbxassetid://16728123956", -- verified
 		Perks = { "EmotePack" },
 		Listed = true,
 		Legacy = false,
 	},
-	[40973940] = { Name = "Mop Whack", Perks = { "MopWhack" }, Listed = true, Legacy = false },
+	[40973940] = {
+		Name = "Mop Whack",
+		Description = "Whack your friends and fellow workers with a mop!",
+		Perks = { "MopWhack" },
+		Icon = "rbxassetid://117497610255331",
+		Listed = true,
+		Legacy = false,
+	},
 	[219651106] = {
 		Name = "Flying Mop",
 		Description = "Stand out from the crowd with your own flying mop to get around the cafe faster!",
-		Icon = "rbxassetid://16728123822",
+		Icon = "rbxassetid://16728123822", -- verified
 		Perks = { "FlyingMop" },
 		Listed = true,
 		Legacy = false,
@@ -130,6 +135,14 @@ local PassCatalog: { [number]: PassEntry } = {
 		Description = "Toggle your character's head to be invisible anytime from Settings!",
 		Icon = "rbxassetid://16728123607",
 		Perks = { "HeadlessHead" },
+		Listed = true,
+		Legacy = false,
+	},
+	[2055509330] = {
+		Name = "Pumpkin Launcher",
+		Description = "Blast festive pumpkins at your friends with this time-limited Halloween launcher!",
+		Icon = "rbxassetid://15112095968",
+		Perks = { "PumpkinLauncher" },
 		Listed = true,
 		Legacy = false,
 	},
@@ -144,16 +157,5 @@ local PassCatalog: { [number]: PassEntry } = {
 		Legacy = false,
 	},
 }
-
-if ProductIds.PumpkinLauncherPass ~= nil then
-	PassCatalog[ProductIds.PumpkinLauncherPass] = {
-		Name = "Pumpkin Launcher",
-		Description = "Blast festive pumpkins at your friends with this time-limited Halloween launcher!",
-		Icon = "rbxassetid://16728123607",
-		Perks = { "PumpkinLauncher" },
-		Listed = true,
-		Legacy = false,
-	}
-end
 
 return PassCatalog

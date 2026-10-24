@@ -36,7 +36,6 @@ local Knit = require(Packages.Knit)
 local GamepassUtil = require(Shared.Utility.GamepassUtil)
 local PassCatalog = require(Shared.Configuration.PassCatalog)
 local PassTools = require(Shared.Configuration.PassTools)
-local ProductIds = require(Shared.Configuration.ProductIds)
 local WhackTarget = require(Shared.Utility.WhackTarget)
 local WorldPath = require(Shared.Utility.WorldPath)
 
@@ -385,9 +384,7 @@ function PassToolService:_grant(player: Player)
 	local perks = Knit.GetService("PerkService")
 	local wantsMop = perks:HasPerk(player, PassTools.MopWhackPerk)
 	local wantsFlying = perks:HasPerk(player, PassTools.FlyingMopPerk)
-	local wantsPumpkin = if ProductIds.PumpkinLauncherPass ~= nil
-		then perks:HasPerk(player, PassTools.PumpkinLauncherPerk)
-		else false
+	local wantsPumpkin = perks:HasPerk(player, PassTools.PumpkinLauncherPerk)
 	if player.Parent == nil then
 		return
 	end
@@ -411,13 +408,6 @@ function PassToolService:_grant(player: Player)
 				local tool = self:_buildPumpkinLauncher()
 				if tool then
 					tool.Parent = backpack
-				end
-				local starterGear = player:FindFirstChild("StarterGear")
-				if starterGear and not starterGear:FindFirstChild(PassTools.PumpkinLauncher.ToolName) then
-					local gearTool = self:_buildPumpkinLauncher()
-					if gearTool then
-						gearTool.Parent = starterGear
-					end
 				end
 			end
 		end
@@ -474,9 +464,6 @@ function PassToolService:KnitStart()
 				if entry and table.find(entry.Perks, perk) ~= nil then
 					relevant = true
 				end
-			end
-			if ProductIds.PumpkinLauncherPass ~= nil and passId == ProductIds.PumpkinLauncherPass then
-				relevant = true
 			end
 			if not relevant then
 				return

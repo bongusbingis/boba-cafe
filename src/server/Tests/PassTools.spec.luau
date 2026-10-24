@@ -22,6 +22,7 @@ return function()
 			expect(found[PassTools.MopWhackPerk]).to.equal(true)
 			expect(found[PassTools.FlyingMopPerk]).to.equal(true)
 			expect(found[PassTools.EmotePackPerk]).to.equal(true)
+			expect(found[PassTools.PumpkinLauncherPerk]).to.equal(true)
 		end)
 	end)
 

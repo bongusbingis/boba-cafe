@@ -91,7 +91,7 @@ local ProductIds: ProductIds = {
 		NametagCapsule50 = 3721439975,
 	},
 	ChangeNickname = 1152995517,
-	PumpkinLauncherPass = nil, -- STUB: Jack to provide Game Pass ID
+	PumpkinLauncherPass = 2055509330, -- Limited-time Halloween Pumpkin Launcher Game Pass
 	BobaBuddy = {
 		Cleaner = 3721839758, -- STUB: 49 R$ (Jack Creator Hub ID)
 		Stocker = 3721839790, -- STUB: 99 R$ (Jack Creator Hub ID)
