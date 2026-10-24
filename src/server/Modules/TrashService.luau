@@ -122,17 +122,21 @@ function TrashService:_wireCan(can: Instance)
 			warn("[TrashService]: Tagged can has no BasePart:", can:GetFullName())
 			return
 		end
-		local prompt = Instance.new("ProximityPrompt")
+		local existing = can:FindFirstChildWhichIsA("ProximityPrompt", true)
+		local prompt = existing or Instance.new("ProximityPrompt")
 		prompt.ActionText = "Use"
 		prompt.ObjectText = "Trash"
 		prompt.HoldDuration = 0
 		prompt.MaxActivationDistance = 8
 		prompt.RequiresLineOfSight = false
+		prompt.Style = Enum.ProximityPromptStyle.Custom
 		prompt:SetAttribute("BuiltBy", BUILT_BY)
 		prompt.Triggered:Connect(function(player)
 			self:_onTriggered(player, part)
 		end)
-		prompt.Parent = part
+		if not existing then
+			prompt.Parent = part
+		end
 		self._prompts[can] = prompt
 	end)
 	if not ok then

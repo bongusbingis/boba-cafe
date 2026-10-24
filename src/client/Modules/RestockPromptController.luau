@@ -1,8 +1,8 @@
 --!strict
 --[[
     Module: RestockPromptController
-    Description: Knit client controller that renders custom ProximityPrompt UI for restockable
-                 kitchen stations and displays live stock status with Rainbow/percentage bars (legacy port).
+    Description: Knit client controller that renders custom ProximityPrompt UI for all gameplay
+                 prompts and displays live stock status with Rainbow/percentage bars for stations.
 --]]
 
 ---> Services
@@ -172,7 +172,7 @@ local function createPrompt(prompt: ProximityPrompt, inputType: Enum.ProximityPr
 	local tweenInfoFull = TweenInfo.new(prompt.HoldDuration, Enum.EasingStyle.Linear, Enum.EasingDirection.Out)
 
 	local promptUI = Instance.new("BillboardGui")
-	promptUI.Name = "RestockPrompt"
+	promptUI.Name = "CustomPrompt"
 	promptUI.AlwaysOnTop = true
 
 	local mainFrame = Instance.new("Frame")
@@ -192,6 +192,7 @@ local function createPrompt(prompt: ProximityPrompt, inputType: Enum.ProximityPr
 	restockFrame.Position = UDim2.fromScale(0, -0.38)
 	restockFrame.BackgroundTransparency = 1
 	restockFrame.BackgroundColor3 = COLOR_BG_DARK
+	restockFrame.Visible = false
 	restockFrame.Parent = promptUI
 
 	local cornerRestock = Instance.new("UICorner")
@@ -502,7 +503,7 @@ local function createPrompt(prompt: ProximityPrompt, inputType: Enum.ProximityPr
 		end
 
 		local displayActionText: string = prompt.ActionText
-		if (currentStock ~= nil and currentStock == 0) or isHoldingBox then
+		if isRestockingStation and ((currentStock ~= nil and currentStock == 0) or isHoldingBox) then
 			displayActionText = "Restock"
 		end
 
@@ -553,7 +554,13 @@ local function createPrompt(prompt: ProximityPrompt, inputType: Enum.ProximityPr
 		tw:Play()
 	end
 
+	local cleanedUp = false
 	local function cleanup()
+		if cleanedUp then
+			return
+		end
+		cleanedUp = true
+
 		if holdBeganConn then
 			holdBeganConn:Disconnect()
 		end
@@ -595,17 +602,42 @@ function RestockPromptController:KnitStart()
 		end)
 	end
 
+	-- Enforce Custom style across all workspace proximity prompts so Roblox default UI never renders
+	local function enforceCustom(desc: Instance)
+		if desc:IsA("ProximityPrompt") and desc.Style ~= Enum.ProximityPromptStyle.Custom then
+			desc.Style = Enum.ProximityPromptStyle.Custom
+		end
+	end
+
+	for _, desc in workspace:GetDescendants() do
+		enforceCustom(desc)
+	end
+	workspace.DescendantAdded:Connect(enforceCustom)
+
 	ProximityPromptService.PromptShown:Connect(
 		function(prompt: ProximityPrompt, inputType: Enum.ProximityPromptInputType)
-			if prompt.Style ~= Enum.ProximityPromptStyle.Custom and prompt:GetAttribute("Theme") ~= "Restock" then
-				return
-			end
+			prompt.Style = Enum.ProximityPromptStyle.Custom
 
 			local gui = getScreenGui()
 			local cleanupFunction = createPrompt(prompt, inputType, gui)
 
-			prompt.PromptHidden:Wait()
-			cleanupFunction()
+			local hiddenConn: RBXScriptConnection? = nil
+			local destroyingConn: RBXScriptConnection? = nil
+
+			local function onHide()
+				if hiddenConn then
+					hiddenConn:Disconnect()
+					hiddenConn = nil
+				end
+				if destroyingConn then
+					destroyingConn:Disconnect()
+					destroyingConn = nil
+				end
+				cleanupFunction()
+			end
+
+			hiddenConn = prompt.PromptHidden:Connect(onHide)
+			destroyingConn = prompt.Destroying:Connect(onHide)
 		end
 	)
 end

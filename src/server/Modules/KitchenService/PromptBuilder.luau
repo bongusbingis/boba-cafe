@@ -19,7 +19,21 @@ local PromptBuilder = {}
 
 ---> Functions
 
+function PromptBuilder.Detach(model: Model)
+	for _, descendant in model:GetDescendants() do
+		if descendant:IsA("ProximityPrompt") then
+			local parent = descendant.Parent
+			descendant:Destroy()
+			if parent and parent ~= model and parent.Name == "Part" and parent.Transparency == 1 then
+				parent:Destroy()
+			end
+		end
+	end
+end
+
 function PromptBuilder.Attach(model: Model, config: PromptConfig, callback: (Player) -> ()): ProximityPrompt
+	PromptBuilder.Detach(model)
+
 	local cf, _ = model:GetBoundingBox()
 
 	local part = Instance.new("Part")
@@ -40,34 +54,20 @@ function PromptBuilder.Attach(model: Model, config: PromptConfig, callback: (Pla
 	prompt.RequiresLineOfSight = false
 	prompt.HoldDuration = holdDuration
 	prompt.MaxActivationDistance = config.MaxActivationDistance or KitchenConfig.PROMPT_DISTANCE
+	prompt.Style = Enum.ProximityPromptStyle.Custom
 
 	if config.Stock ~= nil then
 		prompt:SetAttribute("DefaultStock", config.Stock)
 		prompt:SetAttribute("CurrentStock", config.Stock)
 		prompt:SetAttribute("Theme", config.Theme or "Restock")
-		prompt.Style = Enum.ProximityPromptStyle.Custom
 	elseif config.Theme ~= nil then
 		prompt:SetAttribute("Theme", config.Theme)
-		prompt.Style = Enum.ProximityPromptStyle.Custom
 	end
 
 	prompt.Parent = part
 	prompt.Triggered:Connect(callback)
 
 	return prompt
-end
-
-function PromptBuilder.Detach(model: Model)
-	for _, descendant in model:GetDescendants() do
-		if descendant:IsA("ProximityPrompt") then
-			local parent = descendant.Parent
-			descendant:Destroy()
-			if parent and parent ~= model then
-				parent:Destroy()
-			end
-			break
-		end
-	end
 end
 
 return PromptBuilder
