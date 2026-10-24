@@ -1,68 +1,62 @@
 --!strict
 --[[
 	Nametag
-	Overhead billboard for Boba Buddy instances: "{DisplayName}'s Boba Buddy"
-	with chore indicator and live remaining duration.
+	Overhead billboard for Boba Buddy instances matching the Customer NPC overhead style
+	(CustomerService/Npc.luau & PlayerOverheads.client.luau).
 --]]
 
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Shared = ReplicatedStorage:WaitForChild("Shared")
-local Styles = require(Shared.UI.Styles)
+local NAMETAG_SIZE = UDim2.fromScale(4, 2.5)
+local NAMETAG_SIZE_OFFSET = Vector2.new(0, 1.125)
 
 local Nametag = {}
 
 function Nametag.Attach(model: Model, owner: Player, chore: string, getRemainingSeconds: () -> number): BillboardGui
-	local root = model.PrimaryPart or model:FindFirstChild("HumanoidRootPart") or model:FindFirstChild("Head")
-	assert(root, "BobaBuddy model must have a primary part or root part")
+	local head = model:FindFirstChild("Head") or model.PrimaryPart or model:FindFirstChild("HumanoidRootPart")
+	assert(head, "BobaBuddy model must have a primary part or root part")
 
 	local billboard = Instance.new("BillboardGui")
-	billboard.Name = "BobaBuddyNametag"
-	billboard.Size = UDim2.fromOffset(200, 60)
-	billboard.StudsOffset = Vector3.new(0, 3.2, 0)
-	billboard.AlwaysOnTop = true
+	billboard.Name = "Nametag"
+	billboard.Adornee = head
+	billboard.Size = NAMETAG_SIZE
+	billboard.SizeOffset = NAMETAG_SIZE_OFFSET
+	billboard.LightInfluence = 0
 	billboard.MaxDistance = 60
 	billboard.ResetOnSpawn = false
 
 	local frame = Instance.new("Frame")
 	frame.Name = "Container"
-	frame.Size = UDim2.fromScale(1, 1)
 	frame.BackgroundTransparency = 1
+	frame.Size = UDim2.fromScale(1, 1)
 	frame.Parent = billboard
 
-	local title = Instance.new("TextLabel")
-	title.Name = "Title"
-	title.Size = UDim2.fromScale(1, 0.45)
-	title.Position = UDim2.fromScale(0, 0)
-	title.BackgroundTransparency = 1
-	title.Font = Enum.Font.FredokaOne
-	title.TextSize = 16
-	title.TextColor3 = Color3.new(1, 1, 1)
-	title.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
-	title.TextStrokeTransparency = 0.4
-	title.Text = `{owner.DisplayName}'s Boba Buddy`
-	title.Parent = frame
+	local usernameLabel = Instance.new("TextLabel")
+	usernameLabel.Name = "UsernameLabel"
+	usernameLabel.BackgroundTransparency = 1
+	usernameLabel.FontFace =
+		Font.new("rbxasset://fonts/families/SourceSansPro.json", Enum.FontWeight.Bold, Enum.FontStyle.Normal)
+	usernameLabel.Position = UDim2.fromScale(0, 0.725)
+	usernameLabel.Size = UDim2.fromScale(1, 0.15)
+	usernameLabel.TextColor3 = Color3.new(1, 1, 1)
+	usernameLabel.TextScaled = true
+	usernameLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+	usernameLabel.TextStrokeTransparency = 0.5
+	usernameLabel.Text = `{owner.DisplayName}'s Boba Buddy`
+	usernameLabel.Parent = frame
 
-	local badge = Instance.new("TextLabel")
-	badge.Name = "Badge"
-	badge.Size = UDim2.fromScale(0.8, 0.4)
-	badge.Position = UDim2.fromScale(0.1, 0.5)
-	badge.BackgroundColor3 = if chore == "Cleaner" then Styles.GREEN else Styles.GOLD_MID
-	badge.BackgroundTransparency = 0.2
-	badge.Font = Enum.Font.FredokaOne
-	badge.TextSize = 12
-	badge.TextColor3 = Color3.new(1, 1, 1)
-	badge.Text = `{chore} (3:00)`
-	badge.Parent = frame
-
-	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(1, 0)
-	corner.Parent = badge
-
-	local stroke = Instance.new("UIStroke")
-	stroke.Color = Color3.new(1, 1, 1)
-	stroke.Thickness = 1.2
-	stroke.Transparency = 0.5
-	stroke.Parent = badge
+	local roleLabel = Instance.new("TextLabel")
+	roleLabel.Name = "RoleLabel"
+	roleLabel.BackgroundTransparency = 1
+	roleLabel.FontFace =
+		Font.new("rbxasset://fonts/families/SourceSansPro.json", Enum.FontWeight.Regular, Enum.FontStyle.Italic)
+	roleLabel.Position = UDim2.fromScale(0, 0.85)
+	roleLabel.Size = UDim2.fromScale(1, 0.15)
+	roleLabel.TextColor3 = Color3.new(1, 1, 1)
+	roleLabel.TextScaled = true
+	roleLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+	roleLabel.TextStrokeTransparency = 0.5
+	roleLabel.RichText = true
+	roleLabel.Text = `{chore} (3:00)`
+	roleLabel.Parent = frame
 
 	-- Update remaining time every second
 	task.spawn(function()
@@ -70,7 +64,7 @@ function Nametag.Attach(model: Model, owner: Player, chore: string, getRemaining
 			local remaining = math.max(0, math.floor(getRemainingSeconds()))
 			local mins = math.floor(remaining / 60)
 			local secs = remaining % 60
-			badge.Text = string.format("%s (%d:%02d)", chore, mins, secs)
+			roleLabel.Text = string.format("%s (%d:%02d)", chore, mins, secs)
 			if remaining <= 0 then
 				break
 			end
@@ -78,7 +72,6 @@ function Nametag.Attach(model: Model, owner: Player, chore: string, getRemaining
 		end
 	end)
 
-	billboard.Adornee = root
 	billboard.Parent = model
 	return billboard
 end

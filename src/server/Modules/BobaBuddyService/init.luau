@@ -17,6 +17,7 @@ local CleanerBehavior = require(script.CleanerBehavior)
 local StockerBehavior = require(script.StockerBehavior)
 local FollowBehavior = require(script.FollowBehavior)
 local Nametag = require(script.Nametag)
+local AnimationController = require(script.AnimationController)
 
 type ActiveBuddy = {
 	Model: Model,
@@ -25,6 +26,7 @@ type ActiveBuddy = {
 	ExpiresAt: number,
 	StopFollow: () -> (),
 	StopChore: () -> (),
+	StopAnim: () -> (),
 	IsBusy: boolean,
 }
 
@@ -175,6 +177,15 @@ function BobaBuddyService:SpawnBuddyForPlayer(player: Player, chore: "Cleaner" |
 		end)
 	end
 
+	local rootPart = model:FindFirstChild("HumanoidRootPart") :: BasePart?
+	if rootPart then
+		pcall(function()
+			rootPart:SetNetworkOwner(nil)
+		end)
+	end
+
+	local animController = AnimationController.Attach(model)
+
 	Nametag.Attach(model, player, chore, function()
 		return math.max(0, expiresAt - os.clock())
 	end)
@@ -186,6 +197,7 @@ function BobaBuddyService:SpawnBuddyForPlayer(player: Player, chore: "Cleaner" |
 		ExpiresAt = expiresAt,
 		StopFollow = stopFollow,
 		StopChore = stopChore,
+		StopAnim = animController.Stop,
 		IsBusy = false,
 	}
 
@@ -204,6 +216,9 @@ function BobaBuddyService:DespawnBuddy(player: Player, chore: string, immediate:
 	local buddy = buddies[chore]
 	buddies[chore] = nil
 
+	if buddy.StopAnim then
+		buddy.StopAnim()
+	end
 	buddy.StopFollow()
 	buddy.StopChore()
 
