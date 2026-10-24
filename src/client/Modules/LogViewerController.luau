@@ -435,6 +435,7 @@ local function buildWindow(self: any, tab: string): WindowState
 			local btnStroke = Instance.new("UIStroke")
 			btnStroke.Color = Styles.GRAY
 			btnStroke.Thickness = 1
+			btnStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 			btnStroke.Parent = btn
 
 			btn.Activated:Connect(function()
@@ -471,6 +472,7 @@ local function buildWindow(self: any, tab: string): WindowState
 	local searchStroke = Instance.new("UIStroke")
 	searchStroke.Color = Styles.GRAY
 	searchStroke.Thickness = 1
+	searchStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 	searchStroke.Parent = search
 
 	-- Status label
