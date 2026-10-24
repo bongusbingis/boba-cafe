@@ -3,8 +3,9 @@
 	GroupRankProgression.luau
 	Configuration mapping career levels and legacy game passes to Roblox group roles/ranks.
 
-	- Maps player levels to group roles (with their respective rank 6-10).
-	- RoleId fields are stubs for Jack to provide Open Cloud Role IDs later.
+	- Maps player levels to group roles via RankId (6-10).
+	- RankId is the main mapping ID plugged into the ranking system; RoleId has been removed.
+	- Exposes direct x -> y mapping tables (LEVEL_TO_RANK_ID and PASS_TO_RANK_ID).
 	- Supports retired passes (Barista 6202153, Kitchen Leader 15243046) which allow
 	  claiming their specific rank without meeting the level requirement.
 ]]
@@ -15,8 +16,8 @@ local GamepassUtil = require(ReplicatedStorage:WaitForChild("Shared").Utility.Ga
 export type GroupRankTier = {
 	MinLevel: number,
 	RoleName: string,
-	Rank: number, -- Numeric rank (6-10)
-	RoleId: string?, -- STUB: Jack to provide Open Cloud Role ID later
+	RankId: number, -- Main mapping ID plugged into the ranking system (numeric rank 6-10)
+	Rank: number, -- Alias for RankId for backwards compatibility
 	PassId: number?, -- Retired pass ID that allows claiming this specific rank
 	PassName: string?,
 }
@@ -27,39 +28,66 @@ local GroupRankProgression = {}
 local BARISTA_PASS_ID = 6202153
 local KITCHEN_LEADER_PASS_ID = 15243046
 
+GroupRankProgression.BARISTA_PASS_ID = BARISTA_PASS_ID
+GroupRankProgression.KITCHEN_LEADER_PASS_ID = KITCHEN_LEADER_PASS_ID
+
+--- Direct x -> y mapping: MinLevel -> RankId
+GroupRankProgression.LEVEL_TO_RANK_ID = {
+	[1] = 6,
+	[5] = 7,
+	[10] = 8,
+	[15] = 9,
+	[20] = 10,
+} :: { [number]: number }
+
+--- Direct x -> y mapping: Retired PassId -> RankId
+GroupRankProgression.PASS_TO_RANK_ID = {
+	[BARISTA_PASS_ID] = 8,
+	[KITCHEN_LEADER_PASS_ID] = 10,
+} :: { [number]: number }
+
+--- Direct x -> y mapping: RankId -> RoleName
+GroupRankProgression.RANK_ID_TO_ROLE_NAME = {
+	[6] = "Trainee",
+	[7] = "Junior Barista",
+	[8] = "Barista",
+	[9] = "Senior Barista",
+	[10] = "Head Barista",
+} :: { [number]: string }
+
 -- Career level to group rank tiers:
 GroupRankProgression.TIERS = {
 	{
 		MinLevel = 1,
 		RoleName = "Trainee",
+		RankId = 6,
 		Rank = 6,
-		RoleId = nil, -- STUB: Jack to provide Role ID
 	},
 	{
 		MinLevel = 5,
 		RoleName = "Junior Barista",
+		RankId = 7,
 		Rank = 7,
-		RoleId = nil, -- STUB: Jack to provide Role ID
 	},
 	{
 		MinLevel = 10,
 		RoleName = "Barista",
+		RankId = 8,
 		Rank = 8,
-		RoleId = nil, -- STUB: Jack to provide Role ID
 		PassId = BARISTA_PASS_ID,
 		PassName = "Barista",
 	},
 	{
 		MinLevel = 15,
 		RoleName = "Senior Barista",
+		RankId = 9,
 		Rank = 9,
-		RoleId = nil, -- STUB: Jack to provide Role ID
 	},
 	{
 		MinLevel = 20,
 		RoleName = "Head Barista",
+		RankId = 10,
 		Rank = 10,
-		RoleId = nil, -- STUB: Jack to provide Role ID
 		PassId = KITCHEN_LEADER_PASS_ID,
 		PassName = "Kitchen Leader",
 	},
@@ -93,8 +121,8 @@ function GroupRankProgression.GetClaimableTier(
 ): GroupRankTier?
 	local claimable: GroupRankTier? = nil
 	for _, tier in GroupRankProgression.TIERS do
-		if tier.Rank > currentRank and GroupRankProgression.IsEligibleForTier(tier, playerLevel, ownedPasses) then
-			if not claimable or tier.Rank > claimable.Rank then
+		if tier.RankId > currentRank and GroupRankProgression.IsEligibleForTier(tier, playerLevel, ownedPasses) then
+			if not claimable or tier.RankId > claimable.RankId then
 				claimable = tier
 			end
 		end
@@ -110,7 +138,7 @@ function GroupRankProgression.GetHighestEligibleTier(
 	local highest: GroupRankTier? = nil
 	for _, tier in GroupRankProgression.TIERS do
 		if GroupRankProgression.IsEligibleForTier(tier, playerLevel, ownedPasses) then
-			if not highest or tier.Rank > highest.Rank then
+			if not highest or tier.RankId > highest.RankId then
 				highest = tier
 			end
 		end
@@ -125,7 +153,7 @@ function GroupRankProgression.GetNextLockedTier(
 	ownedPasses: { [number]: boolean }?
 ): GroupRankTier?
 	for _, tier in GroupRankProgression.TIERS do
-		if tier.Rank > currentRank and not GroupRankProgression.IsEligibleForTier(tier, playerLevel, ownedPasses) then
+		if tier.RankId > currentRank and not GroupRankProgression.IsEligibleForTier(tier, playerLevel, ownedPasses) then
 			return tier
 		end
 	end

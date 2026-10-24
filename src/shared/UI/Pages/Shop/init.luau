@@ -7,6 +7,7 @@ local UI = Shared:WaitForChild("UI")
 ---> dependencies
 local Knit = require(Packages.Knit)
 local React = require(Packages.React)
+local SeasonConfig = require(Shared.Configuration.SeasonConfig)
 
 ---> styles
 local Styles = require(UI.Styles)
@@ -27,7 +28,7 @@ local PAGES: { OpenableMenu.Page } = {
 	},
 	{
 		Key = "Season",
-		Label = "Season",
+		Label = "Brew Bonus",
 		LayoutOrder = 1,
 		Content = c(require(script.Season)),
 	},
@@ -133,6 +134,9 @@ return function(props)
 
 	local pages: { OpenableMenu.Page } = {}
 	for _, page in PAGES do
+		if page.Key == "Season" and SeasonConfig.ENABLED == false then
+			continue
+		end
 		local copy = table.clone(page)
 		if page.Key == "Group Benefit" then
 			copy.Visible = not isClaimed

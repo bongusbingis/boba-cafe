@@ -126,7 +126,7 @@ if SEASON_PASS_PRODUCT_ID then
 		)
 	else
 		ProductActionMap[SEASON_PASS_PRODUCT_ID] = {
-			"Season Pass",
+			"Brew Bonus",
 			function(player, _receiptInfo, playerData)
 				local seasonPassService = Knit.GetService("SeasonPassService")
 				return seasonPassService:GrantPremium(player, playerData)

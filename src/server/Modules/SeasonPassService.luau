@@ -15,6 +15,7 @@
 local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 
 local Packages = ReplicatedStorage:WaitForChild("Packages")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -151,6 +152,9 @@ function SeasonPassService:GetSeasonState(player: Player): { [string]: any }
 end
 
 function SeasonPassService:AddSeasonXp(player: Player, amount: number): (boolean, string?)
+	if not SeasonConfig.ENABLED then
+		return false, "SeasonDisabled"
+	end
 	if typeof(amount) ~= "number" or amount <= 0 then
 		return false, "InvalidAmount"
 	end
@@ -189,6 +193,9 @@ end
 --- claim marker, then BB / nametag / title. Perk tiers need no grant:
 --- HasPerk reads the claimed set. Returns (boolean, reason).
 function SeasonPassService:ClaimTier(player: Player, tierIndex: number): (boolean, string?)
+	if not SeasonConfig.ENABLED then
+		return false, "SeasonDisabled"
+	end
 	if typeof(tierIndex) ~= "number" or tierIndex ~= math.floor(tierIndex) then
 		return false, "InvalidTier"
 	end
@@ -333,6 +340,10 @@ function SeasonPassService:PlayerRemoving(player: Player)
 end
 
 function SeasonPassService:KnitStart()
+	if RunService:IsStudio() and SeasonConfig.PREVIEW_SEASON_ID == nil then
+		SeasonConfig.PREVIEW_SEASON_ID = 1
+	end
+
 	local customerService = self:_getService("CustomerService")
 	if customerService and customerService.CustomerResolved then
 		customerService.CustomerResolved:Connect(function(player, result)

@@ -14,6 +14,7 @@ local Knit = require(Packages.Knit)
 local EventProducts = require(Shared.Utility.EventProducts)
 local GamepassUtil = require(Shared.Utility.GamepassUtil)
 local ProductIds = require(Shared.Configuration.ProductIds)
+local SeasonConfig = require(Shared.Configuration.SeasonConfig)
 
 ---> styles
 local Styles = require(UI.Styles)
@@ -679,7 +680,7 @@ return function()
 	end
 
 	local starterAvailable = ProductIds.StarterBundle ~= nil and not starterClaimed
-	local seasonAvailable = ProductIds.SeasonPass ~= nil
+	local seasonAvailable = SeasonConfig.ENABLED and ProductIds.SeasonPass ~= nil
 	local costumeAvailable = ProductIds.BobaBuddyCostume ~= nil
 
 	return c("Frame", {
@@ -741,10 +742,10 @@ return function()
 						"• Free track for everyone",
 					},
 					Image = "rbxassetid://16709481934",
-					Tag = "Season Pass",
+					Tag = "Brew Bonus",
 					TagColor = Styles.GOLD_MID,
 					Price = seasonPrice,
-					ButtonText = "View Season",
+					ButtonText = "View Brew Bonus",
 					ButtonColor = Styles.GREEN_DEEP,
 					OnClick = openSeasonTab,
 				})

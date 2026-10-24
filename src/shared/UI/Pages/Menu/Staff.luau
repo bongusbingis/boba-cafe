@@ -414,14 +414,13 @@ return function()
 
 		-- =========================================================================
 		-- WIRE POINT: Jack's ranking mechanism will be connected here
-		-- e.g., Knit.GetService("RankingService"):SetRankAsync(player, claimableTier.Rank)
+		-- e.g., Knit.GetService("RankingService"):SetRankAsync(player, claimableTier.RankId)
 		-- =========================================================================
 		print(
 			string.format(
-				"[STUB] Claim Group Rank initiated: Role=%s, Rank=%d, RoleId=%s (Player Level: %d)",
+				"[STUB] Claim Group Rank initiated: Role=%s, RankId=%s (Player Level: %d)",
 				claimableTier.RoleName,
-				claimableTier.Rank,
-				tostring(claimableTier.RoleId),
+				tostring(claimableTier.RankId),
 				level
 			)
 		)

@@ -115,7 +115,19 @@ return function()
 
 		it("treats rewardless tiers as nothing to claim", function()
 			local s = state(1, SeasonConfig.XpCumulative(2), true)
-			expect(SeasonConfig.ValidateClaim(s, 2)).to.equal("Claimed")
+			expect(SeasonConfig.ValidateClaim(s, 2)).to.equal("Empty")
+		end)
+
+		it("supports PREVIEW_SEASON_ID override", function()
+			SeasonConfig.PREVIEW_SEASON_ID = 99
+			expect(SeasonConfig.GetCurrentSeasonId(0)).to.equal(99)
+			SeasonConfig.PREVIEW_SEASON_ID = nil
+		end)
+
+		it("derives PERK_TIERS correctly from TRACK", function()
+			expect(SeasonConfig.PERK_TIERS.QuestSlot).to.equal(5)
+			expect(SeasonConfig.PERK_TIERS.HatchSpeed).to.equal(10)
+			expect(SeasonConfig.PERK_TIERS.QuestReroll).to.equal(15)
 		end)
 	end)
 
