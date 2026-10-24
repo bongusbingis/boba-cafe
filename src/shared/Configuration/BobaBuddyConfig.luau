@@ -31,6 +31,17 @@ return {
 		ANCHOR_ROBUX = 99,
 	},
 
+	COLORS = {
+		Stocker = {
+			Skin = Color3.fromRGB(130, 138, 93),
+			Liquid = Color3.fromRGB(193, 190, 66),
+		},
+		Cleaner = {
+			Skin = Color3.fromRGB(93, 128, 148),
+			Liquid = Color3.fromRGB(75, 175, 220),
+		},
+	},
+
 	UPSELL = {
 		TriggerCount = 1, -- Fires on 1st chore completion; configurable for A/B testing
 		DelaySeconds = 8, -- Delay after chore before presenting modal

@@ -56,5 +56,40 @@ return function()
 
 			expect(expiresAt - initialTime).to.equal(180)
 		end)
+
+		it("should have correct role colors for Stocker and Cleaner", function()
+			expect(BobaBuddyConfig.COLORS).to.be.ok()
+			expect(BobaBuddyConfig.COLORS.Stocker).to.be.ok()
+			expect(BobaBuddyConfig.COLORS.Stocker.Skin).to.equal(Color3.fromRGB(130, 138, 93))
+			expect(BobaBuddyConfig.COLORS.Stocker.Liquid).to.equal(Color3.fromRGB(193, 190, 66))
+
+			expect(BobaBuddyConfig.COLORS.Cleaner).to.be.ok()
+			expect(BobaBuddyConfig.COLORS.Cleaner.Skin).to.equal(Color3.fromRGB(93, 128, 148))
+			expect(BobaBuddyConfig.COLORS.Cleaner.Liquid).to.equal(Color3.fromRGB(75, 175, 220))
+		end)
+
+		it("should attach a FredokaOne nametag with username and role", function()
+			local ServerScriptService = game:GetService("ServerScriptService")
+			local Nametag = require(ServerScriptService.Server.Modules.BobaBuddyService.Nametag)
+			local player = makeFakePlayer(99902, true)
+
+			local billboard = Nametag.Attach(player.Character, player, "Cleaner")
+			expect(billboard).to.be.ok()
+			expect(billboard.Name).to.equal("Nametag")
+
+			local container = billboard:FindFirstChild("Container") :: Frame?
+			expect(container).to.be.ok()
+
+			local usernameLabel = container:FindFirstChild("UsernameLabel") :: TextLabel?
+			local roleLabel = container:FindFirstChild("RoleLabel") :: TextLabel?
+			expect(usernameLabel).to.be.ok()
+			expect(roleLabel).to.be.ok()
+
+			expect(usernameLabel.Text).to.equal(`${player.Name}'s Boba Buddy`)
+			expect(roleLabel.Text).to.equal("Cleaner")
+
+			player.Character:Destroy()
+			player:Destroy()
+		end)
 	end)
 end

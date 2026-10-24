@@ -5,6 +5,7 @@
 	consumable Boba Buddy companions (Cleaner and Stocker).
 --]]
 
+local PhysicsService = game:GetService("PhysicsService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Packages = ReplicatedStorage:WaitForChild("Packages")
@@ -18,6 +19,8 @@ local StockerBehavior = require(script.StockerBehavior)
 local FollowBehavior = require(script.FollowBehavior)
 local Nametag = require(script.Nametag)
 local AnimationController = require(script.AnimationController)
+
+local NPC_COLLISION_GROUP = "NPC"
 
 type ActiveBuddy = {
 	Model: Model,
@@ -40,6 +43,75 @@ local BobaBuddyService = Knit.CreateService({
 	_buddiesFolder = nil :: Folder?,
 })
 
+local function ensureCollisionGroups()
+	pcall(function()
+		if not PhysicsService:IsCollisionGroupRegistered(NPC_COLLISION_GROUP) then
+			PhysicsService:RegisterCollisionGroup(NPC_COLLISION_GROUP)
+		end
+		if not PhysicsService:IsCollisionGroupRegistered("Players") then
+			PhysicsService:RegisterCollisionGroup("Players")
+		end
+		PhysicsService:CollisionGroupSetCollidable(NPC_COLLISION_GROUP, "Players", false)
+		PhysicsService:CollisionGroupSetCollidable(NPC_COLLISION_GROUP, NPC_COLLISION_GROUP, false)
+		PhysicsService:CollisionGroupSetCollidable(NPC_COLLISION_GROUP, "Default", true)
+	end)
+end
+
+local function applyCollisionGroup(model: Model)
+	ensureCollisionGroups()
+	for _, descendant in model:GetDescendants() do
+		if descendant:IsA("BasePart") then
+			pcall(function()
+				descendant.CollisionGroup = NPC_COLLISION_GROUP
+			end)
+		end
+	end
+	model.DescendantAdded:Connect(function(descendant)
+		if descendant:IsA("BasePart") then
+			pcall(function()
+				descendant.CollisionGroup = NPC_COLLISION_GROUP
+			end)
+		end
+	end)
+end
+
+local function applyRoleColors(model: Model, chore: "Cleaner" | "Stocker")
+	local colorConfig = BobaBuddyConfig.COLORS and BobaBuddyConfig.COLORS[chore]
+	if not colorConfig then
+		return
+	end
+
+	local skinColor = colorConfig.Skin
+	local liquidColor = colorConfig.Liquid
+
+	-- 1. BodyColors
+	local bodyColors = model:FindFirstChildOfClass("BodyColors")
+	if bodyColors then
+		bodyColors.HeadColor3 = skinColor
+		bodyColors.LeftArmColor3 = skinColor
+		bodyColors.RightArmColor3 = skinColor
+		bodyColors.LeftLegColor3 = skinColor
+		bodyColors.RightLegColor3 = skinColor
+		bodyColors.TorsoColor3 = skinColor
+	end
+
+	-- 2. Character limb BaseParts
+	for _, child in model:GetChildren() do
+		if child:IsA("BasePart") and child.Name ~= "HumanoidRootPart" and child.Name ~= "BobaCostume" then
+			child.Color = skinColor
+		end
+	end
+
+	-- 3. BobaCostume.Liquid
+	local costume = model:FindFirstChild("BobaCostume")
+	if costume then
+		local liquid = costume:FindFirstChild("Liquid")
+		if liquid and liquid:IsA("BasePart") then
+			liquid.Color = liquidColor
+		end
+	end
+end
+
 function BobaBuddyService:KnitInit()
 	local folder = workspace:FindFirstChild("BobaBuddies") :: Folder?
 	if not folder then
@@ -48,6 +120,7 @@ function BobaBuddyService:KnitInit()
 		folder.Parent = workspace
 	end
 	self._buddiesFolder = folder
+	ensureCollisionGroups()
 end
 
 function BobaBuddyService:KnitStart()
@@ -152,6 +225,12 @@ function BobaBuddyService:SpawnBuddyForPlayer(player: Player, chore: "Cleaner" |
 	model:SetAttribute("Chore", chore)
 	model:SetAttribute("BuiltBy", "BOBA-BUDDY-CONSUMABLE-001")
 
+	-- Apply role skin & liquid colors
+	applyRoleColors(model, chore)
+
+	-- Put in NPC collision group so buddy never collides with players or customer NPCs
+	applyCollisionGroup(model)
+
 	local ownerChar = player.Character
 	local ownerRoot = ownerChar and ownerChar:FindFirstChild("HumanoidRootPart")
 	if ownerRoot then
@@ -186,9 +265,8 @@ function BobaBuddyService:SpawnBuddyForPlayer(player: Player, chore: "Cleaner" |
 
 	local animController = AnimationController.Attach(model)
 
-	Nametag.Attach(model, player, chore, function()
-		return math.max(0, expiresAt - os.clock())
-	end)
+	-- FredokaOne nametag: "{username}'s Boba Buddy" with chore role underneath and nothing else
+	Nametag.Attach(model, player, chore)
 
 	local activeBuddy: ActiveBuddy = {
 		Model = model,

@@ -2,7 +2,10 @@
 --[[
 	FollowBehavior
 	Smooth owner-following behavior for Boba Buddy instances.
+	Utilizes Navigator (PathfindingService) to avoid getting stuck on obstacles, walls, and counters.
 --]]
+
+local Navigator = require(script.Parent.Navigator)
 
 local FollowBehavior = {}
 
@@ -13,7 +16,7 @@ local TELEPORT_DISTANCE = 45
 function FollowBehavior.Start(model: Model, owner: Player, isBusy: () -> boolean): () -> ()
 	local running = true
 	local humanoid = model:FindFirstChildOfClass("Humanoid")
-	local root = model.PrimaryPart or model:FindFirstChild("HumanoidRootPart")
+	local root = model.PrimaryPart or model:FindFirstChild("HumanoidRootPart") :: BasePart?
 
 	-- Disable collisions on limbs so buddy doesn't shove players or NPCs
 	for _, desc in model:GetDescendants() do
@@ -48,11 +51,22 @@ function FollowBehavior.Start(model: Model, owner: Player, isBusy: () -> boolean
 				continue
 			end
 
-			-- Walk towards owner if beyond follow distance
+			-- Walk towards owner if beyond follow distance using PathfindingService
 			if dist > FOLLOW_DISTANCE_MAX then
 				local direction = (root.Position - ownerRoot.Position).Unit
 				local targetPos = ownerRoot.Position + direction * FOLLOW_DISTANCE_MIN
-				humanoid:MoveTo(targetPos)
+
+				Navigator.WalkTo(model, targetPos, {
+					ArriveRadius = FOLLOW_DISTANCE_MAX,
+					Timeout = 3,
+					ShouldAbort = function()
+						if not running or not model.Parent or isBusy() or not ownerRoot.Parent then
+							return true
+						end
+						local newDist = (ownerRoot.Position - root.Position).Magnitude
+						return newDist <= FOLLOW_DISTANCE_MAX or newDist > TELEPORT_DISTANCE
+					end,
+				})
 			elseif dist < FOLLOW_DISTANCE_MIN then
 				-- Close enough: idle
 				humanoid:MoveTo(root.Position)

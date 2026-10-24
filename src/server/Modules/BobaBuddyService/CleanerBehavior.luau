@@ -2,7 +2,7 @@
 --[[
 	CleanerBehavior
 	Autonomous chore behavior for Boba Buddy: Cleaner.
-	Scans for mopping spills within 25 studs of owner, walks to them,
+	Scans for mopping spills within 25 studs of owner, navigates to them via PathfindingService,
 	plays cleaning animation, and cleans the spill without player quest/stat credit.
 --]]
 
@@ -12,6 +12,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 
 local Knit = require(Packages.Knit)
 local BobaBuddyConfig = require(Shared.Configuration.BobaBuddyConfig)
+local Navigator = require(script.Parent.Navigator)
 
 local CleanerBehavior = {}
 
@@ -72,31 +73,24 @@ function CleanerBehavior.Start(model: Model, owner: Player, setBusy: (boolean) -
 			bestSpill.Object:SetAttribute("ClaimedByBuddy", true)
 			setBusy(true)
 
-			-- Move to spill
-			humanoid:MoveTo(bestPos)
-			local reached = false
-			local moveConn
-			moveConn = humanoid.MoveToFinished:Connect(function()
-				reached = true
-			end)
-
-			local startMove = os.clock()
-			while not reached and os.clock() - startMove < 6 do
-				if not running or not model.Parent or not bestSpill.Object or not bestSpill.Object.Parent then
-					break
-				end
-				local currentDist = (root.Position - bestPos).Magnitude
-				if currentDist <= 4 then
-					break
-				end
-				task.wait(0.2)
-			end
-			if moveConn then
-				moveConn:Disconnect()
-			end
+			-- Navigate to spill using PathfindingService
+			local reached = Navigator.WalkTo(model, bestPos, {
+				ArriveRadius = 4,
+				Timeout = 8,
+				ShouldAbort = function()
+					return not running or not model.Parent or not bestSpill.Object or not bestSpill.Object.Parent
+				end,
+			})
 
 			-- Clean spill if still valid
-			if running and model.Parent and bestSpill.Object and bestSpill.Object.Parent and not bestSpill.Cleaning then
+			if
+				reached
+				and running
+				and model.Parent
+				and bestSpill.Object
+				and bestSpill.Object.Parent
+				and not bestSpill.Cleaning
+			then
 				-- Play cleaning animation if present
 				local animator = humanoid:FindFirstChildOfClass("Animator")
 				local mopAnimObj = bestSpill.Object:FindFirstChild("MoppingAnim")
@@ -123,15 +117,18 @@ function CleanerBehavior.Start(model: Model, owner: Player, setBusy: (boolean) -
 					track:Destroy()
 				end
 
-				-- Clean the spill (CleanedBy stays nil so no player stat/quest credit, but cafe cleanliness rises)
+				-- Clean spill via SpillService
 				pcall(function()
-					bestSpill:Clean()
+					spillService:Clean(bestSpill, nil, true)
 				end)
 			end
 
+			if bestSpill and bestSpill.Object and bestSpill.Object.Parent then
+				bestSpill.Object:SetAttribute("ClaimedByBuddy", nil)
+			end
 			setBusy(false)
 
-			-- Cooldown before next clean
+			-- Cooldown before next clean check
 			task.wait(BobaBuddyConfig.CLEANER.COOLDOWN_SECONDS)
 		end
 	end)
