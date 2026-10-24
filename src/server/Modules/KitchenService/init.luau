@@ -383,7 +383,7 @@ function KitchenService:KnitInit()
 		self.Client.InteractionFailed:Fire(player, reason)
 	end, function(player: Player, _recipeData: RecipeData, model: Model)
 		-- Station interaction succeeded: decrement stock if applicable
-		local prompt = self._modelPrompts[model]
+		local prompt = self._modelPrompts[model] or model:FindFirstChildWhichIsA("ProximityPrompt", true)
 		if prompt then
 			local currentStock = prompt:GetAttribute("CurrentStock")
 			local defaultStock = prompt:GetAttribute("DefaultStock") or KitchenConfig.GetDefaultStock(model.Name)
@@ -423,7 +423,8 @@ function KitchenService:KnitStart()
 		local stockCapacity = KitchenConfig.GetDefaultStock(itemName)
 
 		for _, model in models do
-			local prompt = PromptBuilder.Attach(model, {
+			local prompt: ProximityPrompt
+			prompt = PromptBuilder.Attach(model, {
 				Label = itemName,
 				ActionText = "Interact",
 				HoldDuration = recipeData.HoldDuration,
@@ -435,14 +436,20 @@ function KitchenService:KnitStart()
 					return
 				end
 
+				local targetPrompt = prompt
+					or self._modelPrompts[model]
+					or model:FindFirstChildWhichIsA("ProximityPrompt", true)
+
 				-- If player is carrying a restock box, restock the station:
 				if player:GetAttribute("Restocking") == true then
-					self:RestockStation(player, model, prompt)
+					if targetPrompt then
+						self:RestockStation(player, model, targetPrompt)
+					end
 					return
 				end
 
 				-- Normal drink preparation: verify station has stock
-				local currentStock = prompt:GetAttribute("CurrentStock")
+				local currentStock = targetPrompt and targetPrompt:GetAttribute("CurrentStock")
 				if currentStock ~= nil and currentStock <= 0 then
 					local okPerk, perkService = pcall(function()
 						return Knit.GetService("PerkService")
