@@ -431,6 +431,7 @@ local CustomerConfig = {
 	-- and the NPC is Scripted (its patience does not tick).
 	FIRST_SESSION_COUNT = 3, -- TUNING
 	AUTO_GRANT_FIRST_ORDER = true,
+	AUTO_GRANT_TUTORIAL_ORDERS = 3,
 	-- Field names copied from the ORDER_POOL entries above (Size lives in
 	-- CustomInfo, as Rules.PickOrder writes it).
 	FIRST_SESSION_ORDERS = { -- TUNING

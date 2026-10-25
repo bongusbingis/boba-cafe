@@ -1,5 +1,6 @@
 ---> Services
 
+local CollectionService = game:GetService("CollectionService")
 local ContextActionService = game:GetService("ContextActionService")
 local MarketplaceService = game:GetService("MarketplaceService")
 local Players = game:GetService("Players")
@@ -41,6 +42,8 @@ local RESCUE_TOAST_COOLDOWN_SECONDS = 20
 local IMPATIENT_TEXT = "Your customer is getting impatient!"
 local WAIT_REGISTER_TEXT = "Wait at the register for your first customer!"
 local WAIT_REGISTER_TOAST_COOLDOWN_SECONDS = 15
+local WRONG_DRINK_TOAST_COOLDOWN_SECONDS = 10
+local lastWrongDrinkToastAt = -math.huge
 
 -- TUNING
 local GUIDANCE_INTERVAL_SECONDS = 0.2 -- how often the hint target is recomputed
@@ -405,10 +408,79 @@ local function fallbackRegisterHint(rootPart: BasePart): boolean
 	local now = os.clock()
 	if now - lastWaitRegisterToastAt >= WAIT_REGISTER_TOAST_COOLDOWN_SECONDS then
 		lastWaitRegisterToastAt = now
-		toast(WAIT_REGISTER_TEXT)
+		local text = if runtime.CustomersSeen == 0
+			then WAIT_REGISTER_TEXT
+			else "Head to the register to take your next customer's order!"
+		toast(text)
 	end
 
 	return true
+end
+
+local function getNearestTrashCan(origin: Vector3): Model?
+	local candidates = CollectionService:GetTagged("TrashCan")
+	if #candidates == 0 then
+		local assets = workspace:FindFirstChild("Assets")
+		local kitchen = assets and assets:FindFirstChild("Kitchen")
+		local trashFolder = kitchen and kitchen:FindFirstChild("TrashCans")
+		if trashFolder then
+			candidates = trashFolder:GetChildren()
+		end
+	end
+
+	local bestModel: Model? = nil
+	local bestDist = math.huge
+	for _, inst in candidates do
+		local model: Model? = if inst:IsA("Model") then inst else inst:FindFirstAncestorWhichIsA("Model")
+		if model then
+			local part = anchorPart(model)
+			if part then
+				local dist = (part.Position - origin).Magnitude
+				if dist < bestDist then
+					bestDist = dist
+					bestModel = model
+				end
+			end
+		end
+	end
+	return bestModel
+end
+
+local function resolvePrerequisiteToast(stationName: string?): string
+	local player = Players.LocalPlayer
+	local character = player and player.Character
+	local heldTool = character and character:FindFirstChildWhichIsA("Tool")
+
+	if not heldTool then
+		local backpack = player and player:FindFirstChild("Backpack")
+		local backpackTool = backpack and backpack:FindFirstChildWhichIsA("Tool")
+		if backpackTool then
+			return "Equip your cup from your backpack!"
+		end
+		return "Grab a cup from the cup dispenser first!"
+	end
+
+	local itemAttr = heldTool:GetAttribute("Item")
+	local toolName = heldTool.Name
+	local sName = stationName or ""
+	local isSyrup = string.find(sName, "Syrup") ~= nil
+	local isTapioca = string.find(sName, "Tapioca") ~= nil
+
+	if sName == "Milk" then
+		if itemAttr == "Milk" or string.find(toolName, "%+ Milk") ~= nil then
+			return "You already added milk! Add Syrup next."
+		end
+	elseif isTapioca then
+		if itemAttr == "Milk" or string.find(toolName, "%+ Milk") ~= nil then
+			return "Add Syrup to your cup first!"
+		else
+			return "Add Milk to your cup first!"
+		end
+	elseif isSyrup then
+		return "Add Milk to your cup first!"
+	end
+
+	return "Grab a cup from the cup dispenser first!"
 end
 
 local function guidanceStep(serveTarget: Model?)
@@ -418,8 +490,24 @@ local function guidanceStep(serveTarget: Model?)
 	local specs = KitchenGuidance.ResolveSpecs(order, OrderSpec.FromOrderItem)
 	local candidates = allToolCandidates()
 	local heldAttrs = heldToolAttributes()
-	local activeSpec, allDone = KitchenGuidance.FindActiveSpec(specs, candidates, heldAttrs)
+	local activeAttrs = heldAttrs
+	if activeAttrs == nil and #candidates > 0 then
+		local bestCandidate = nil
+		local bestStep = 1
+		for _, cand in candidates do
+			if cand.Item ~= nil then
+				local step = if specs[1] then OrderSpec.StepState(specs[1], cand) else 1
+				if step >= bestStep then
+					bestStep = step
+					bestCandidate = cand
+				end
+			end
+		end
+		activeAttrs = bestCandidate or candidates[1]
+	end
+	local activeSpec, allDone = KitchenGuidance.FindActiveSpec(specs, candidates, activeAttrs)
 
+	local isWrongDrink = false
 	local guidance: KitchenGuidance.Guidance? = nil
 	if allDone then
 		guidance = {
@@ -435,9 +523,11 @@ local function guidanceStep(serveTarget: Model?)
 			Item = if activeSpec then activeSpec.Item elseif specs[1] then specs[1].Item else "",
 		}
 	elseif activeSpec ~= nil then
-		guidance = KitchenGuidance.Compute(activeSpec, heldAttrs)
+		guidance = KitchenGuidance.Compute(activeSpec, activeAttrs)
 		if guidance ~= nil and guidance.IsServe and not allDone then
 			guidance.IsServe = false
+			isWrongDrink = true
+			guidance.Label = "Throw wrong drink in Trash"
 		end
 	end
 
@@ -466,11 +556,21 @@ local function guidanceStep(serveTarget: Model?)
 	end
 
 	local target: Model? = nil
-	if guidance.IsServe then
+	if isWrongDrink then
+		target = getNearestTrashCan(rootPart.Position)
+	elseif guidance.IsServe then
 		-- The assigned NPC. Which model that is comes from the M1.4f ticket (see evidence).
 		target = serveTarget
 	elseif guidance.Station then
 		target = nearestModel(guidance.Station, rootPart.Position)
+	end
+
+	if isWrongDrink then
+		local now = os.clock()
+		if now - lastWrongDrinkToastAt >= WRONG_DRINK_TOAST_COOLDOWN_SECONDS then
+			lastWrongDrinkToastAt = now
+			toast("Wrong recipe! Throw it in the trash can to try again.")
+		end
 	end
 
 	-- Never more than MAX_HIGHLIGHTS; today one hint target uses one slot.
@@ -486,11 +586,12 @@ local function guidanceStep(serveTarget: Model?)
 	end
 
 	local targetPart = target and anchorPart(target)
-	local beamAllowed = KitchenGuidance.ShouldShowBeam({
-		CustomersSeen = runtime.CustomersSeen,
-		ItemSeenBefore = runtime.SeenItems[guidance.Item] == true,
-		IdleSeconds = os.clock() - runtime.LastChange,
-	})
+	local beamAllowed = isWrongDrink
+		or KitchenGuidance.ShouldShowBeam({
+			CustomersSeen = runtime.CustomersSeen,
+			ItemSeenBefore = runtime.SeenItems[guidance.Item] == true,
+			IdleSeconds = os.clock() - runtime.LastChange,
+		})
 	if targetPart and beamAllowed then
 		showBeam(rootPart, targetPart)
 	elseif runtime.Beam then
@@ -740,7 +841,7 @@ local function startGuidance()
 		end
 	end)
 
-	Knit.GetService("KitchenService").InteractionFailed:Connect(function(reason: string)
+	Knit.GetService("KitchenService").InteractionFailed:Connect(function(reason: string, stationName: string?)
 		if reason == "ClockedOut" then
 			offerClockIn()
 		elseif reason == "OutOfStock" then
@@ -749,7 +850,7 @@ local function startGuidance()
 			typeof(reason) == "string"
 			and (string.find(reason, "ToolNameValidityCheck") or string.find(reason, "EmptyTool"))
 		then
-			toast("You need to grab a cup first! Check the cup dispensers.")
+			toast(resolvePrerequisiteToast(stationName))
 		end
 	end)
 end

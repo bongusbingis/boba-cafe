@@ -137,20 +137,68 @@ Recipes.Items = {
 	["Sink"] = {
 		Sound = "Sink",
 		SkillMoment = true, -- BIG-B7 pour meter
-		HoldDuration = 3,
+		HoldDuration = 1,
 		Actions = {
-			{ "ToolNameValidityCheck", { "#Cup|!Milk" } },
+			{
+				"ToolNameValidityCheck",
+				{
+					"#Cup|#Mug|#Milk|#Boba|#Water|#Regular|#Decaf|#Espresso|#Cappuccino|#Americano|#Cortado|#Koa Coffee|#Tea|#Hot Chocolate",
+				},
+			},
 			{
 				"SelectFrom",
 				{
 					Title = "Sink",
-					Text = "Choose water temperature:",
+					Text = "Choose an option:",
 					Buttons = {
+						{ Text = "Wash Cup", Color = Color3.fromRGB(120, 200, 150) },
 						{ Text = "Cold Water", Color = Color3.fromRGB(100, 170, 240) },
 						{ Text = "Hot Water", Color = Color3.fromRGB(210, 100, 80) },
 					},
 				},
 				{
+					["Wash Cup"] = {
+						{ "SetToolHoldingProperty", "Liquid", "Transparency", 1 },
+						{ "SetToolHoldingProperty", "BobaBalls", "Transparency", 1 },
+						{ "SetToolHoldingProperty", "CoffeeLid", "Transparency", 1 },
+						{
+							"RenameToolHolding",
+							function(old: string, tool: Tool?)
+								if (tool and tool.Name:find("Mug")) or old:find("Mug") ~= nil then
+									return "Mug"
+								end
+								local size = "Medium"
+								if tool then
+									local sizeVal = tool:FindFirstChild("Size")
+									if sizeVal and sizeVal:IsA("StringValue") and sizeVal.Value ~= "" then
+										size = sizeVal.Value
+									elseif tool:GetAttribute("Size") then
+										size = tostring(tool:GetAttribute("Size"))
+									end
+								end
+								if size ~= "Small" and size ~= "Medium" and size ~= "Large" then
+									local first = old:split(" ")[1]
+									if first == "Small" or first == "Medium" or first == "Large" then
+										size = first
+									else
+										size = "Medium"
+									end
+								end
+								local isClear = true
+								if tool then
+									if tool:FindFirstChild("CoffeeCup") or tool:FindFirstChild("CoffeeHolder") then
+										isClear = false
+									end
+								else
+									if old:find("Cup") and not old:find("Clear") then
+										isClear = false
+									end
+								end
+								return size .. (if isClear then " Clear Cup" else " Cup")
+							end,
+						},
+						{ "SetToolAttributes", { ClearAttributes = true, Item = "Clear Cup" } },
+					},
 					["Cold Water"] = {
 						{ "SetToolHoldingProperty", "Liquid", "Color", Color3.fromRGB(100, 186, 253) },
 						{ "SetToolHoldingProperty", "Liquid", "Transparency", 0 },
@@ -158,6 +206,9 @@ Recipes.Items = {
 							"RenameToolHolding",
 							function(old: string)
 								local size = old:split(" ")[1]
+								if size ~= "Small" and size ~= "Medium" and size ~= "Large" then
+									size = "Medium"
+								end
 								return size .. " Cold Water"
 							end,
 						},
@@ -170,6 +221,9 @@ Recipes.Items = {
 							"RenameToolHolding",
 							function(old: string)
 								local size = old:split(" ")[1]
+								if size ~= "Small" and size ~= "Medium" and size ~= "Large" then
+									size = "Medium"
+								end
 								return size .. " Hot Water"
 							end,
 						},
@@ -183,7 +237,7 @@ Recipes.Items = {
 	["Milk"] = {
 		Sound = "Pour",
 		SkillMoment = true, -- BIG-B7 pour meter
-		HoldDuration = 2,
+		HoldDuration = 1,
 		Actions = {
 			{ "ToolNameValidityCheck", { "#Clear Cup|=Mug" } },
 			{ "SetToolHoldingProperty", "Liquid", "Color", Color3.new(1, 1, 1) },
@@ -276,7 +330,8 @@ Recipes.Items = {
 
 	["Blender"] = {
 		Sound = "Blender",
-		HoldDuration = 5,
+		HoldDuration = 2.5,
+		ActionText = "Blend (Optional)",
 		Actions = {
 			{ "ToolNameValidityCheck", { "#Milk", "#Syrup" } },
 			{
@@ -344,7 +399,7 @@ for name: string, color: Color3 in Recipes.Syrups do
 	Recipes.Items[name .. " Syrup"] = {
 		Sound = "Pour",
 		SkillMoment = true, -- BIG-B7 pour meter
-		HoldDuration = 2,
+		HoldDuration = 1,
 		Actions = {
 			{ "ToolNameValidityCheck", { "#Cup %+ Milk" } },
 			{ "SetToolHoldingProperty", "Liquid", "Color", color },
@@ -359,7 +414,7 @@ for name: string, color: Color3 in Recipes.Tapioca do
 	name = name .. " Tapioca"
 	Recipes.Items[name] = {
 		Sound = "Pop",
-		HoldDuration = 2,
+		HoldDuration = 1,
 		Actions = {
 			-- Accepts "Milk + [Flavor] Syrup" (straight from the syrup step) and the
 			-- blended "[Flavor] Milk". Cup names ("... + Milk") are rejected.

@@ -1,7 +1,0 @@
-# PET-COMPLETION repair evidence
-
-- RESULT: PASS (focused static gates). Source state: dirty shared working tree on 2026-10-17; preserved existing changes. Final SHA-256: `CapsuleService.luau` `7C1E387D5FBBE22EB308210A595CC7D1EEA7D5C435FAFC991BAFCE52F042583E`; `ProcessReceipt.server.luau` `4E0760C7DB979ED3DBFAEDF255E8CF142B33C4706186661BF184E914CC3DF05B`.
-- Changed: `src/server/Modules/CapsuleService.luau`, `src/server/Scripts/ProcessReceipt.server.luau`, and this evidence file. Pet recovery reads wrapper properties via nil-safe `GetProperties()` checks. Skip Hatch clones the pending record and updates only `TimeAccumulated`, preserving `HatchId`, `MinTier`, and unknown future fields.
-- CapsuleService check: `wsl bash -lc 'cd /mnt/c/Users/jackc/desktop/boba-cafe && . .review/agent-workflow/tools/wsl/env.sh && stylua src/server/Modules/CapsuleService.luau && gate src/server/Modules/CapsuleService.luau'` — PASS; Selene 0 new findings, StyLua pass, Rojo build pass, GATE pass.
-- ProcessReceipt check: `wsl bash -lc 'cd /mnt/c/Users/jackc/desktop/boba-cafe && . .review/agent-workflow/tools/wsl/env.sh && stylua src/server/Scripts/ProcessReceipt.server.luau && gate src/server/Scripts/ProcessReceipt.server.luau'` — PASS; Selene 0 new findings, StyLua pass, Rojo build pass, GATE pass.
-- UNVERIFIED: no Studio, Play, or TestEZ. Runtime post-write throw/nil recovery, profile persistence, and receipt timing remain unexercised.

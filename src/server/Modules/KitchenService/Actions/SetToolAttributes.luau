@@ -53,6 +53,49 @@ local function SetToolAttributes(player: Player, _actionModel: Model, attributes
 		tool:SetAttribute(name, value)
 	end
 
+	if attributes.ClearAttributes == true then
+		for _, attrName in { "ClearAttributes", "Syrup", "Tapioca", "Iced", "Sugar", "Lid", "Blended", "Served" } do
+			tool:SetAttribute(attrName, nil)
+		end
+		if tool.Name:find("Mug") ~= nil then
+			tool:SetAttribute("Item", "Mug")
+			tool:SetAttribute("Size", "Mug")
+		else
+			local isClear = tool:FindFirstChild("CoffeeCup") == nil and tool:FindFirstChild("CoffeeHolder") == nil
+			local sizeVal = tool:FindFirstChild("Size")
+			local size = (sizeVal and sizeVal:IsA("StringValue") and sizeVal.Value ~= "" and sizeVal.Value)
+				or tool:GetAttribute("Size")
+				or "Medium"
+			if size ~= "Small" and size ~= "Medium" and size ~= "Large" then
+				size = "Medium"
+			end
+			tool:SetAttribute("Item", if isClear then "Clear Cup" else "Cup")
+			tool:SetAttribute("Size", size)
+		end
+		for _, desc in tool:GetDescendants() do
+			if
+				desc.Name == "BobaBalls"
+				or desc.Name == "Tapioca"
+				or desc.Name == "Liquid"
+				or desc.Name == "CoffeeLid"
+			then
+				local target: Instance = desc
+				if
+					(desc:IsA("SpecialMesh") or desc:IsA("FileMesh"))
+					and desc.Parent
+					and desc.Parent:IsA("BasePart")
+				then
+					target = desc.Parent
+				end
+				pcall(function()
+					if target:IsA("BasePart") then
+						target.Transparency = 1
+					end
+				end)
+			end
+		end
+	end
+
 	if attributes.Tapioca ~= nil and typeof(attributes.Tapioca) == "string" then
 		local ReplicatedStorage = game:GetService("ReplicatedStorage")
 		local Recipes = require(ReplicatedStorage.Shared.Kitchen.Recipes)

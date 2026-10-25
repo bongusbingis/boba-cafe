@@ -1,5 +1,0 @@
-RESULT: PASS
-CHANGED: `src/server/Modules/CapsuleService.luau` — first-shift-only async grant; marker-first guard; full inventory preflight; rollback on nil Insert.
-GATE: WSL StyLua and `gate src/server/Modules/CapsuleService.luau` passed (Selene new=0, StyLua OK, Rojo build passed).
-STUDIO: TestEZ passed (430 tests). In Play on non-live placeId 89999123284040, a temporary server Script fired the actual `ShiftEnding` signal with `First=true, Stars=0`: inventory changed 0→1, marker was added, and a duplicate signal added nothing. This simulates the handler, not the full customer gameplay shift. Test profile inventory, marker, XP, and level were restored; temp Script removed; `RunTests` cleared.
-RISKS: Full-inventory branch was not runtime-tested. No atomic save transaction exists; a rare interruption between marker and item writes can persist the marker without the capsule. The initial harness attempt omitted `Stars` and triggered a ProgressionService warning; the corrected run included it and passed.

@@ -6,23 +6,23 @@
 ---> Helpers
 
 local function getHeldTool(player: Player): Tool?
-    return (player.Character and player.Character:FindFirstChildWhichIsA("Tool"))
+	return (player.Character and player.Character:FindFirstChildWhichIsA("Tool"))
 end
 
 ---> Action
 
 local function RenameToolHolding(player: Player, _actionModel: Model, newName: string): boolean
-    local tool = getHeldTool(player)
-    if not tool then
-        return false
-    end
+	local tool = getHeldTool(player)
+	if not tool then
+		return false
+	end
 
-    if typeof(newName) == "function" then
-        newName = newName(tool.Name)
-    end
+	if typeof(newName) == "function" then
+		newName = newName(tool.Name, tool)
+	end
 
-    tool.Name = newName
-    return true
+	tool.Name = newName
+	return true
 end
 
 return RenameToolHolding

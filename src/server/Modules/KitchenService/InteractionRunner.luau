@@ -72,7 +72,7 @@ type SequenceState = {
 type InteractionRunner = {
 	_debounces: { [Player]: boolean },
 	_registry: ActionRegistry,
-	_onFailure: (player: Player, reason: string) -> (),
+	_onFailure: (player: Player, reason: string, stationName: string?) -> (),
 	_onSuccess: ((player: Player, recipeData: RecipeData) -> ())?,
 	_pourMoments: any?,
 	Run: (self: InteractionRunner, player: Player, recipeData: RecipeData, model: Model) -> (),
@@ -103,7 +103,7 @@ InteractionRunner.__index = InteractionRunner
 
 function InteractionRunner.new(
 	registry: ActionRegistry,
-	onFailure: (player: Player, reason: string) -> (),
+	onFailure: (player: Player, reason: string, stationName: string?) -> (),
 	onSuccessOrPours: any?,
 	pourMoments: any?
 ): InteractionRunner
@@ -296,8 +296,17 @@ function InteractionRunner:Run(player: Player, recipeData: RecipeData, model: Mo
 		end
 
 		if not result.Success then
-			self._onFailure(player, result.Error :: string)
+			self._onFailure(player, result.Error :: string, model.Name)
 		else
+			local sparksPart = model:FindFirstChild("Sparks", true)
+			if sparksPart and sparksPart:IsA("BasePart") then
+				for _, emitter in sparksPart:GetChildren() do
+					if emitter:IsA("ParticleEmitter") then
+						emitter:Emit(15)
+					end
+				end
+			end
+
 			if recipeData.Sound then
 				local kitchenSounds = getKitchenSounds()
 				local soundTemplate = kitchenSounds and kitchenSounds:FindFirstChild(recipeData.Sound)

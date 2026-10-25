@@ -1201,7 +1201,7 @@ function CustomerService:_dispatchUnassignedNpcs()
 	end
 end
 
-function CustomerService:_checkAutoGrantFirstOrder(player: Player)
+function CustomerService:_checkAutoGrantFirstOrder(player: Player, servedCountOverride: number?)
 	if not CustomerConfig.AUTO_GRANT_FIRST_ORDER then
 		return
 	end
@@ -1232,8 +1232,9 @@ function CustomerService:_checkAutoGrantFirstOrder(player: Player)
 			self._firstOrderGranting[player] = nil
 			return
 		end
-		local served = self:_readServedCount(player)
-		if served ~= 0 then
+		local served = servedCountOverride or self:_readServedCount(player)
+		local limit = CustomerConfig.AUTO_GRANT_TUTORIAL_ORDERS or CustomerConfig.FIRST_SESSION_COUNT
+		if served >= limit then
 			self._firstOrderGranting[player] = nil
 			return
 		end
@@ -1241,12 +1242,12 @@ function CustomerService:_checkAutoGrantFirstOrder(player: Player)
 			self._firstOrderGranting[player] = nil
 			return
 		end
-		self:_autoGrantFirstOrder(player)
+		self:_autoGrantFirstOrder(player, served)
 		self._firstOrderGranting[player] = nil
 	end)
 end
 
-function CustomerService:_autoGrantFirstOrder(player: Player)
+function CustomerService:_autoGrantFirstOrder(player: Player, served: number?)
 	if not self.Enabled or self._context == nil then
 		return
 	end
@@ -1257,7 +1258,9 @@ function CustomerService:_autoGrantFirstOrder(player: Player)
 		return
 	end
 
-	local firstOrderConfig = CustomerConfig.FIRST_SESSION_ORDERS[1]
+	local servedCount = served or self:_readServedCount(player)
+	local orderIndex = math.clamp(servedCount + 1, 1, #CustomerConfig.FIRST_SESSION_ORDERS)
+	local firstOrderConfig = CustomerConfig.FIRST_SESSION_ORDERS[orderIndex]
 	local order: Rules.OrderItem = {
 		Category = firstOrderConfig.Category,
 		Item = firstOrderConfig.Item,
@@ -1302,7 +1305,11 @@ function CustomerService:_autoGrantFirstOrder(player: Player)
 		targetNpc.OrderRolled = true
 		targetNpc.RolledScriptedFor = player.UserId
 		self._lastOrder[player] = order
-		self._firstServe[player] = true
+		if servedCount == 0 then
+			self._firstServe[player] = true
+		else
+			self._firstServe[player] = nil
+		end
 		targetNpc:ClearVariant()
 		targetNpc:SetAssignment(player.UserId, 0, true)
 		if pickupPos ~= nil then
@@ -1336,7 +1343,11 @@ function CustomerService:_autoGrantFirstOrder(player: Player)
 		npc.OrderRolled = true
 		npc.RolledScriptedFor = player.UserId
 		self._lastOrder[player] = order
-		self._firstServe[player] = true
+		if servedCount == 0 then
+			self._firstServe[player] = true
+		else
+			self._firstServe[player] = nil
+		end
 		npc:ClearVariant()
 		npc:SetAssignment(player.UserId, 0, true)
 
@@ -1812,12 +1823,12 @@ function CustomerService:_onServeTriggered(npc: Npc.Npc, player: Player)
 		pay += pourTip
 	end
 	self._currency:Modify(player, "BobaBucks", pay, "Gameplay")
+	local servedBefore = self:_readServedCount(player)
 	pcall(function()
 		local a = Knit.GetService("AnalyticsEvents")
 		a:OnboardingFunnel(player, 4, "FirstOrderServed")
 		a:Funnel(player, 4, "FirstServe")
 
-		local servedBefore = self:_readServedCount(player)
 		if (servedBefore + 1) >= CustomerConfig.FIRST_SESSION_COUNT then
 			a:OnboardingFunnel(player, 5, "OnboardingCompleted")
 			a:Funnel(player, 5, "OnboardingCompleted")
@@ -1902,6 +1913,15 @@ function CustomerService:_onServeTriggered(npc: Npc.Npc, player: Player)
 	self:_clearTicket(npc)
 	if self._context ~= nil then
 		self._context.ReleasePickupSpot(npc)
+	end
+	local servedNow = servedBefore + 1
+	local limit = CustomerConfig.AUTO_GRANT_TUTORIAL_ORDERS or CustomerConfig.FIRST_SESSION_COUNT
+	if servedNow < limit then
+		task.delay(1, function()
+			if player.Parent == Players and self.Enabled then
+				self:_checkAutoGrantFirstOrder(player, servedNow)
+			end
+		end)
 	end
 	if rescue and holder ~= nil and holder ~= player then
 		self._dialog:Notify(holder, {

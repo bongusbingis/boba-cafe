@@ -398,8 +398,8 @@ function KitchenService:KnitInit()
 	self._registry = registry
 
 	self._pours = PourMoments.new(self)
-	self._runner = InteractionRunner.new(registry, function(player: Player, reason: string)
-		self.Client.InteractionFailed:Fire(player, reason)
+	self._runner = InteractionRunner.new(registry, function(player: Player, reason: string, stationName: string?)
+		self.Client.InteractionFailed:Fire(player, reason, stationName)
 	end, function(player: Player, _recipeData: RecipeData, model: Model)
 		-- Station interaction succeeded: decrement stock if applicable
 		local prompt = self._modelPrompts[model] or model:FindFirstChildWhichIsA("ProximityPrompt", true)
@@ -445,7 +445,7 @@ function KitchenService:KnitStart()
 			local prompt: ProximityPrompt
 			prompt = PromptBuilder.Attach(model, {
 				Label = itemName,
-				ActionText = "Interact",
+				ActionText = (recipeData :: any).ActionText or "Interact",
 				HoldDuration = recipeData.HoldDuration,
 				Stock = stockCapacity,
 				Theme = "Restock",

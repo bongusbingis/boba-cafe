@@ -1,3 +1,5 @@
+**WARNING: This is a historical append-only ledger. Some decisions here are superseded. Read `CURRENT_STATE.md` for the active rules.**
+
 # Architectural & Optimization Decisions
 
 Newest first. Each entry is `## <GOAL> / DEC-###: <title>` with Date, Source, and Decision. Prime is the only writer. Numbering continues; never reuse a number.
