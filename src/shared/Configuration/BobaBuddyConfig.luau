@@ -59,9 +59,9 @@ return {
 	},
 
 	NPC_SLIP = {
-		RATING_PENALTY_PERCENT = 5,
+		RATING_PENALTY_PERCENT = 1,
 		FALL_DURATION_SECONDS = 2.5,
 		COOLDOWN_SECONDS = 5,
-		TOAST_MESSAGE = "A customer slipped on a spill! -5% Cafe Rating",
+		TOAST_MESSAGE = "A customer slipped on a spill! -1% Cafe Rating",
 	},
 }
