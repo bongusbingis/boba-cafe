@@ -17,6 +17,7 @@
 
 ---> Services
 
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
@@ -270,6 +271,18 @@ return function(props: {
 	local offerPassId = if capOk and not clicked then PassUpsell.PickLevelUpOffer(owned) else nil
 	local offerPrice = PassUpsell.usePrice(offerPassId)
 	local showUpsell = offerPassId ~= nil and offerPrice ~= nil
+
+	local shownPassIdRef = React.useRef(nil)
+	React.useEffect(function()
+		if showUpsell and offerPassId ~= nil and shownPassIdRef.current ~= offerPassId then
+			shownPassIdRef.current = offerPassId
+			pcall(function()
+				local player = Players.LocalPlayer
+				local analytics = Knit.GetService("AnalyticsEvents")
+				analytics:Custom(player, "PassUpsellShown", offerPassId)
+			end)
+		end
+	end, { showUpsell, offerPassId } :: { any })
 
 	-- Read by the hold timer, which outlives this render.
 	local queuedRef = React.useRef(false)

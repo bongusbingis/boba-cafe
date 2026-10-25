@@ -160,6 +160,8 @@ Recipes.Items = {
 					["Wash Cup"] = {
 						{ "SetToolHoldingProperty", "Liquid", "Transparency", 1 },
 						{ "SetToolHoldingProperty", "BobaBalls", "Transparency", 1 },
+						{ "SetToolHoldingProperty", "Straw", "Transparency", 1 },
+						{ "SetToolHoldingProperty", "HasStraw", "Value", false },
 						{ "SetToolHoldingProperty", "CoffeeLid", "Transparency", 1 },
 						{
 							"RenameToolHolding",
@@ -442,6 +444,18 @@ for name: string, color: Color3 in Recipes.Tapioca do
 				"BobaBalls",
 				"Transparency",
 				0,
+			},
+			{
+				"SetToolHoldingProperty",
+				"Straw",
+				"Transparency",
+				0,
+			},
+			{
+				"SetToolHoldingProperty",
+				"HasStraw",
+				"Value",
+				true,
 			},
 			{
 				"RenameToolHolding",

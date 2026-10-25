@@ -338,6 +338,10 @@ return function(props: {
 						:CancelCounterOrder(counterData.CounterCustomerId, counterData.LockId)
 						:catch(warn)
 				end)
+			elseif npcOrderData ~= nil and RunService:IsRunning() then
+				pcall(function()
+					Knit.GetService("CustomerService"):CancelNpcOrder(npcOrderData.NpcId):catch(warn)
+				end)
 			end
 		end
 	end, {})
@@ -375,7 +379,7 @@ return function(props: {
 
 	---> order accumulation
 	local orderItems, setOrderItems = React.useState(function(): { any }
-		if npcOrderData ~= nil and npcOrderData.Prefill == true then
+		if npcOrderData ~= nil and (npcOrderData.Prefill == true or npcOrderData.Guided == true) then
 			return prefillFromNpc(npcOrderData)
 		end
 		return {}
@@ -473,24 +477,40 @@ return function(props: {
 			if reqSelIdx > 1 then
 				setReqSelIdx(reqSelIdx - 1)
 			else
+				local isSingleItem = false
+				if selCategory and FoodTable[selCategory] and FoodTable[selCategory].Items then
+					local itemCount = 0
+					for _ in FoodTable[selCategory].Items do
+						itemCount += 1
+					end
+					isSingleItem = itemCount == 1
+				end
 				setSelCategory(nil)
 				setSelItemKey(nil)
 				setCustomInfo({})
 				setReqSelQueue({})
 				setReqSelIdx(1)
-				setPage("ItemSelect")
+				setPage(if isSingleItem then "CategorySelect" else "ItemSelect")
 			end
 		elseif page == "SizeOptions" then
 			if #reqSelQueue > 0 then
 				setReqSelIdx(#reqSelQueue)
 				setPage("RequiredSelection")
 			else
+				local isSingleItem = false
+				if selCategory and FoodTable[selCategory] and FoodTable[selCategory].Items then
+					local itemCount = 0
+					for _ in FoodTable[selCategory].Items do
+						itemCount += 1
+					end
+					isSingleItem = itemCount == 1
+				end
 				setSelCategory(nil)
 				setSelItemKey(nil)
 				setCustomInfo({})
 				setReqSelQueue({})
 				setReqSelIdx(1)
-				setPage("ItemSelect")
+				setPage(if isSingleItem then "CategorySelect" else "ItemSelect")
 			end
 		end
 	end
@@ -504,13 +524,9 @@ return function(props: {
 		setPage("CategorySelect")
 	end
 
-	local function onCategorySelected(categoryKey: string)
+	local function selectItem(categoryKey: string, itemKey: string)
 		setSelCategory(categoryKey)
-		setPage("ItemSelect")
-	end
-
-	local function onItemSelected(itemKey: string)
-		local item = FoodTable[selCategory :: string].Items[itemKey]
+		local item = FoodTable[categoryKey].Items[itemKey]
 
 		-- Initialise customInfo with Select defaults and Option defaults.
 		local info: { [string]: any } = {}
@@ -544,6 +560,35 @@ return function(props: {
 		setReqSelQueue(queue)
 		setReqSelIdx(1)
 		setPage(if #queue > 0 then "RequiredSelection" else "SizeOptions")
+	end
+
+	local function onCategorySelected(categoryKey: string)
+		setSelCategory(categoryKey)
+		local catData = FoodTable[categoryKey]
+		local items = if catData then catData.Items else nil
+		local singleKey: string? = nil
+		local count = 0
+		if items then
+			for k in items do
+				count += 1
+				singleKey = k
+				if count > 1 then
+					break
+				end
+			end
+		end
+
+		if count == 1 and singleKey ~= nil then
+			selectItem(categoryKey, singleKey)
+		else
+			setPage("ItemSelect")
+		end
+	end
+
+	local function onItemSelected(itemKey: string)
+		if selCategory then
+			selectItem(selCategory, itemKey)
+		end
 	end
 
 	local function onAddToOrder(overrideInfo: { [string]: any }?)

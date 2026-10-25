@@ -1,10 +1,15 @@
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 local Packages = ReplicatedStorage:WaitForChild("Packages")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local UI = Shared:WaitForChild("UI")
 
 ---> dependencies
+local Knit = require(Packages.Knit)
 local React = require(Packages.React)
+
+local LocalPlayer = Players.LocalPlayer
 
 ---> components
 local Pane = require(UI.Components.Pane)
@@ -21,7 +26,7 @@ local EventIntro = require(script.EventIntro)
 ---> private
 local c = React.createElement
 
-local TICKET_WIDTH = 190
+local TICKET_WIDTH = 220
 local TICKET_SCALE = 1.6 -- Jack Q27 A (DEC-052): ticket size only
 
 return function(props: {
@@ -51,6 +56,31 @@ return function(props: {
 			end
 		end
 	end, { props.CurrentPage })
+
+	local questsFirstShiftOpened = React.useRef(false)
+	React.useEffect(function()
+		if not RunService:IsRunning() then
+			return nil
+		end
+		local conn = Knit.GetService("ShiftService").ShiftEnded:Connect(function(summary)
+			if summary and summary.First == true and not questsFirstShiftOpened.current then
+				questsFirstShiftOpened.current = true
+				task.spawn(function()
+					task.wait((summary.Seconds or 8) + 2)
+					local waited = 0
+					while LocalPlayer and LocalPlayer:GetAttribute("NicknamePending") == true and waited < 30 do
+						task.wait(0.5)
+						waited += 0.5
+					end
+					setQuestsOpen(true)
+				end)
+			end
+		end)
+
+		return function()
+			conn:Disconnect()
+		end
+	end, {})
 
 	return c(Pane, {
 		Native = {

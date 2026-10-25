@@ -126,21 +126,29 @@ end
 -- Returns a flat list of customisation strings for an item (e.g. "+ Boba", "- NO Ice").
 local function resolveCustomisations(item: { [string]: any }): { string }
 	local lines: { string } = {}
-	if item.DefaultInfo == nil or item.CustomInfo == nil then
+	if item.CustomInfo == nil then
 		return lines
 	end
 
-	if item.DefaultInfo.RequiredSelection then
-		for selType in item.DefaultInfo.RequiredSelection do
-			table.insert(lines, selType .. ": " .. (item.CustomInfo[selType] or "?"))
+	if item.DefaultInfo ~= nil then
+		if item.DefaultInfo.RequiredSelection then
+			for selType in item.DefaultInfo.RequiredSelection do
+				table.insert(lines, selType .. ": " .. (item.CustomInfo[selType] or "?"))
+			end
 		end
-	end
 
-	if item.DefaultInfo.Options then
-		for optType, defaultValue in item.DefaultInfo.Options do
-			local chosen = item.CustomInfo[optType]
-			if chosen ~= defaultValue then
-				table.insert(lines, if chosen then ("+ " .. optType) else ("- NO " .. optType))
+		if item.DefaultInfo.Options then
+			for optType, defaultValue in item.DefaultInfo.Options do
+				local chosen = item.CustomInfo[optType]
+				if chosen ~= defaultValue then
+					table.insert(lines, if chosen then ("+ " .. optType) else ("- NO " .. optType))
+				end
+			end
+		end
+	elseif typeof(item.CustomInfo) == "table" then
+		for selType, val in item.CustomInfo do
+			if selType ~= "Size" and typeof(val) == "string" then
+				table.insert(lines, selType .. ": " .. val)
 			end
 		end
 	end
@@ -304,6 +312,7 @@ local function ItemRow(props: {
 			Text = line,
 			TextColor3 = Styles.GRAY,
 			TextSize = 13,
+			TextWrapped = true,
 			TextXAlignment = Enum.TextXAlignment.Left,
 		})
 	end
@@ -341,6 +350,7 @@ local function ItemRow(props: {
 			Text = displayName,
 			TextColor3 = Styles.GREEN_DEEP,
 			TextSize = 15,
+			TextWrapped = true,
 			TextXAlignment = Enum.TextXAlignment.Left,
 			[React.Event.Activated] = props.onOpenRecipe,
 		}),
@@ -734,7 +744,7 @@ return function(props: {
 		BorderSizePixel = 0,
 		LayoutOrder = props.layoutOrder,
 		Position = if props.stacked then nil else UDim2.fromScale(0.99, 0.92),
-		Size = if props.stacked then UDim2.fromScale(1, 0) else UDim2.fromOffset(190, 0),
+		Size = if props.stacked then UDim2.fromScale(1, 0) else UDim2.fromOffset(220, 0),
 		ZIndex = 10,
 	}, {
 		Corner = c("UICorner", { CornerRadius = UDim.new(0, 6) }),

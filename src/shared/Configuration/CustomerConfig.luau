@@ -436,11 +436,6 @@ local CustomerConfig = {
 	-- CustomInfo, as Rules.PickOrder writes it).
 	FIRST_SESSION_ORDERS = { -- TUNING
 		{
-			Category = "Boba Teas",
-			Item = "Custom Boba",
-			CustomInfo = { ["Syrup Flavor"] = "Classic Milk Tea", ["Tapioca Flavor"] = "Normal", Size = "Medium" },
-		},
-		{
 			Category = "Pastries",
 			Item = "Fudge Brownie",
 			CustomInfo = {},
@@ -449,6 +444,11 @@ local CustomerConfig = {
 			Category = "Coffees",
 			Item = "Regular",
 			CustomInfo = { Iced = false, Sugar = false, Size = "Small" },
+		},
+		{
+			Category = "Boba Teas",
+			Item = "Custom Boba",
+			CustomInfo = { ["Syrup Flavor"] = "Classic Milk Tea", ["Tapioca Flavor"] = "Normal", Size = "Medium" },
 		},
 	} :: { OrderItem },
 }

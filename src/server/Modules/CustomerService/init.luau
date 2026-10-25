@@ -71,7 +71,7 @@ local PACING_TICK_SECONDS = 1
 local SUBMIT_MAX_DISTANCE_STUDS = 20 -- DEC-058 agent-set, Jack to tune: tablet submit range (Take Order is 12; slack to step back)
 local COMBO_MILESTONES = { [3] = true, [5] = true, [10] = true } -- TUNING: combo values that get a callout toast
 local TEAM_PROGRESS_FROM = 5 -- TUNING: show Team N/10 on the serve toast from this chain length
-local SERVED_COUNT_TIMEOUT_SECONDS = 5 -- budget for reading Statistics.CustomersServed
+local SERVED_COUNT_TIMEOUT_SECONDS = 15 -- budget for reading Statistics.CustomersServed
 local CUSTOMERS_FOLDER_NAME = "Customers"
 -- Counter ordering (DEC-059): real players at workspace["Ordering System"].CustomerAreas.
 local COUNTER_TICK_SECONDS = 0.3
@@ -249,6 +249,7 @@ local CustomerService = Knit.CreateService({
 	_teamChain = 0, -- consecutive successful serves server-wide (session memory only)
 	_firstServe = {} :: { [Player]: boolean }, -- barista -> served 0 customers when last assigned (session memory)
 	_firstOrderGranting = {} :: { [Player]: boolean },
+	_groupNudged = {} :: { [Player]: boolean },
 	_teamComboUntil = 0, -- os.clock() deadline of the active Team Combo (0 = none)
 	_npcSeq = 0, -- makes ticket Ids unique per NPC
 	_stressSeen = {} :: { [Npc.Npc]: number }, -- BIG-B4-P1: first-seen clock per unassigned counter NPC (Studio stress only)
@@ -488,8 +489,10 @@ function CustomerService:_makeContext(nodes: Npc.Nodes, folder: Folder): Npc.Con
 					self._pickupHolders[s] = nil
 				end
 			end
+			npc.OrderTaker = nil
 		end,
 		ReleaseCounter = function(npc)
+			npc.OrderTaker = nil
 			local spot = self._npcRegister[npc] or npc.CounterSpot
 			if spot ~= nil and self._registerLines[spot] ~= nil then
 				local index = table.find(self._registerLines[spot], npc)
@@ -902,7 +905,7 @@ end
 -- normal pool orders, never the scripted ones.
 function CustomerService:_readServedCount(player: Player): number
 	if self._data == nil then
-		return CustomerConfig.FIRST_SESSION_COUNT
+		return 0
 	end
 	local pcallOk, awaitOk, profile = pcall(function()
 		return self._data:GetDataAsync(player):timeout(SERVED_COUNT_TIMEOUT_SECONDS):await()
@@ -914,7 +917,7 @@ function CustomerService:_readServedCount(player: Player): number
 		end
 	end
 	warnOnce("served", `[CustomerService] Could not read CustomersServed for {player.Name}; using pool orders.`)
-	return CustomerConfig.FIRST_SESSION_COUNT
+	return 0
 end
 
 -- The same spec is never dealt to one barista twice in a row: compares the
@@ -1352,6 +1355,14 @@ function CustomerService:_autoGrantFirstOrder(player: Player, served: number?)
 		npc:SetAssignment(player.UserId, 0, true)
 
 		self:_issueTicket(player, npc)
+		task.spawn(function()
+			pcall(function()
+				Knit.GetService("DialogService"):Notify(player, {
+					Title = "New Order",
+					Description = "A new customer is at the pick-up counter  check your ticket!",
+				})
+			end)
+		end)
 		if self._order and typeof(self._order.RegisterCustomerOrder) == "function" then
 			self._order:RegisterCustomerOrder(npc.Id, "Customer", 1, "Being Prepared", npc.Model)
 		end
@@ -1494,6 +1505,19 @@ function CustomerService:_onTakeOrderTriggered(npc: Npc.Npc, player: Player)
 		return
 	end
 
+	-- NPC Take Order lock: ensure only one barista can take an NPC's order at a time
+	if npc.OrderTaker ~= nil and npc.OrderTaker ~= player and npc.OrderTaker:IsDescendantOf(Players) then
+		if os.clock() < (npc.OrderTakerExpires or 0) then
+			self._dialog:Notify(player, {
+				Title = "Order in progress",
+				Description = `{npc.OrderTaker.DisplayName} is already taking this order!`,
+			})
+			return
+		end
+	end
+	npc.OrderTaker = player
+	npc.OrderTakerExpires = os.clock() + 60
+
 	-- The order is rolled once per NPC (TAKEOVER-FIX 3): a re-press or a second barista
 	-- sees the same order, so an open tablet always still matches.
 	if not npc.OrderRolled then
@@ -1556,15 +1580,21 @@ function CustomerService:_onTakeOrderTriggered(npc: Npc.Npc, player: Player)
 	end
 	takers[player] = true
 
-	-- The NPC order always rides in the tablet notepad; the worker punches it
-	-- into the ordering pages. No prefill: the scripted first-session tablet
-	-- guides the worker through each step instead (Guided).
+	local guided = npc.RolledScriptedFor == player.UserId
+	local okServed, servedCount = pcall(function()
+		return self:_readServedCount(player)
+	end)
+	if okServed and typeof(servedCount) == "number" then
+		guided = npc.RolledScriptedFor == player.UserId or (servedCount < CustomerConfig.FIRST_SESSION_COUNT + 2)
+	end
+
 	self.Client.OpenOrderingTablet:Fire(player, {
 		NpcId = npc.Id,
 		RequestedText = npc.RequestedDrinkText,
 		Orders = npc.Orders,
 		Specs = npc.Specs,
-		Guided = npc.RolledScriptedFor == player.UserId,
+		Guided = guided,
+		Prefill = guided,
 		PatienceEnd = if npc.Model ~= nil then npc.Model:GetAttribute("PatienceEnd") else nil,
 		PatienceTotal = if npc.Model ~= nil then npc.Model:GetAttribute("PatienceTotal") else nil,
 	})
@@ -1691,6 +1721,8 @@ function CustomerService:_submitNpcOrder(
 		end
 		self._orderTakers[npc] = nil
 	end
+	npc.OrderTaker = nil
+
 	if pickupPos ~= nil then
 		npc:GoToPickup(pickupPos, pickupRot)
 	else
@@ -1702,6 +1734,18 @@ end
 
 function CustomerService.Client:SubmitNpcOrder(player: Player, npcId: string, submittedOrderItems: any)
 	return self.Server:_submitNpcOrder(player, npcId, submittedOrderItems)
+end
+
+function CustomerService.Client:CancelNpcOrder(player: Player, npcId: any)
+	if typeof(npcId) ~= "string" then
+		return
+	end
+	for npc in self.Server._npcs do
+		if npc.Id == npcId and npc.OrderTaker == player then
+			npc.OrderTaker = nil
+			break
+		end
+	end
 end
 
 -- The Serve prompt, in design 4.6 order. The tip bonus is resolved first (it may
@@ -1732,16 +1776,20 @@ function CustomerService:_onServeTriggered(npc: Npc.Npc, player: Player)
 	if npc.Left or (npc.State ~= "AtPickup" and npc.State ~= "AtCounter") then
 		return
 	end
-	-- (4) assigned, or a Rescue below 30% patience.
+	-- (4) Assignee-only serve (Rescue removed)
 	local fractionLeft = npc:FractionLeft()
 	local assigned = npc.AssignedUserId == player.UserId
-	if not Rules.CanServe(assigned, fractionLeft) then
-		-- Wrong-customer handoff QOL: name the correct customer instead of failing silently.
+	if not assigned then
 		local correct = self:_heldCustomerName(player, npc)
 		if correct ~= nil then
 			self._dialog:Notify(player, {
 				Title = "Wrong customer",
 				Description = `That order is for {correct}!`,
+			})
+		else
+			self._dialog:Notify(player, {
+				Title = "Not your customer",
+				Description = "Only the barista assigned to this customer can serve them!",
 			})
 		end
 		return
@@ -1798,7 +1846,7 @@ function CustomerService:_onServeTriggered(npc: Npc.Npc, player: Player)
 		tool:Destroy()
 	end
 
-	local rescue = not assigned
+	local rescue = false
 	local combo = self._combo[player] or 0
 	local pay = Rules.Payout(npc.Orders, grade, fractionLeft, combo, npc.Scripted, rescue)
 	pay = Rules.PayoutVariant(pay, npc.Variant, grade)
@@ -1837,7 +1885,42 @@ function CustomerService:_onServeTriggered(npc: Npc.Npc, player: Player)
 		a:Custom(player, "NpcServed", 1)
 		a:Custom(player, "ServeSeconds", (npc.Model:GetAttribute("PatienceTotal") or 0) * (1 - fractionLeft))
 		a:Custom(player, "PourAccuracy", if grade == "Perfect" then 3 elseif pourTip > 0 then 2 else 1)
+		a:Custom(player, "ServedItem_" .. (npc.Specs[1] and npc.Specs[1].Item or "Unknown"), 1)
+		if npc.Scripted then
+			a:Custom(player, "TutorialOrderServed_" .. (servedBefore + 1), 1)
+		end
 	end)
+
+	if (servedBefore + 1) >= CustomerConfig.FIRST_SESSION_COUNT and not self._groupNudged[player] then
+		self._groupNudged[player] = true
+		pcall(function()
+			Knit.GetService("AnalyticsEvents"):Custom(player, "AntPetPromptShown", 1)
+		end)
+		task.spawn(function()
+			pcall(function()
+				task.wait(2)
+				if player.Parent ~= Players then
+					return
+				end
+				local ok, choice = self._dialog
+					:CreateDialog(player, "ButtonPrompt", {
+						Title = "Free Reward!",
+						Text = "Join our group to claim a free Ant Pet! Check the Shop to claim it.",
+						Buttons = {
+							{ Text = "Go to Shop", Color = Styles.GREEN },
+							{ Text = "Later", Color = Styles.RED },
+						},
+					})
+					:await()
+				if ok and choice == "Go to Shop" and player.Parent == Players then
+					pcall(function()
+						Knit.GetService("AnalyticsEvents"):Custom(player, "AntPetPromptClicked", 1)
+					end)
+					self._dialog:OpenShop(player, "GroupBenefit")
+				end
+			end)
+		end)
+	end
 	self._stats:IncrementStat(player, "CustomersServed")
 	pcall(function()
 		Knit.GetService("LeaderboardService"):IncrementStat(player, "OrdersServed", 1)
@@ -2746,6 +2829,7 @@ end
 
 function CustomerService:PlayerRemoving(player: Player)
 	self._firstOrderGranting[player] = nil
+	self._groupNudged[player] = nil
 	self:_unwatchBaristaInventory(player)
 	self._counterSubmitAt[player] = nil
 	self._clockInPromptOpen[player] = nil
@@ -2754,6 +2838,11 @@ function CustomerService:PlayerRemoving(player: Player)
 		for customer, state in self._counterCustomers do
 			if state.Lock ~= nil and state.Lock.Taker == player then
 				self:_releaseCounterLock(customer)
+			end
+		end
+		for npc in self._npcs do
+			if npc.OrderTaker == player then
+				npc.OrderTaker = nil
 			end
 		end
 	end)

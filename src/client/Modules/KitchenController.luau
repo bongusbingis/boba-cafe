@@ -46,10 +46,12 @@ local WRONG_DRINK_TOAST_COOLDOWN_SECONDS = 10
 local lastWrongDrinkToastAt = -math.huge
 
 -- TUNING
-local GUIDANCE_INTERVAL_SECONDS = 0.2 -- how often the hint target is recomputed
+local GUIDANCE_INTERVAL_SECONDS = 0.4 -- how often the hint target is recomputed
 local HIGHLIGHT_FILL_TRANSPARENCY = 0.65
 local BEAM_WIDTH = 0.35
 local BEAM_TRANSPARENCY = 0.35
+
+local promptCache = {}
 
 ---> Controller
 
@@ -720,24 +722,31 @@ local function updateServePrompts()
 		return
 	end
 	local clockedIn = not isClockedOut()
-	for _, model in customers:GetChildren() do
-		local prompt = model:FindFirstChild("CustomerPrompt", true)
+	for _, npc in customers:GetChildren() do
+		local prompt = promptCache[npc]
+		if not prompt then
+			prompt = npc:FindFirstChild("CustomerPrompt", true)
+			if prompt then
+				promptCache[npc] = prompt
+				-- Add this cleanup to prevent memory leaks:
+				npc.Destroying:Connect(function()
+					promptCache[npc] = nil
+				end)
+			end
+		end
 		local root = prompt and prompt.Parent
 		if prompt and prompt:IsA("ProximityPrompt") and root and root:IsA("BasePart") then
-			local fraction = patienceFraction(model)
-			local action = model:GetAttribute("PromptAction")
+			local fraction = patienceFraction(npc)
+			local action = npc:GetAttribute("PromptAction")
 			if action == "Serve" then
-				if model:GetAttribute("AssignedUserId") == Players.LocalPlayer.UserId then
+				if npc:GetAttribute("AssignedUserId") == Players.LocalPlayer.UserId then
 					prompt.Enabled = true
 					prompt.ActionText = "Serve"
-				elseif clockedIn and fraction < CustomerConfig.RESCUE_FRACTION then
-					prompt.Enabled = true
-					prompt.ActionText = "Rescue"
 				else
 					prompt.Enabled = false
 				end
 			end
-			local cuesOk, cuesErr = pcall(runPatienceCues, model, root, fraction, clockedIn)
+			local cuesOk, cuesErr = pcall(runPatienceCues, npc, root, fraction, clockedIn)
 			if not cuesOk and not patienceCuesWarned then
 				patienceCuesWarned = true
 				warn("[KitchenController] Patience cues failed: " .. tostring(cuesErr))
@@ -1388,7 +1397,7 @@ function KitchenController:KnitStart()
 	local promptElapsed = 0
 	RunService.Heartbeat:Connect(function(dt)
 		promptElapsed += dt
-		if promptElapsed < 0.2 then
+		if promptElapsed < 0.4 then
 			return
 		end
 		promptElapsed = 0

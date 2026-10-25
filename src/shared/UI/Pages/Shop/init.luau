@@ -117,6 +117,8 @@ return function(props)
 		landingKey = "Products"
 	elseif landingKey == "Capsules" then
 		landingKey = "Pets"
+	elseif landingKey == "GroupBenefit" then
+		landingKey = "Group Benefit"
 	end
 
 	if landingKey then

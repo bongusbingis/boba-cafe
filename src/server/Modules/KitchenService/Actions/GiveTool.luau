@@ -93,10 +93,10 @@ local function GiveTool(player: Player, _actionModel: Model, toolToClone: Tool, 
 		end
 	end
 
-	-- If the tool is a cup with BobaBalls, make sure BobaBalls start hidden until tapioca is added
-	if clone:GetAttribute("Tapioca") == nil then
+	-- If the tool is a cup with BobaBalls/Straw, make sure they start hidden until tapioca is added
+	if clone:GetAttribute("Tapioca") == nil and clone:GetAttribute("Item") ~= "Boba" then
 		for _, desc in clone:GetDescendants() do
-			if desc.Name == "BobaBalls" or desc.Name == "Tapioca" then
+			if desc.Name == "BobaBalls" or desc.Name == "Tapioca" or desc.Name == "Straw" then
 				local target: Instance = desc
 				if
 					(desc:IsA("SpecialMesh") or desc:IsA("FileMesh"))
@@ -108,6 +108,24 @@ local function GiveTool(player: Player, _actionModel: Model, toolToClone: Tool, 
 				pcall(function()
 					if target:IsA("BasePart") then
 						target.Transparency = 1
+					end
+				end)
+			end
+		end
+	else
+		for _, desc in clone:GetDescendants() do
+			if desc.Name == "Straw" then
+				local target: Instance = desc
+				if
+					(desc:IsA("SpecialMesh") or desc:IsA("FileMesh"))
+					and desc.Parent
+					and desc.Parent:IsA("BasePart")
+				then
+					target = desc.Parent
+				end
+				pcall(function()
+					if target:IsA("BasePart") then
+						target.Transparency = 0
 					end
 				end)
 			end

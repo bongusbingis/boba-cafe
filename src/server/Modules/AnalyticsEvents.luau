@@ -165,6 +165,24 @@ function AnalyticsEvents:Custom(player: Player, name: string, value: number?)
 	end)
 end
 
+function AnalyticsEvents.Client:Custom(player: Player, name: any, value: any, extra: any)
+	local eventName: string? = nil
+	local eventValue: any = nil
+	if typeof(name) == "string" then
+		eventName = name
+		eventValue = value
+	elseif typeof(value) == "string" then
+		eventName = value
+		eventValue = extra
+	end
+	if typeof(eventName) ~= "string" then
+		return
+	end
+	pcall(function()
+		self.Server:Custom(player, eventName, eventValue)
+	end)
+end
+
 --- Safely retrieves player segment buckets for personalization/offers.
 function AnalyticsEvents:GetSegments(player: Player): {
 	HasData: boolean,

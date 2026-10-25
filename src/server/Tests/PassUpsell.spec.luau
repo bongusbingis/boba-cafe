@@ -34,14 +34,14 @@ return function()
 	end)
 
 	describe("ShouldShowOnLevelUp", function()
-		it("shows only on every 3rd level", function()
+		it("shows from the 2nd level, then every 3rd", function()
 			local shown = {}
 			for level = 1, 12 do
 				if PassUpsell.ShouldShowOnLevelUp(level) then
 					table.insert(shown, level)
 				end
 			end
-			expect(table.concat(shown, ",")).to.equal("3,6,9,12")
+			expect(table.concat(shown, ",")).to.equal("2,5,8,11")
 			expect(PassUpsell.ShouldShowOnLevelUp(0)).to.equal(false)
 		end)
 	end)

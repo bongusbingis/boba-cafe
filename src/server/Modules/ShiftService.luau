@@ -20,6 +20,7 @@ local Knit = require(Packages.Knit)
 local GoodSignal = require(Packages.GoodSignal)
 local ShiftConfig = require(ReplicatedStorage.Shared.Configuration.ShiftConfig)
 local InventoryItemDefinitions = require(ReplicatedStorage.Shared.Configuration.InventoryItemDefinitions)
+local Styles = require(ReplicatedStorage.Shared.UI.Styles)
 
 ---> types
 
@@ -94,7 +95,9 @@ local ShiftService = Knit.CreateService({
 	_states = {} :: { [Player]: ShiftState },
 	_paused = {} :: { [Player]: ShiftState }, -- loaded shift kept across a clock out (session only)
 	_customers = nil :: any,
+	_dialog = nil :: any,
 	_capsuleNudged = {} :: { [Player]: boolean },
+	_shopNudged = {} :: { [Player]: boolean },
 	_streaks = {} :: { [Player]: number }, -- session-only consecutive shifts completed
 })
 
@@ -320,6 +323,11 @@ function ShiftService:_endShift(player: Player, state: ShiftState)
 		end
 		a:ProgressionComplete(player, "Shift", state.Completed + 1, `Shift {state.Completed + 1}`)
 		a:Custom(player, "ShiftCompleted", state.Served)
+		if state.Completed == 0 then
+			a:Custom(player, "Shift2Started", 1)
+		elseif state.Completed == 1 then
+			a:Custom(player, "Shift2Completed", state.Served)
+		end
 	end)
 	-- Spawned: AdvanceQuest awaits the profile (and a pass lookup on rollover); the card must not wait.
 	task.spawn(function()
@@ -366,9 +374,28 @@ function ShiftService:_endShift(player: Player, state: ShiftState)
 	end)
 	task.spawn(function()
 		pcall(function()
-			self:_capsuleNudge(player)
+			if summary.First == true then
+				self:_postShiftShopNudge(player, summary)
+			else
+				self:_capsuleNudge(player)
+			end
 		end)
 	end)
+	if summary.First == true then
+		task.spawn(function()
+			pcall(function()
+				task.delay((summary.Seconds or ShiftConfig.CARD_SECONDS_FIRST) + 0.5, function()
+					if player.Parent ~= nil then
+						local dialog = self._dialog or Knit.GetService("DialogService")
+						dialog:Notify(player, {
+							Title = "Next shift",
+							Description = "Shift 2 goal: serve 10 customers. You unlocked Taro & Strawberry syrups!",
+						})
+					end
+				end)
+			end)
+		end)
+	end
 end
 
 -- Raises the stored bests; never lowers them.
@@ -423,6 +450,53 @@ function ShiftService:_capsuleNudge(player: Player)
 	end
 	self._capsuleNudged[player] = true
 	Knit.GetService("DialogService"):Notify(player, { Text = NUDGE_TEXT } :: any)
+end
+
+-- Post-first-shift shop nudge (REVENUE_NUDGE_SPEC Proposal A)
+function ShiftService:_postShiftShopNudge(player: Player, summary: any)
+	if not summary or not summary.First then
+		return
+	end
+	if self._shopNudged[player] then
+		return
+	end
+	task.wait(NUDGE_DELAY_SECONDS)
+	local waited = 0
+	while player:GetAttribute(NICK_PENDING_ATTRIBUTE) == true and waited < NUDGE_NICK_WAIT_SECONDS do
+		task.wait(NUDGE_POLL_SECONDS)
+		waited += NUDGE_POLL_SECONDS
+	end
+	if player:GetAttribute(NICK_PENDING_ATTRIBUTE) == true then
+		return
+	end
+	task.wait(NUDGE_DRAIN_SECONDS)
+	if player.Parent == nil or self._shopNudged[player] or not self:IsClockedIn(player) then
+		return
+	end
+	self._shopNudged[player] = true
+	pcall(function()
+		Knit.GetService("AnalyticsEvents"):Custom(player, "ShopNudgeShown", 1)
+	end)
+
+	local dialogService = Knit.GetService("DialogService")
+	local ok, choice = pcall(function()
+		return dialogService
+			:CreateDialog(player, "ButtonPrompt", {
+				Title = "Shift complete!",
+				Text = "You earned Boba Bucks this shift! Check the Shop  pet capsules start at 75 BB, and the Starter Bundle is a great deal for new baristas.",
+				Buttons = {
+					{ Text = "View Shop", Color = Styles.GREEN },
+					{ Text = "Later", Color = Styles.RED },
+				},
+			})
+			:await()
+	end)
+	if ok and choice == "View Shop" and player.Parent ~= nil then
+		pcall(function()
+			Knit.GetService("AnalyticsEvents"):Custom(player, "ShopNudgeClicked", 1)
+		end)
+		dialogService:OpenShop(player, "Currency")
+	end
 end
 
 ---> public
@@ -547,6 +621,7 @@ function ShiftService:PlayerAdded(player: Player)
 end
 
 function ShiftService:KnitStart()
+	self._dialog = Knit.GetService("DialogService")
 	local customers = Knit.GetService("CustomerService")
 	self._customers = customers
 	customers.CustomerResolved:Connect(function(p, r)
@@ -564,6 +639,7 @@ function ShiftService:PlayerRemoving(player: Player)
 	self._paused[player] = nil
 	self._toggleDebounces[player.UserId] = nil
 	self._capsuleNudged[player] = nil
+	self._shopNudged[player] = nil
 	self._streaks[player] = nil
 end
 

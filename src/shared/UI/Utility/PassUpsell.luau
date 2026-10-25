@@ -31,6 +31,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local UI = Shared:WaitForChild("UI")
 
 local React = require(Packages.React)
+local Knit = require(Packages.Knit)
 
 local GamepassUtil = require(Shared.Utility.GamepassUtil)
 local PassCatalog = require(Shared.Configuration.PassCatalog)
@@ -59,9 +60,10 @@ PassUpsell.BOOST_PERCENT = {
 PassUpsell.XP_PASS_IDS = { PassUpsell.BARISTA, PassUpsell.KITCHEN_LEADER }
 
 -- Cap rules. Paycheck: from the 2nd completed shift, then every 3rd (2, 5, 8 ...).
--- Level-up: every 3rd level (3, 6, 9 ...).
+-- Level-up: from level 2, then every 3rd (2, 5, 8 ...).
 PassUpsell.PAYCHECK_FIRST_SHIFT = 2
 PassUpsell.PAYCHECK_EVERY = 3
+PassUpsell.LEVELUP_FIRST = 2
 PassUpsell.LEVELUP_EVERY = 3
 
 local priceCache: { [number]: number } = {}
@@ -81,6 +83,10 @@ local function connectFinished()
 			if player ~= Players.LocalPlayer or not wasPurchased then
 				return
 			end
+			pcall(function()
+				local analytics = Knit.GetService("AnalyticsEvents")
+				analytics:Custom(player, "PassPurchased", passId)
+			end)
 			purchasedThisSession[passId] = true
 			for _, listener in purchaseListeners do
 				task.spawn(listener, passId)
@@ -99,10 +105,10 @@ function PassUpsell.ShouldShowOnPaycheck(shift: any): boolean
 end
 
 function PassUpsell.ShouldShowOnLevelUp(level: any): boolean
-	if typeof(level) ~= "number" or level < PassUpsell.LEVELUP_EVERY then
+	if typeof(level) ~= "number" or level < PassUpsell.LEVELUP_FIRST then
 		return false
 	end
-	return level % PassUpsell.LEVELUP_EVERY == 0
+	return (level - PassUpsell.LEVELUP_FIRST) % PassUpsell.LEVELUP_EVERY == 0
 end
 
 -- owned: passId -> boolean, an absent key means "not resolved yet" (no offer).
@@ -145,6 +151,10 @@ function PassUpsell.Prompt(passId: number)
 	if localPlayer == nil then
 		return
 	end
+	pcall(function()
+		local analytics = Knit.GetService("AnalyticsEvents")
+		analytics:Custom(localPlayer, "PassUpsellClicked", passId)
+	end)
 	pcall(function()
 		MarketplaceService:PromptGamePassPurchase(localPlayer, passId)
 	end)

@@ -178,6 +178,18 @@ local function PaycheckBody(props: {
 	local offerPrice = PassUpsell.usePrice(offerPassId)
 	local showOffer = offerPassId ~= nil and offerPrice ~= nil
 
+	local shownPassIdRef = React.useRef(nil)
+	React.useEffect(function()
+		if showOffer and offerPassId ~= nil and shownPassIdRef.current ~= offerPassId then
+			shownPassIdRef.current = offerPassId
+			pcall(function()
+				local player = Players.LocalPlayer
+				local analytics = Knit.GetService("AnalyticsEvents")
+				analytics:Custom(player, "PassUpsellShown", offerPassId)
+			end)
+		end
+	end, { showOffer, offerPassId } :: { any })
+
 	return c("ImageLabel", {
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		BackgroundTransparency = 1,
