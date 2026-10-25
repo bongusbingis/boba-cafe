@@ -579,10 +579,6 @@ local function QuestCardBody(props: {
 					if hasXp then
 						text ..= (if hasBucks then " · +" else " +") .. xp .. " XP"
 					end
-					local dialogController = Knit.GetController("DialogController")
-					if dialogController and dialogController.Toast then
-						dialogController:Toast(text)
-					end
 				end)
 			end
 		end)

@@ -24,10 +24,11 @@ local Knit = require(Packages.Knit)
 local React = require(Packages.React)
 local ReactSpring = require(Packages.ReactSpring)
 local RankUtil = require(Shared.Utility.RankUtil)
+local CapsuleConfig = require(Shared.Configuration.CapsuleConfig)
 
 ---> constants
 local SKIP_HATCH_PRODUCT_ID = 1143554452
-local HATCH_DURATION_SECONDS = 15 * 60
+local HATCH_DURATION_SECONDS = CapsuleConfig.PET_HATCH_DURATION
 local BUTTON_SIZE = UDim2.fromScale(1, 1)
 local CLOCKED_IN_ATTRIBUTE = "ClockedIn" -- owned by the server's ShiftService
 local COUNT_TWEEN = TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)

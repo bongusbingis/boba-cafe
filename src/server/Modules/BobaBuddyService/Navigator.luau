@@ -8,10 +8,10 @@
 local PathfindingService = game:GetService("PathfindingService")
 
 local PATHFINDING_OPTIONS = {
-	AgentRadius = 2,
-	AgentHeight = 5,
+	AgentRadius = 1.5,
+	AgentHeight = 4.5,
 	AgentCanJump = false,
-	WaypointSpacing = 4,
+	WaypointSpacing = 3,
 }
 
 local ARRIVE_RADIUS_STUDS = 3.5
@@ -107,6 +107,8 @@ function Navigator.WalkTo(model: Model, targetPos: Vector3, options: NavigateOpt
 		local dist = (root.Position - wpPos).Magnitude
 		local timeout = math.max(1.5, (dist / math.max(humanoid.WalkSpeed, 1)) * 3)
 		local deadline = os.clock() + timeout
+		local lastPos = root.Position
+		local lastMoveCheck = os.clock()
 
 		while not finished and os.clock() < deadline and model.Parent do
 			if shouldAbort and shouldAbort() then
@@ -120,6 +122,19 @@ function Navigator.WalkTo(model: Model, targetPos: Vector3, options: NavigateOpt
 			if i < #waypoints and flatDist <= waypointRadius then
 				break
 			end
+
+			-- Anti-stuck detection: if stuck on a counter corner, hop and skip ahead
+			local now = os.clock()
+			if now - lastMoveCheck >= 0.5 then
+				local delta = (root.Position - lastPos).Magnitude
+				if delta < 0.25 then
+					humanoid.Jump = true
+					break
+				end
+				lastPos = root.Position
+				lastMoveCheck = now
+			end
+
 			task.wait(WALK_POLL_SECONDS)
 		end
 		conn:Disconnect()

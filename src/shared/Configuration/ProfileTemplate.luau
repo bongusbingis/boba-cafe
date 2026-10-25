@@ -102,6 +102,7 @@ export type SeasonPassData = {
 export type UpsellsSeenData = {
 	Cleaner: boolean,
 	Stocker: boolean,
+	InstantBrew: boolean?,
 }
 
 export type CharacterCustomizationData = {
@@ -266,6 +267,7 @@ return {
 	UpsellsSeen = {
 		Cleaner = false,
 		Stocker = false,
+		InstantBrew = false,
 	},
 	Character = {
 		EquippedUniform = "Default",

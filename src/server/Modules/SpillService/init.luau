@@ -176,6 +176,13 @@ function SpillService:CreateSpill(Type: string, Object: string, Region: BasePart
 	return true
 end
 
+--- Cleans a specific active spill (called by automated chore assistants like Boba Buddy).
+function SpillService:Clean(Spill: any)
+	if typeof(Spill) == "table" and typeof(Spill.Clean) == "function" then
+		Spill:Clean()
+	end
+end
+
 function SpillService:CleanEverything()
 	for _, SpillType in pairs({ self.Spills.Mopping, self.Spills.Table }) do
 		for _, RegionSpills in pairs(SpillType) do

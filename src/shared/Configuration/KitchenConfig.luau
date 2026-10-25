@@ -33,28 +33,29 @@ KitchenConfig.POUR_METER = {
 -- Restocking System Configuration (legacy port)
 KitchenConfig.RESTOCK_HOLD_DURATION = 3
 KitchenConfig.RESTOCK_XP_AWARD = 25
-KitchenConfig.RESTOCK_BOX_ANIMATION_ID = "rbxassetid://6999226257"
-KitchenConfig.RESTOCK_BOX_MESH_ID = "rbxassetid://7706347498"
+KitchenConfig.RESTOCK_BOX_ANIMATION_ID = "rbxassetid://75777393079152"
+KitchenConfig.RESTOCK_BOX_MESH_ID = "rbxassetid://15518122178"
+KitchenConfig.RESTOCK_BOX_TEXTURE_ID = "rbxassetid://15518180983"
 KitchenConfig.UNLIMITED_STOCK_PASS_ID = 43707849
 
 -- Default stock capacity per station name or pattern
 KitchenConfig.DEFAULT_STOCKS = {
-	["Food Display"] = 10,
-	["Fruits Freezer"] = 10,
-	["Ice Cream Freezer"] = 10,
-	["Cup"] = 8,
-	["Clear Cup"] = 8,
-	["Mug"] = 5,
-	["Lids"] = 5,
-	["Milk"] = 5,
-	["Sugar"] = 5,
-	["Ice Machine"] = 5,
-	["Blender"] = 3,
-	["Coffee Machine"] = 3,
-	["Syrups"] = 4, -- default for all syrups
-	["Tapioca"] = 5, -- default for all tapioca jars
-	["Powder"] = 5, -- default for all tea / hot chocolate powders
-	["Default"] = 5,
+	["Food Display"] = 20,
+	["Fruits Freezer"] = 20,
+	["Ice Cream Freezer"] = 20,
+	["Cup"] = 16,
+	["Clear Cup"] = 16,
+	["Mug"] = 10,
+	["Lids"] = 10,
+	["Milk"] = 10,
+	["Sugar"] = 10,
+	["Ice Machine"] = 10,
+	["Blender"] = 6,
+	["Coffee Machine"] = 6,
+	["Syrups"] = 8, -- default for all syrups
+	["Tapioca"] = 10, -- default for all tapioca jars
+	["Powder"] = 10, -- default for all tea / hot chocolate powders
+	["Default"] = 10,
 }
 
 --- Resolves default stock for a given station name

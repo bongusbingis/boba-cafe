@@ -65,25 +65,66 @@ local function waitForKitchen(): Instance?
 end
 
 local function createBoxAccessory(): Accessory
+	local storage = ReplicatedStorage:FindFirstChild("SharedStorage")
+	local stockingStorage = storage and storage:FindFirstChild("StockingStorage")
+	local template = stockingStorage and stockingStorage:FindFirstChild("Box")
+
+	-- If an authored Accessory exists in StockingStorage.Box, clone it directly
+	if template and template:IsA("Accessory") then
+		local box = template:Clone()
+		box.Name = "Box"
+		local handle = box:FindFirstChild("Handle")
+		if handle and handle:IsA("BasePart") then
+			handle.CanCollide = false
+			handle.Anchored = false
+			handle.Massless = true
+		end
+		return box
+	end
+
 	local box = Instance.new("Accessory")
 	box.Name = "Box"
 
-	local handle = Instance.new("Part")
-	handle.Name = "Handle"
-	handle.Size = Vector3.new(2.57, 2.13, 2.14)
-	handle.CanCollide = false
-	handle.Anchored = false
-	handle.Massless = true
+	local handle: BasePart
+	if template and template:IsA("BasePart") then
+		handle = template:Clone()
+		handle.Name = "Handle"
+		handle.CanCollide = false
+		handle.Anchored = false
+		handle.Massless = true
+	else
+		handle = Instance.new("Part")
+		handle.Name = "Handle"
+		handle.Size = Vector3.new(1.83, 1.82, 1.83)
+		handle.CanCollide = false
+		handle.Anchored = false
+		handle.Massless = true
+		handle.Color = Color3.fromRGB(190, 145, 95)
+		handle.Material = Enum.Material.SmoothPlastic
 
-	local mesh = Instance.new("SpecialMesh")
-	mesh.MeshType = Enum.MeshType.FileMesh
-	mesh.MeshId = KitchenConfig.RESTOCK_BOX_MESH_ID
-	mesh.Parent = handle
+		local mesh = Instance.new("SpecialMesh")
+		mesh.MeshType = Enum.MeshType.FileMesh
+		mesh.MeshId = KitchenConfig.RESTOCK_BOX_MESH_ID
+		mesh.TextureId = KitchenConfig.RESTOCK_BOX_TEXTURE_ID
+		mesh.Parent = handle
+	end
 
-	local att = Instance.new("Attachment")
-	att.Name = "BodyFrontAttachment"
-	att.Position = Vector3.new(-0.024, 0.157, -1.546)
-	att.Parent = handle
+	local att = handle:FindFirstChild("BodyFrontAttachment")
+	if not att then
+		att = Instance.new("Attachment")
+		att.Name = "BodyFrontAttachment"
+		att.Parent = handle
+	end
+	att.Position = Vector3.new(-0.024, 0.157, -1.35)
+
+	local front = handle:FindFirstChild("Front")
+	if front and front:FindFirstChild("Content") and front.Content:IsA("TextLabel") then
+		front.Content.Text = "Restocking"
+	end
+	local back = handle:FindFirstChild("Back")
+	if back and back:FindFirstChild("Content") and back.Content:IsA("TextLabel") then
+		back.Content.Text = "Restocking"
+	end
 
 	handle.Parent = box
 	return box
@@ -259,21 +300,6 @@ function KitchenService:GiveRestockBox(player: Player)
 
 	player:SetAttribute("Restocking", true)
 	self.Client.SetBackpackEnabled:Fire(player, false)
-
-	if not self._restockPromptShown[player.UserId] then
-		self._restockPromptShown[player.UserId] = true
-		local ok, dialogService = pcall(function()
-			return Knit.GetService("DialogService")
-		end)
-		if ok and dialogService and dialogService.Notify then
-			dialogService:Notify(player, {
-				Title = "Restocking Mode",
-				Description = "You are now in Restocking mode. To get rid of your box, throw it away in a trash can.",
-				Image = "",
-				SoundEnabled = false,
-			})
-		end
-	end
 end
 
 function KitchenService:ThrowAwayRestockBox(player: Player): boolean
@@ -304,17 +330,6 @@ function KitchenService:RestockStation(player: Player, model: Model, prompt: Pro
 	local defaultStock = prompt:GetAttribute("DefaultStock") or KitchenConfig.GetDefaultStock(model.Name)
 
 	if currentStock >= defaultStock then
-		local ok, dialogService = pcall(function()
-			return Knit.GetService("DialogService")
-		end)
-		if ok and dialogService and dialogService.Notify then
-			dialogService:Notify(player, {
-				Title = "Restock",
-				Description = "This station is already fully stocked!",
-				Image = "",
-				SoundEnabled = false,
-			})
-		end
 		return false
 	end
 

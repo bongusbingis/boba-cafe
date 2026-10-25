@@ -1,23 +1,27 @@
 --!strict
 --[[
 	RankingService.luau
-	Knit service and module utilizing Roblox Open Cloud API (v2) to set a user's
-	role in the group associated with the authorized account / API key.
+	Knit service and module utilizing the external Ranking API client with
+	HttpService:GetSecret("GAME_KEY"), with Open Cloud API v2 fallback,
+	to manage and update player group ranks in Boba Cafe (GroupId 3174578).
 
-	- Reads the API key securely from Creator Hub Secrets via HttpService:GetSecret.
+	- Connects to https://apibeta.rankingservice.xyz via RankingClient using GAME_KEY.
 	- Validates rank to strictly allow values in range 6..10.
-	- Queries roles from Open Cloud Groups v2, matches rank to role resource path.
-	- Queries user membership to ensure the user is in the group and not already at the rank.
-	- Updates membership via PATCH /cloud/v2/groups/{groupId}/memberships/{userId}.
-	- Automatically invalidates RankUtil server cache for online players on success.
+	- Validates career level and gamepass eligibility via GroupRankProgression.
+	- Exposes ClaimRank(player) on Server and Client.
+	- Automatically invalidates RankUtil cache on rank changes.
 ]]
 
 local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Packages = ReplicatedStorage:WaitForChild("Packages")
 local Knit = require(Packages.Knit)
+local GroupRankProgression = require(Shared.Configuration.GroupRankProgression)
+local RankUtil = require(Shared.Utility.RankUtil)
+local RankingClient = require(script.Parent.RankingClient)
 
 local MIN_RANK = 6
 local MAX_RANK = 10
@@ -49,12 +53,15 @@ export type CachedRoles = {
 
 local RankingService = Knit.CreateService({
 	Name = "RankingService",
-	Client = {},
+	Client = {
+		RankClaimed = Knit.CreateSignal(),
+	},
 	MIN_RANK = MIN_RANK,
 	MAX_RANK = MAX_RANK,
 	_secretName = DEFAULT_SECRET_NAME,
 	_customGroupId = nil :: number?,
 	_rolesCache = {} :: { [number]: CachedRoles },
+	_rankingApiClient = nil :: any,
 })
 
 --- Dependency hooks for unit testing / offline specs.
@@ -90,6 +97,29 @@ function RankingService:GetTargetGroupId(overrideGroupId: number?): number
 		return game.CreatorId
 	end
 	return DEFAULT_GROUP_ID
+end
+
+--- Configures or overrides the RankingClient instance (useful for unit testing).
+function RankingService:SetRankingClient(client: any)
+	self._rankingApiClient = client
+end
+
+--- Lazily resolves the RankingClient initialized with the GAME_KEY secret.
+function RankingService:_getOrCreateRankingClient(): any?
+	if self._rankingApiClient ~= nil then
+		return self._rankingApiClient
+	end
+
+	local ok, secret = pcall(function()
+		return self._getSecret("GAME_KEY")
+	end)
+
+	if ok and secret ~= nil then
+		self._rankingApiClient = RankingClient(secret)
+		return self._rankingApiClient
+	end
+
+	return nil
 end
 
 --- Resolves the Roblox Open Cloud Secret object.
@@ -225,7 +255,7 @@ function RankingService:GetRoleForRankAsync(rank: number, overrideGroupId: numbe
 	return targetRole, nil
 end
 
---- Fetches the user's membership details in the target group.
+--- Fetches the user's membership details in the target group via Open Cloud.
 function RankingService:GetMemberAsync(playerOrUserId: Player | number, overrideGroupId: number?): (any?, string?)
 	local userId: number
 	if typeof(playerOrUserId) == "Instance" and playerOrUserId:IsA("Player") then
@@ -285,6 +315,46 @@ function RankingService:GetMemberAsync(playerOrUserId: Player | number, override
 	return memberships[1], nil
 end
 
+--- Sets a user's rank using the external RankingClient API.
+function RankingService:SetRankViaClientAsync(
+	userId: number,
+	rank: number,
+	overrideGroupId: number?
+): (boolean, string?)
+	if not self.IsValidRank(rank) then
+		return false,
+			string.format(
+				"Invalid rank %s. Allowed rank values are integers from %d to %d.",
+				tostring(rank),
+				MIN_RANK,
+				MAX_RANK
+			)
+	end
+
+	local client = self:_getOrCreateRankingClient()
+	if not client then
+		return false, "Ranking client is not initialized (missing GAME_KEY secret)."
+	end
+
+	local groupId = self:GetTargetGroupId(overrideGroupId)
+	local response = client.setRank(groupId, userId, rank)
+
+	if not response then
+		return false, "No response from ranking API."
+	end
+
+	if response.error then
+		return false, tostring(response.error)
+	end
+
+	local onlinePlayer = Players:GetPlayerByUserId(userId)
+	if onlinePlayer and onlinePlayer.Parent ~= nil then
+		RankUtil:InvalidateCache(onlinePlayer)
+	end
+
+	return true, string.format("Successfully set user %d to rank %d in group %d.", userId, rank, groupId)
+end
+
 --- Internal implementation of setting a user's rank.
 function RankingService:_setRankInternalAsync(
 	playerOrUserId: Player | number,
@@ -319,6 +389,14 @@ function RankingService:_setRankInternalAsync(
 	end
 
 	local groupId = self:GetTargetGroupId(overrideGroupId)
+
+	-- If external RankingClient is available, use it first:
+	if self._rankingApiClient ~= nil then
+		local ok, msg = self:SetRankViaClientAsync(userId, rank, groupId)
+		if ok then
+			return true, msg
+		end
+	end
 
 	local secret, secretErr = self:_resolveSecret()
 	if not secret then
@@ -379,13 +457,7 @@ function RankingService:_setRankInternalAsync(
 
 	-- Invalidate RankUtil cache for player if currently in the server
 	if onlinePlayer and onlinePlayer.Parent ~= nil then
-		local ok, RankUtil = pcall(function()
-			local Shared = ReplicatedStorage:WaitForChild("Shared")
-			return require(Shared.Utility.RankUtil)
-		end)
-		if ok and RankUtil and typeof(RankUtil.InvalidateCache) == "function" then
-			RankUtil:InvalidateCache(onlinePlayer)
-		end
+		RankUtil:InvalidateCache(onlinePlayer)
 	end
 
 	return true, string.format("Successfully set user %d to rank %d (%s).", userId, rank, targetRole.displayName)
@@ -424,6 +496,100 @@ function RankingService.SetRank(
 	optionalGroupId: any?
 ): (boolean, string?)
 	return RankingService.SetRankAsync(selfOrTarget, targetOrRank, rankOrGroupId, optionalGroupId)
+end
+
+--- Claims a group rank promotion for the given player based on career level & passes.
+function RankingService:ClaimRank(player: Player): (boolean, string?)
+	if typeof(player) ~= "Instance" or not player:IsA("Player") then
+		return false, "Invalid player instance."
+	end
+
+	local groupId = self:GetTargetGroupId()
+
+	-- 1. Check current group rank
+	local currentRank = 0
+	local rankOk, fetchedRank = pcall(function()
+		return RankUtil:GetRankAsync(player)
+	end)
+	if rankOk and typeof(fetchedRank) == "number" then
+		currentRank = fetchedRank
+	else
+		currentRank = player:GetRankInGroup(groupId)
+	end
+
+	if currentRank == 0 then
+		return false, "You must join the Boba Cafe group to claim a group rank!"
+	end
+
+	-- 2. Check career level
+	local playerLevel = 1
+	local okProg, ProgressionService = pcall(function()
+		return Knit.GetService("ProgressionService")
+	end)
+	if okProg and ProgressionService and typeof(ProgressionService.GetLevel) == "function" then
+		playerLevel = ProgressionService:GetLevel(player)
+	else
+		local attrLevel = player:GetAttribute("Level")
+		if typeof(attrLevel) == "number" then
+			playerLevel = attrLevel
+		end
+	end
+
+	-- 3. Check owned passes
+	local ownedPasses = GroupRankProgression.FetchPassOwnershipAsync(player)
+
+	-- 4. Find claimable tier
+	local claimableTier = GroupRankProgression.GetClaimableTier(playerLevel, currentRank, ownedPasses)
+	if not claimableTier then
+		return false, "No eligible rank promotion found for your current level and passes."
+	end
+
+	if not self.IsValidRank(claimableTier.RankId) then
+		return false, string.format("Invalid target rank %d for promotion.", claimableTier.RankId)
+	end
+
+	if currentRank >= claimableTier.RankId then
+		return false, string.format("You already hold rank %d (%s) or higher.", currentRank, claimableTier.RoleName)
+	end
+
+	-- 5. Perform the rank update using RankingClient (or fallback to Open Cloud)
+	local setOk, setErr = false, nil
+	local client = self:_getOrCreateRankingClient()
+	if client then
+		setOk, setErr = self:SetRankViaClientAsync(player.UserId, claimableTier.RankId, groupId)
+	else
+		setOk, setErr = self:_setRankInternalAsync(player, claimableTier.RankId, groupId)
+	end
+
+	if not setOk then
+		return false, setErr or "Failed to update group rank."
+	end
+
+	-- 6. Invalidate RankUtil server cache
+	RankUtil:InvalidateCache(player)
+
+	-- 7. Notify player
+	local okDialog, DialogService = pcall(function()
+		return Knit.GetService("DialogService")
+	end)
+	if okDialog and DialogService and typeof(DialogService.Notify) == "function" then
+		DialogService:Notify(player, {
+			Title = "Group Promotion!",
+			Description = string.format("Congratulations! You are now a %s in Boba Cafe!", claimableTier.RoleName),
+		})
+	end
+
+	-- 8. Fire Knit Signal to client
+	if self.Client and self.Client.RankClaimed then
+		self.Client.RankClaimed:Fire(player, claimableTier.RoleName, claimableTier.RankId)
+	end
+
+	return true, claimableTier.RoleName
+end
+
+--- Client API: ClaimRank invoked from UI (Staff page).
+function RankingService.Client:ClaimRank(player: Player): (boolean, string?)
+	return self.Server:ClaimRank(player)
 end
 
 --- Callable table support: RankingService(player, rank, groupId)

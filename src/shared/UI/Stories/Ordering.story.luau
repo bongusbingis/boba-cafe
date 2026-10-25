@@ -102,7 +102,7 @@ local mockOrderItems: { any } = {
 
 return function(target)
 	local root = ReactRoblox.createRoot(target)
-    
+
 	root:render(c("Frame", {
 		BackgroundTransparency = 1,
 		Size = UDim2.fromScale(0.9, 0.9),
@@ -115,7 +115,8 @@ return function(target)
 		Ordering = c(Ordering, {
 			OrderItems = mockOrderItems,
 			MaxOrderItems = 3,
-			StaffRole = "Customer",
+			StaffLevel = 5,
+			StaffRole = "Level 5",
 			StaffAvatarUrl = "rbxasset://textures/ui/GuiImagePlaceholder.png",
 			ResolveItemName = resolveItemName,
 			ResolveItemDescription = resolveItemDescription,

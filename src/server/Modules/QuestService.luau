@@ -272,29 +272,6 @@ function QuestService:AdvanceQuest(player: Player, questType: string, amount: nu
 		end)
 	end
 
-	if #halfwayEntries > 0 then
-		task.defer(function()
-			pcall(function()
-				local dialog = self:_getService("DialogService")
-				if dialog then
-					for _, quest in halfwayEntries do
-						dialog:Notify(
-							player,
-							{
-								Text = string.format(
-									"%s: %d/%d",
-									QuestConfig.GetQuestTitle(quest),
-									quest.Progress,
-									quest.Target
-								),
-							} :: any
-						)
-					end
-				end
-			end)
-		end)
-	end
-
 	return changed
 end
 

@@ -334,8 +334,8 @@ return function()
 			BackgroundTransparency = 1,
 			FontFace = Styles.FONT_FREDOKA,
 			LayoutOrder = 1,
-			Position = UDim2.fromScale(0.043, 0.285),
-			Size = UDim2.fromScale(0.474, 0.24),
+			Position = UDim2.fromScale(0.045, 0.18),
+			Size = UDim2.fromScale(0.65, 0.38),
 			Text = bannerText,
 			TextColor3 = Styles.OFFWHITE,
 			TextScaled = true,
@@ -343,8 +343,8 @@ return function()
 			ZIndex = 3,
 		}, {
 			Constraint = c("UITextSizeConstraint", {
-				MaxTextSize = 13,
-				MinTextSize = 8,
+				MaxTextSize = 20,
+				MinTextSize = 10,
 			}),
 		}),
 	})

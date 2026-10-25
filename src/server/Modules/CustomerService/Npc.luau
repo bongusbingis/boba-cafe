@@ -74,6 +74,7 @@ export type Context = {
 }
 
 export type BubbleUI = {
+	Gui: BillboardGui,
 	Fill: Frame,
 	Track: Frame,
 	Chip: Frame,
@@ -152,6 +153,8 @@ local BUBBLE_CHIP = 10
 local BUBBLE_TITLE_H = 18
 local BUBBLE_DETAIL_H = 13
 local BUBBLE_TRACK_H = 5
+local BUBBLE_COMPACT_WIDTH = 70
+local BUBBLE_COMPACT_HEIGHT = 8
 local BUBBLE_OFFSET = Vector3.new(0, 3.2, 0) -- above the head
 -- Lifts the gui so the order card's centre (not the gui's) sits on BUBBLE_OFFSET.
 local BUBBLE_SIZE_OFFSET =
@@ -401,11 +404,12 @@ local function buildBubble(model: Model, specs: { OrderSpec.OrderSpec }, variant
 	gui.LightInfluence = 0
 	gui.MaxDistance = BUBBLE_MAX_DISTANCE_STUDS
 	gui.SizeOffset = BUBBLE_SIZE_OFFSET
+	gui.Enabled = false
 
 	local card = Instance.new("Frame")
 	card.Name = "Card"
-	card.AnchorPoint = Vector2.new(0, 1)
-	card.Position = UDim2.fromScale(0, 1)
+	card.AnchorPoint = Vector2.new(0.5, 1)
+	card.Position = UDim2.fromScale(0.5, 1)
 	card.Size = UDim2.new(1, 0, 0, BUBBLE_CARD_H)
 	card.BackgroundColor3 = if variant == "VIP" then Styles.GOLD else Styles.CREAM
 	card.BorderSizePixel = 0
@@ -514,6 +518,7 @@ local function buildBubble(model: Model, specs: { OrderSpec.OrderSpec }, variant
 	speechPadding.Parent = speech
 
 	local bubble: BubbleUI = {
+		Gui = gui,
 		Fill = fill,
 		Track = track,
 		Chip = chip,
@@ -807,10 +812,31 @@ function Npc.ShowGreetingBubble(self: Npc)
 	if bubble == nil then
 		return
 	end
-	layoutBubble(bubble, false, false)
+	local card = bubble.Card
+	card.AnchorPoint = Vector2.new(0.5, 1)
+	card.Position = UDim2.fromScale(0.5, 1)
+	card.Size = UDim2.fromOffset(BUBBLE_COMPACT_WIDTH, BUBBLE_COMPACT_HEIGHT)
+	card.BackgroundColor3 = if self.Variant == "VIP" then Styles.GOLD else Styles.CREAM
+	local cardCorner = card:FindFirstChildOfClass("UICorner")
+	if cardCorner then
+		cardCorner.CornerRadius = Styles.CORNER_FULL
+	end
+	local cardStroke = card:FindFirstChildOfClass("UIStroke")
+	if cardStroke then
+		cardStroke.Thickness = 1.5
+		cardStroke.Color = if self.Variant == "VIP" then Styles.GOLD_DEEP else Styles.GREEN
+	end
+	bubble.Track.AnchorPoint = Vector2.new(0.5, 0.5)
+	bubble.Track.Position = UDim2.fromScale(0.5, 0.5)
+	bubble.Track.Size = UDim2.new(1, -4, 1, -4)
+	bubble.Track.BackgroundColor3 = Styles.GRAY
+	bubble.Track.Visible = true
+	bubble.Chip.Visible = false
+	bubble.Label.Visible = false
+	bubble.Label.Text = ""
+	bubble.Detail.Visible = false
 	bubble.Card.Visible = true
-	bubble.Track.Visible = true -- register patience shows on the same bar (TAKEOVER-FIX 2)
-	bubble.Label.Text = "Hi, can I order?"
+	bubble.Gui.Enabled = true
 	self:_setPatienceBar(1)
 end
 
@@ -849,8 +875,28 @@ function Npc.ShowOrderBubble(self: Npc)
 	if bubble == nil then
 		return
 	end
+	local card = bubble.Card
+	card.AnchorPoint = Vector2.new(0.5, 1)
+	card.Position = UDim2.fromScale(0.5, 1)
+	card.Size = UDim2.new(1, 0, 0, BUBBLE_CARD_H)
+	card.BackgroundColor3 = if self.Variant == "VIP" then Styles.GOLD else Styles.CREAM
+	local cardCorner = card:FindFirstChildOfClass("UICorner")
+	if cardCorner then
+		cardCorner.CornerRadius = Styles.CORNER_BUTTON
+	end
+	local cardStroke = card:FindFirstChildOfClass("UIStroke")
+	if cardStroke then
+		cardStroke.Thickness = 2
+		cardStroke.Color = if self.Variant == "VIP" then Styles.GOLD_DEEP else Styles.GREEN
+	end
+	bubble.Track.AnchorPoint = Vector2.new(0, 0)
+	bubble.Track.Position = UDim2.new(0, BUBBLE_PAD, 1, -(BUBBLE_TRACK_H + 5))
+	bubble.Track.Size = UDim2.new(1, -2 * BUBBLE_PAD, 0, BUBBLE_TRACK_H)
+	bubble.Track.BackgroundColor3 = Styles.GRAY
+	bubble.Label.Visible = true
 	local title, detail = describeOrders(self.Specs, self.Variant)
 	layoutBubble(bubble, true, detail ~= "")
+	bubble.Gui.Enabled = true
 	bubble.Card.Visible = true
 	bubble.Track.Visible = true
 	bubble.Chip.BackgroundColor3 = chipColor(self.Spec)
@@ -977,7 +1023,7 @@ function Npc._say(self: Npc, kind: string)
 		local lines = (pool :: any)[kind]
 		local gui = self.Model:FindFirstChild("OrderBubble")
 		local speech = if gui ~= nil then gui:FindFirstChild("Speech") else nil
-		if lines == nil or #lines == 0 or speech == nil then
+		if lines == nil or #lines == 0 or speech == nil or gui == nil then
 			return
 		end
 		local line: string = lines[math.random(#lines)]
@@ -986,6 +1032,7 @@ function Npc._say(self: Npc, kind: string)
 		end)
 		self._speechToken += 1
 		local token = self._speechToken;
+		(gui :: BillboardGui).Enabled = true
 		(speech :: TextLabel).Text = line;
 		(speech :: TextLabel).Visible = true
 		task.delay(SPEECH_SECONDS, function()
@@ -1221,128 +1268,144 @@ function Npc._run(self: Npc)
 	local ctx = self._ctx
 	local nodes = ctx.Nodes
 
-	-- Spawn at Entry, in its orientation.
-	local entry = nodes.Entry
-	self.Model:PivotTo(CFrame.new(entry.Position + Vector3.new(0, ROOT_HEIGHT_STUDS, 0)) * entry.CFrame.Rotation)
-	self.Model.Parent = ctx.Parent
-	pcall(function()
-		self.Root:SetNetworkOwner(nil) -- server owns the physics
-	end)
+	-- If the NPC already has a pickup spot assigned upon start (e.g. auto-granted first order):
+	-- spawn directly at the pickup counter so the player doesn't wait for them to walk in from Entry.
+	if self.PickupSpot ~= nil then
+		local spawnPos = if typeof(self.PickupSpot) == "Vector3"
+			then self.PickupSpot
+			else (self.PickupSpot :: BasePart).Position
+		local spawnRot = self.PickupRotation or CFrame.Angles(0, 0, 0)
+		self.Model:PivotTo(CFrame.new(spawnPos + Vector3.new(0, ROOT_HEIGHT_STUDS, 0)) * spawnRot)
+		self.Model.Parent = ctx.Parent
+		pcall(function()
+			self.Root:SetNetworkOwner(nil)
+		end)
+	else
+		-- Spawn at Entry, in its orientation.
+		local entry = nodes.Entry
+		self.Model:PivotTo(CFrame.new(entry.Position + Vector3.new(0, ROOT_HEIGHT_STUDS, 0)) * entry.CFrame.Rotation)
+		self.Model.Parent = ctx.Parent
+		pcall(function()
+			self.Root:SetNetworkOwner(nil) -- server owns the physics
+		end)
 
-	self:_startMoving()
-	for _, node in nodes.Path do
-		self:_walkTo(node)
-	end
-	self:_stopMoving()
-
-	-- Wait in line at their chosen register. The front NPC takes the counter spot; everyone else
-	-- waits behind them in line like in a real cafe.
-	self:_setState("Queued")
-	local spot: number? = nil
-	local standingAt = 0
-	local regSpot = if ctx.GetRegisterSpot ~= nil then ctx.GetRegisterSpot(self) else 1
-	local counterPart = nodes.Counter[regSpot]
-	local lineLeft = CustomerConfig.QUEUE_PATIENCE_SECONDS
-	local lineLast = os.clock()
-	while spot == nil and not self._destroyed and not self.Left do
-		local qIndex = ctx.QueueIndex(self)
-		spot = ctx.TryTakeCounter(self)
-		local lineNow = os.clock()
-		if not ctx.IsPaused() then
-			lineLeft -= lineNow - lineLast
+		self:_startMoving()
+		for _, node in nodes.Path do
+			self:_walkTo(node)
 		end
-		lineLast = lineNow
-		if spot ~= nil then
-			break
-		elseif lineLeft <= 0 then
-			-- Gave up in line (TAKEOVER-FIX 2): quiet, no walkout. Clears a Rush backlog.
-			self:Leave("LineGaveUp")
-			break
-		elseif standingAt ~= qIndex then
-			if counterPart ~= nil then
-				local offset = (qIndex - 1) * 3.5
-				local queuePos = counterPart.Position - counterPart.CFrame.LookVector * offset
-				self:_walkTo(queuePos)
-				self.Model:PivotTo(CFrame.new(self.Model:GetPivot().Position) * counterPart.CFrame.Rotation)
-				self:_playTrack("Idle", true, Enum.AnimationPriority.Idle)
-				standingAt = qIndex
+		self:_stopMoving()
+
+		-- Wait in line at their chosen register. The front NPC takes the counter spot; everyone else
+		-- waits behind them in line like in a real cafe.
+		self:_setState("Queued")
+		local spot: number? = nil
+		local standingAt = 0
+		local regSpot = if ctx.GetRegisterSpot ~= nil then ctx.GetRegisterSpot(self) else 1
+		local counterPart = nodes.Counter[regSpot]
+		local lineLeft = CustomerConfig.QUEUE_PATIENCE_SECONDS
+		local lineLast = os.clock()
+		while spot == nil and not self._destroyed and not self.Left and self.PickupSpot == nil do
+			local qIndex = ctx.QueueIndex(self)
+			spot = ctx.TryTakeCounter(self)
+			local lineNow = os.clock()
+			if not ctx.IsPaused() then
+				lineLeft -= lineNow - lineLast
+			end
+			lineLast = lineNow
+			if spot ~= nil or self.PickupSpot ~= nil then
+				break
+			elseif lineLeft <= 0 then
+				-- Gave up in line (TAKEOVER-FIX 2): quiet, no walkout. Clears a Rush backlog.
+				self:Leave("LineGaveUp")
+				break
+			elseif standingAt ~= qIndex then
+				if counterPart ~= nil then
+					local offset = (qIndex - 1) * 3.5
+					local queuePos = counterPart.Position - counterPart.CFrame.LookVector * offset
+					self:_walkTo(queuePos)
+					self.Model:PivotTo(CFrame.new(self.Model:GetPivot().Position) * counterPart.CFrame.Rotation)
+					self:_playTrack("Idle", true, Enum.AnimationPriority.Idle)
+					standingAt = qIndex
+				else
+					task.wait(WAIT_POLL_SECONDS)
+				end
 			else
 				task.wait(WAIT_POLL_SECONDS)
 			end
-		else
-			task.wait(WAIT_POLL_SECONDS)
 		end
-	end
-	if spot == nil then
-		if self.Left and not self._destroyed then
-			self:_pathfindTo(nodes.Exit.Position)
-			self:_walkTo(nodes.Exit)
+		if self.PickupSpot == nil and spot == nil then
+			if self.Left and not self._destroyed then
+				self:_pathfindTo(nodes.Exit.Position)
+				self:_walkTo(nodes.Exit)
+			end
+			return
 		end
-		return
-	end
 
-	self.CounterSpot = spot
-	self:_setState("Walking")
-	local counter = nodes.Counter[spot]
-	self:_walkTo(counter)
-	-- Counter parts face the kitchen; the customer faces the same way.
-	self.Model:PivotTo(CFrame.new(self.Model:GetPivot().Position) * counter.CFrame.Rotation)
-	self:_setState("AtCounter")
-	self:ShowGreetingBubble()
-	self:_playTrack("Wave", false, Enum.AnimationPriority.Action)
-	self:_playTrack("Idle", true, Enum.AnimationPriority.Idle)
+		if self.PickupSpot == nil and spot ~= nil then
+			self.CounterSpot = spot
+			self:_setState("Walking")
+			local counter = nodes.Counter[spot]
+			self:_walkTo(counter)
+			-- Counter parts face the kitchen; the customer faces the same way.
+			self.Model:PivotTo(CFrame.new(self.Model:GetPivot().Position) * counter.CFrame.Rotation)
+			self:_setState("AtCounter")
+			self:ShowGreetingBubble()
+			self:_playTrack("Wave", false, Enum.AnimationPriority.Action)
+			self:_playTrack("Idle", true, Enum.AnimationPriority.Idle)
 
-	local ok, err = pcall(self._ctx.OnAtCounter, self)
-	if not ok then
-		warn(`[CustomerService] NPC OnAtCounter failed: {err}`)
-	end
+			local ok, err = pcall(self._ctx.OnAtCounter, self)
+			if not ok then
+				warn(`[CustomerService] NPC OnAtCounter failed: {err}`)
+			end
 
-	-- Register patience (TAKEOVER-FIX 2): the NPC waits for its order to be taken and
-	-- submitted (which moves it to pickup); if nobody does, it walks out unhappy.
-	-- Guarded: a context without RegisterPatience (a server that loaded a mismatched
-	-- CustomerService, seen in Studio as "Npc:884: attempt to call a nil value") or a
-	-- throwing callback used to despawn every NPC reaching the counter. Fall back instead.
-	local registerTotal = CustomerConfig.PATIENCE_BASE_SECONDS * CustomerConfig.REGISTER_PATIENCE_MULT
-	local okPatience, seconds = pcall(ctx.RegisterPatience, self)
-	if okPatience and typeof(seconds) == "number" and seconds == seconds and seconds < math.huge then
-		registerTotal = seconds
-	elseif not registerPatienceWarned then
-		registerPatienceWarned = true
-		warn(`[CustomerService] RegisterPatience failed; using the base patience: {seconds}`)
-	end
-	registerTotal = math.max(1, registerTotal)
-	self._registerTotal = registerTotal
-	self._registerEnd = os.clock() + registerTotal
-	if self.Model ~= nil then
-		self.Model:SetAttribute("PatienceTotal", registerTotal)
-		self.Model:SetAttribute("PatienceEnd", workspace:GetServerTimeNow() + registerTotal)
-	end
-	local registerLast = os.clock()
-	while self.State == "AtCounter" and not self._destroyed and not self.Left do
-		task.wait(WAIT_POLL_SECONDS)
-		local now = os.clock()
-		if ctx.IsPaused() then
-			self._registerEnd += now - registerLast
+			-- Register patience (TAKEOVER-FIX 2): the NPC waits for its order to be taken and
+			-- submitted (which moves it to pickup); if nobody does, it walks out unhappy.
+			-- Guarded: a context without RegisterPatience (a server that loaded a mismatched
+			-- CustomerService, seen in Studio as "Npc:884: attempt to call a nil value") or a
+			-- throwing callback used to despawn every NPC reaching the counter. Fall back instead.
+			local registerTotal = CustomerConfig.PATIENCE_BASE_SECONDS * CustomerConfig.REGISTER_PATIENCE_MULT
+			local okPatience, seconds = pcall(ctx.RegisterPatience, self)
+			if okPatience and typeof(seconds) == "number" and seconds == seconds and seconds < math.huge then
+				registerTotal = seconds
+			elseif not registerPatienceWarned then
+				registerPatienceWarned = true
+				warn(`[CustomerService] RegisterPatience failed; using the base patience: {seconds}`)
+			end
+			registerTotal = math.max(1, registerTotal)
+			self._registerTotal = registerTotal
+			self._registerEnd = os.clock() + registerTotal
+			if self.Model ~= nil then
+				self.Model:SetAttribute("PatienceTotal", registerTotal)
+				self.Model:SetAttribute("PatienceEnd", workspace:GetServerTimeNow() + registerTotal)
+			end
+			local registerLast = os.clock()
+			while self.State == "AtCounter" and not self._destroyed and not self.Left do
+				task.wait(WAIT_POLL_SECONDS)
+				local now = os.clock()
+				if ctx.IsPaused() then
+					self._registerEnd += now - registerLast
+				end
+				registerLast = now
+				if self.State ~= "AtCounter" or self.Left then
+					break
+				end
+				local remaining = self._registerEnd - now
+				self:_setPatienceBar(remaining / registerTotal)
+				if remaining <= 0 then
+					self:Leave("PatienceOut")
+					break
+				end
+			end
+			self._registerEnd = 0
+			if self._destroyed then
+				return
+			end
+			if self.Left then
+				self:_pathfindTo(nodes.Exit.Position)
+				self:_walkTo(nodes.Exit)
+				return
+			end
 		end
-		registerLast = now
-		if self.State ~= "AtCounter" or self.Left then
-			break
-		end
-		local remaining = self._registerEnd - now
-		self:_setPatienceBar(remaining / registerTotal)
-		if remaining <= 0 then
-			self:Leave("PatienceOut")
-			break
-		end
-	end
-	self._registerEnd = 0
-	if self._destroyed then
-		return
-	end
-	if self.Left then
-		self:_pathfindTo(nodes.Exit.Position)
-		self:_walkTo(nodes.Exit)
-		return
 	end
 
 	-- Walk from register to open pickup spot on workspace.Assets.NPC.OrderPickup

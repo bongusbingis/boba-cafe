@@ -26,6 +26,7 @@ return function()
 		mockRequests = {}
 
 		RankingService._secretName = "OPEN_CLOUD_API_KEY"
+		RankingService._rankingApiClient = nil
 		RankingService:InvalidateRolesCache()
 
 		RankingService._getSecret = function(name: string)
@@ -285,6 +286,41 @@ return function()
 		it("supports metatable call RankingService(userId, rank)", function()
 			local ok, _ = RankingService(12345, 8)
 			expect(ok).to.equal(true)
+		end)
+	end)
+
+	describe("RankingClient integration with GAME_KEY", function()
+		it("routes rank updates through injected RankingClient", function()
+			local calledGroupId, calledUserId, calledRank
+			local mockClient = {
+				setRank = function(groupId: number, userId: number, rank: number)
+					calledGroupId = groupId
+					calledUserId = userId
+					calledRank = rank
+					return { success = true }
+				end,
+			}
+
+			RankingService:SetRankingClient(mockClient)
+			local ok, msg = RankingService:SetRankViaClientAsync(12345, 9)
+			expect(ok).to.equal(true)
+			expect(calledGroupId).to.equal(3174578)
+			expect(calledUserId).to.equal(12345)
+			expect(calledRank).to.equal(9)
+			expect(string.find(msg or "", "Successfully", 1, true) ~= nil).to.equal(true)
+		end)
+
+		it("returns error message when RankingClient returns an error", function()
+			local mockClient = {
+				setRank = function(_groupId: number, _userId: number, _rank: number)
+					return { error = "User is pending a response." }
+				end,
+			}
+
+			RankingService:SetRankingClient(mockClient)
+			local ok, err = RankingService:SetRankViaClientAsync(12345, 7)
+			expect(ok).to.equal(false)
+			expect(string.find(err or "", "User is pending", 1, true) ~= nil).to.equal(true)
 		end)
 	end)
 end

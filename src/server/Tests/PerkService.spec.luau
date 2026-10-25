@@ -38,7 +38,7 @@ return function()
 
 	describe("PassCatalog", function()
 		it("should not contain deferred passes", function()
-			for _, deferredId in { 7564248, 7564221, 8022138, 43707849 } do
+			for _, deferredId in { 7564248, 7564221, 8022138 } do
 				expect(PassCatalog[deferredId]).to.equal(nil)
 			end
 		end)

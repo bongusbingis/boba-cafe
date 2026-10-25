@@ -253,6 +253,8 @@ function DialogController:KnitInit()
 	handle.Name = "Priority"
 	handle.DisplayOrder = 100
 	handle.ResetOnSpawn = false
+	handle.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+	handle.IgnoreGuiInset = true
 	handle.Parent = Players.LocalPlayer.PlayerGui
 	priorityGui = handle
 

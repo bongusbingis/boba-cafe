@@ -248,6 +248,7 @@ local CustomerService = Knit.CreateService({
 	_lastOrder = {} :: { [Player]: Rules.OrderItem }, -- last order per barista (no repeats)
 	_teamChain = 0, -- consecutive successful serves server-wide (session memory only)
 	_firstServe = {} :: { [Player]: boolean }, -- barista -> served 0 customers when last assigned (session memory)
+	_firstOrderGranting = {} :: { [Player]: boolean },
 	_teamComboUntil = 0, -- os.clock() deadline of the active Team Combo (0 = none)
 	_npcSeq = 0, -- makes ticket Ids unique per NPC
 	_stressSeen = {} :: { [Npc.Npc]: number }, -- BIG-B4-P1: first-seen clock per unassigned counter NPC (Studio stress only)
@@ -1200,6 +1201,153 @@ function CustomerService:_dispatchUnassignedNpcs()
 	end
 end
 
+function CustomerService:_checkAutoGrantFirstOrder(player: Player)
+	if not CustomerConfig.AUTO_GRANT_FIRST_ORDER then
+		return
+	end
+	if self._firstOrderGranting[player] then
+		return
+	end
+	self._firstOrderGranting[player] = true
+
+	task.spawn(function()
+		if player.Parent ~= Players then
+			self._firstOrderGranting[player] = nil
+			return
+		end
+		-- Bounded wait for ShiftService and world context to resolve on join
+		local startWait = os.clock()
+		while
+			player.Parent == Players
+			and (self._context == nil or not self._shift:IsClockedIn(player))
+			and os.clock() - startWait < 5
+		do
+			task.wait(0.2)
+		end
+		if player.Parent ~= Players or self._context == nil or not self._shift:IsClockedIn(player) then
+			self._firstOrderGranting[player] = nil
+			return
+		end
+		if not self:_hasFreeSlot(player) then
+			self._firstOrderGranting[player] = nil
+			return
+		end
+		local served = self:_readServedCount(player)
+		if served ~= 0 then
+			self._firstOrderGranting[player] = nil
+			return
+		end
+		if not self:_hasFreeSlot(player) then
+			self._firstOrderGranting[player] = nil
+			return
+		end
+		self:_autoGrantFirstOrder(player)
+		self._firstOrderGranting[player] = nil
+	end)
+end
+
+function CustomerService:_autoGrantFirstOrder(player: Player)
+	if not self.Enabled or self._context == nil then
+		return
+	end
+	if not self._shift:IsClockedIn(player) then
+		return
+	end
+	if not self:_hasFreeSlot(player) then
+		return
+	end
+
+	local firstOrderConfig = CustomerConfig.FIRST_SESSION_ORDERS[1]
+	local order: Rules.OrderItem = {
+		Category = firstOrderConfig.Category,
+		Item = firstOrderConfig.Item,
+		CustomInfo = table.clone(firstOrderConfig.CustomInfo),
+	}
+	local spec, reason = OrderSpec.FromOrderItem(order)
+	if spec == nil then
+		warn(`[CustomerService] Auto-grant order rejected by OrderSpec ({reason}): {order.Category}/{order.Item}`)
+		return
+	end
+
+	local targetNpc: Npc.Npc? = nil
+
+	-- 1. Prefer an unassigned NPC already at the counter
+	for npc in self._npcs do
+		if not npc.Left and npc.AssignedUserId == nil and self._assignee[npc] == nil and npc.State == "AtCounter" then
+			targetNpc = npc
+			break
+		end
+	end
+
+	-- 2. Next prefer an unassigned NPC queued in line
+	if targetNpc == nil then
+		for npc in self._npcs do
+			if not npc.Left and npc.AssignedUserId == nil and self._assignee[npc] == nil and npc.State == "Queued" then
+				targetNpc = npc
+				break
+			end
+		end
+	end
+
+	if targetNpc ~= nil then
+		if targetNpc.CounterSpot ~= nil then
+			self._context.ReleaseCounter(targetNpc)
+		end
+		local pickupPos, pickupRot = self._context.ClaimPickupSpot(targetNpc)
+		self._npcSeq += 1
+		if targetNpc.Model.Name == "Customer" then
+			targetNpc.Model.Name = `Customer_{self._npcSeq}`
+		end
+		targetNpc:SetOrders({ order }, { spec })
+		targetNpc.OrderRolled = true
+		targetNpc.RolledScriptedFor = player.UserId
+		self._lastOrder[player] = order
+		self._firstServe[player] = true
+		targetNpc:ClearVariant()
+		targetNpc:SetAssignment(player.UserId, 0, true)
+		if pickupPos ~= nil then
+			targetNpc:GoToPickup(pickupPos, pickupRot)
+		else
+			targetNpc:GoToPickup()
+		end
+		self:_issueTicket(player, targetNpc)
+		if self._order and typeof(self._order.RegisterCustomerOrder) == "function" then
+			self._order:RegisterCustomerOrder(targetNpc.Id, "Customer", 1, "Being Prepared", targetNpc.Model)
+		end
+	else
+		-- 3. No available NPC: spawn one directly at pickup
+		local npc = Npc.new(self._context, order, spec, 0, nil, nil)
+		if npc == nil then
+			warn("[CustomerService] Failed to create NPC for auto-granted order")
+			return
+		end
+		targetNpc = npc
+		self._npcs[npc] = true
+		self._npcCount += 1
+
+		local pickupPos, pickupRot = self._context.ClaimPickupSpot(npc)
+		npc.PickupSpot = pickupPos
+		npc.PickupRotation = pickupRot
+		self._npcSeq += 1
+		if npc.Model.Name == "Customer" then
+			npc.Model.Name = `Customer_{self._npcSeq}`
+		end
+		npc:SetOrders({ order }, { spec })
+		npc.OrderRolled = true
+		npc.RolledScriptedFor = player.UserId
+		self._lastOrder[player] = order
+		self._firstServe[player] = true
+		npc:ClearVariant()
+		npc:SetAssignment(player.UserId, 0, true)
+
+		self:_issueTicket(player, npc)
+		if self._order and typeof(self._order.RegisterCustomerOrder) == "function" then
+			self._order:RegisterCustomerOrder(npc.Id, "Customer", 1, "Being Prepared", npc.Model)
+		end
+		npc:Start()
+	end
+end
+
 -- Dedicated is the only mode (TAKEOVER-FIX 2): the barista who takes the order serves it.
 function CustomerService:_onAtCounter(npc: Npc.Npc)
 	if not self.Enabled then
@@ -1718,7 +1866,12 @@ function CustomerService:_onServeTriggered(npc: Npc.Npc, player: Player)
 		text ..= " · Fast"
 	end
 	if newCombo >= 2 then
-		text ..= ` · Combo ×{newCombo}`
+		if COMBO_MILESTONES[newCombo] and not teamDone and not isFirstServe then
+			local nextBonus = math.round(math.min(newCombo * CustomerConfig.COMBO_STEP, CustomerConfig.COMBO_CAP) * 100)
+			text ..= ` · Combo ×{newCombo} (+{nextBonus}% next)`
+		else
+			text ..= ` · Combo ×{newCombo}`
+		end
 	end
 	if teamChain >= TEAM_PROGRESS_FROM then
 		text ..= ` · Team {teamChain}/{TeamComboConfig.CHAIN_TARGET}`
@@ -1726,12 +1879,6 @@ function CustomerService:_onServeTriggered(npc: Npc.Npc, player: Player)
 	self._dialog:Notify(player, { Title = "Order served!", Description = text })
 	task.defer(function()
 		pcall(function()
-			if COMBO_MILESTONES[newCombo] and not teamDone and not isFirstServe then
-				local nextBonus =
-					math.round(math.min(newCombo * CustomerConfig.COMBO_STEP, CustomerConfig.COMBO_CAP) * 100)
-				local comboText = `Combo ×{newCombo}! Next serve +{nextBonus}% pay`
-				self._dialog:Notify(player, { Title = "Combo", Description = comboText, Text = comboText } :: any)
-			end
 			if isFirstServe then
 				task.delay(0.2, function()
 					pcall(function()
@@ -1776,6 +1923,7 @@ function CustomerService:_onServeTriggered(npc: Npc.Npc, player: Player)
 			Combo = newCombo,
 			Items = #npc.Orders,
 			Tip = tip,
+			Scripted = npc.Scripted == true,
 		})
 	end)
 end
@@ -2346,33 +2494,50 @@ end
 
 -- Clears the ticket for the NPC's holder: fires nil, frees the slot and
 -- restarts the holder's idle clock. Idempotent.
-function CustomerService:_clearTicket(npc: Npc.Npc)
-	local holder = self._assignee[npc]
-	if holder == nil then
-		return
-	end
+function CustomerService:_clearTicket(npc: Npc.Npc, fallbackHolder: Player?)
+	local holder = self._assignee[npc] or fallbackHolder
 	self._assignee[npc] = nil
-	local held = self._tickets[holder]
-	if held ~= nil then
+
+	local function clearTicketForPlayer(p: Player)
+		local held = self._tickets[p]
+		if held == nil then
+			return false
+		end
+		local foundAny = false
 		for slot, ticket in held do
-			if ticket.Id == npc.Model.Name then
+			local matchesModel = (ticket.NpcModel ~= nil and npc.Model ~= nil and ticket.NpcModel == npc.Model)
+			local matchesName = (npc.Model ~= nil and ticket.Id == npc.Model.Name)
+			local matchesId = (
+				npc.Id ~= nil and (ticket.Id == npc.Id or (ticket.NpcModel ~= nil and ticket.NpcModel.Name == npc.Id))
+			)
+			if matchesModel or matchesName or matchesId then
+				foundAny = true
 				held[slot] = nil
-				if typeof(holder) ~= "Instance" or holder:IsDescendantOf(Players) then
-					self._idleSince[holder] = os.clock()
+				if typeof(p) ~= "Instance" or p:IsDescendantOf(Players) then
+					self._idleSince[p] = os.clock()
 				end
-				self:_fireTicket(holder, nil, slot)
-				self:_dispatchRealOrders() -- a waiting real order may take the freed slot
-				self:_dispatchUnassignedNpcs() -- an unassigned pickup NPC may take the freed slot
-				-- Deferred so the serve's CustomerResolved is recorded before a due shift ends.
+				self:_fireTicket(p, nil, slot)
+				self:_dispatchRealOrders()
+				self:_dispatchUnassignedNpcs()
 				task.defer(function()
-					pcall(self._shift.Recheck, self._shift, holder)
+					pcall(self._shift.Recheck, self._shift, p)
 				end)
-				break
 			end
 		end
 		if next(held) == nil then
-			self._tickets[holder] = nil
-			self:_unwatchBaristaInventory(holder)
+			self._tickets[p] = nil
+			self:_unwatchBaristaInventory(p)
+		end
+		return foundAny
+	end
+
+	if holder ~= nil then
+		clearTicketForPlayer(holder)
+	end
+
+	for p in self._tickets do
+		if p ~= holder then
+			clearTicketForPlayer(p)
 		end
 	end
 end
@@ -2381,6 +2546,7 @@ end
 -- the next free barista. Patience keeps running (PatienceEnd unchanged).
 function CustomerService:_releaseTicket(player: Player)
 	self._activeOrderingNpc[player] = nil
+	self.Client.CloseOrderingTablet:Fire(player)
 	local held: { Npc.Npc } = {}
 	for waiting, holder in self._assignee do
 		if holder == player then
@@ -2391,6 +2557,14 @@ function CustomerService:_releaseTicket(player: Player)
 		npc:ClearAssignment()
 		self:_clearTicket(npc)
 		self:_handOff(npc, player)
+	end
+	local remaining = self._tickets[player]
+	if remaining ~= nil then
+		for slot in remaining do
+			self:_fireTicket(player, nil, slot)
+		end
+		self._tickets[player] = nil
+		self:_unwatchBaristaInventory(player)
 	end
 end
 
@@ -2419,13 +2593,13 @@ function CustomerService:_onCustomerLeft(npc: Npc.Npc, reason: string)
 		self._orderTakers[npc] = nil
 	end
 
+	local holder = self._assignee[npc] or npc._lastTaker
 	if reason ~= "PatienceOut" and reason ~= "WrongOrder" then
-		self:_clearTicket(npc)
+		self:_clearTicket(npc, holder)
 		return
 	end
 	self:RecordTeamServe(nil) -- any walkout breaks the server-wide chain, assigned or not
-	local holder = self._assignee[npc] or npc._lastTaker
-	self:_clearTicket(npc)
+	self:_clearTicket(npc, holder)
 	local ratingMult = npc._walkoutRatingMult or 1
 	if holder == nil then
 		-- Nobody held it (register walkout or orphan): the cafe rating still drops (TAKEOVER-FIX 2).
@@ -2521,6 +2695,7 @@ function CustomerService:KnitStart()
 			if clockedIn then
 				self._idleSince[player] = os.clock()
 				self:_dispatchUnassignedNpcs()
+				self:_checkAutoGrantFirstOrder(player)
 			else
 				self:_releaseTicket(player)
 			end
@@ -2532,6 +2707,7 @@ function CustomerService:KnitStart()
 
 	for _, player in Players:GetPlayers() do
 		self._idleSince[player] = os.clock()
+		self:_checkAutoGrantFirstOrder(player)
 	end
 
 	-- Players who joined while the world was being resolved.
@@ -2544,10 +2720,12 @@ end
 function CustomerService:PlayerAdded(player: Player)
 	if self.Enabled then
 		self:_safeWatchPlayer(player)
+		self:_checkAutoGrantFirstOrder(player)
 	end
 end
 
 function CustomerService:PlayerRemoving(player: Player)
+	self._firstOrderGranting[player] = nil
 	self:_unwatchBaristaInventory(player)
 	self._counterSubmitAt[player] = nil
 	self._clockInPromptOpen[player] = nil

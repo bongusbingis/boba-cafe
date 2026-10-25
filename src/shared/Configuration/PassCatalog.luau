@@ -45,6 +45,12 @@ local PassCatalog: { [number]: PassEntry } = {
 		Listed = false,
 		Legacy = false,
 	},
+	[6202139] = {
+		Name = "Staff Assistant",
+		Perks = { "TipBoost50", "XpBoost50" },
+		Listed = false,
+		Legacy = true,
+	},
 	[12385781] = {
 		Name = "VIP",
 		Description = "Unlock exclusive VIP features including special patio access, 2x rewards, and a specialized chat color!",
@@ -52,6 +58,12 @@ local PassCatalog: { [number]: PassEntry } = {
 		Perks = { "DailyReward2x", "VipLounge", "VipTag" },
 		Listed = true,
 		Legacy = false,
+	},
+	[2126368] = {
+		Name = "Premium Lounge",
+		Perks = { "VipLounge" },
+		Listed = false,
+		Legacy = true,
 	},
 	[219650999] = {
 		Name = "Star Employee",
@@ -98,10 +110,10 @@ local PassCatalog: { [number]: PassEntry } = {
 		Listed = true,
 		Legacy = false,
 	},
-	[16728123325] = {
+	[219651224] = {
 		Name = "Uniform Remover",
 		Description = "Remove your uniform and wear your own style in the cafe!",
-		Icon = "rbxassetid://16728123822", -- verified
+		Icon = "rbxassetid://16728123325", -- verified
 		Perks = { "UniformRemover" },
 		Listed = true,
 		Legacy = false,
@@ -154,6 +166,25 @@ local PassCatalog: { [number]: PassEntry } = {
 		Icon = "rbxassetid://16728123607",
 		Perks = { "UnlimitedStock" },
 		Listed = true,
+		Legacy = false,
+	},
+
+	-- Display-only passes: sold in the shop before, but wired to no perks yet.
+	-- Delisted until they grant something (Jack).
+	[29083693] = {
+		Name = "Nametag Customizer",
+		Description = "Customize your nametag with a variety of colors!",
+		Icon = "rbxassetid://16728123607",
+		Perks = {},
+		Listed = false,
+		Legacy = false,
+	},
+	[219651161] = {
+		Name = "Water Pack",
+		Description = "Buckle up and unleash the thrill as you conquer the waves!",
+		Icon = "rbxassetid://16709440324",
+		Perks = {},
+		Listed = false,
 		Legacy = false,
 	},
 }

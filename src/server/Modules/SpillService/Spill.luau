@@ -354,10 +354,6 @@ end
 function Spill:_ListenToCleanPrompt()
 	return self.Prompt.Triggered:Connect(function(Player)
 		if Player:GetAttribute("CleaningSpill") or Player:GetAttribute("Restocking") or self.Cleaning then
-			Service("DialogService"):Notify(Player, {
-				Title = "Notification",
-				Description = "You can't do that right now.",
-			})
 			return
 		end
 
@@ -553,18 +549,25 @@ function Spill:Clean()
 	end
 
 	self.Cleaning = true
-	self.Prompt.Enabled = false
+	if self.Prompt then
+		self.Prompt.Enabled = false
+	end
 
-	local Sparkles = Service("SpillService").Storage.Sparkles:Clone()
-	Sparkles.Parent = self.Object.PrimaryPart
-	Sparkles:Emit(30)
+	local storage = Service("SpillService").Storage
+	local sparklesAsset = storage and storage:FindFirstChild("Sparkles")
+	if sparklesAsset and self.Object and self.Object.PrimaryPart then
+		local Sparkles = sparklesAsset:Clone()
+		Sparkles.Parent = self.Object.PrimaryPart
+		Sparkles:Emit(30)
+		self.Janitor:Add(Sparkles)
+	end
 
-	local _itemFader = ItemFader.new()
-	_itemFader:AddItem(self.Object)
-	_itemFader:FadeOut()
-
-	self.Janitor:Add(Sparkles)
-	self.Janitor:Add(_itemFader)
+	if self.Object then
+		local _itemFader = ItemFader.new()
+		_itemFader:AddItem(self.Object)
+		_itemFader:FadeOut()
+		self.Janitor:Add(_itemFader)
+	end
 
 	task.wait(1.5)
 	self:Destroy()

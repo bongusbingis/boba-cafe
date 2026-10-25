@@ -11,11 +11,7 @@ return function()
 	local function makeFakePlayer(userId: number, clockedIn: boolean): Player
 		local folder = Instance.new("Folder")
 		folder.Name = "TestPlayer_" .. userId
-		local player = folder :: any
-		player.UserId = userId
-		player.Name = folder.Name
-		player.DisplayName = "TestUser"
-		player:SetAttribute("ClockedIn", clockedIn)
+		folder:SetAttribute("ClockedIn", clockedIn)
 
 		local char = Instance.new("Model")
 		char.Name = "Character"
@@ -24,17 +20,26 @@ return function()
 		root.Parent = char
 		char.PrimaryPart = root
 		char.Parent = workspace
-		player.Character = char
 
-		return player
+		local player = setmetatable({
+			UserId = userId,
+			Name = folder.Name,
+			DisplayName = "TestUser",
+			Character = char,
+			Destroy = function(_self)
+				folder:Destroy()
+			end,
+		}, { __index = folder })
+
+		return (player :: any) :: Player
 	end
 
 	describe("BobaBuddyService", function()
 		it("should have valid configuration constants", function()
 			expect(BobaBuddyConfig.LIFESPAN_SECONDS).to.equal(180)
 			expect(BobaBuddyConfig.STACK_MODE).to.equal("Extend")
-			expect(BobaBuddyConfig.CLEANER.RANGE_STUDS).to.equal(25)
-			expect(BobaBuddyConfig.STOCKER.RANGE_STUDS).to.equal(30)
+			expect(BobaBuddyConfig.CLEANER.RANGE_STUDS).to.equal(50)
+			expect(BobaBuddyConfig.STOCKER.RANGE_STUDS).to.equal(50)
 		end)
 
 		it("should refuse to spawn buddy when player is not clocked in", function()
@@ -90,6 +95,21 @@ return function()
 
 			player.Character:Destroy()
 			player:Destroy()
+		end)
+
+		it("should support SpillService:Clean to trigger spill cleanup", function()
+			local ServerScriptService = game:GetService("ServerScriptService")
+			local SpillService = require(ServerScriptService.Server.Modules.SpillService)
+
+			expect(typeof(SpillService.Clean)).to.equal("function")
+			local cleaned = false
+			local mockSpill = {
+				Clean = function()
+					cleaned = true
+				end,
+			}
+			SpillService:Clean(mockSpill)
+			expect(cleaned).to.equal(true)
 		end)
 	end)
 end

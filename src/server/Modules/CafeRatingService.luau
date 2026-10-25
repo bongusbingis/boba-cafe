@@ -26,7 +26,10 @@ local CafeRatingService = Knit.CreateService({
 	_partyEndTime = nil :: number?,
 	_partyCooldownEnd = nil :: number?,
 	_partyBuyer = nil :: string?,
+	_lastSlipToastAt = -math.huge,
 })
+
+local SLIP_TOAST_COOLDOWN_SECONDS = 45
 
 --- D5: DisplayName when it is a non-empty string, else Name when a string, else nil.
 local function buyerName(buyer: Player?): string?
@@ -144,13 +147,9 @@ function CafeRatingService:StartOrExtendBobaParty(buyer: Player?): (boolean, str
 		self:_publish()
 		local extenderName = buyerName(buyer) or "Someone"
 		local text = if buyer
-			then `{extenderName} extended the Boba Party by 10 minutes!`
+			then `{extenderName} extended the Boba Party by 10 minutes! Thank them with an emote!`
 			else "Boba Party was extended by 10 minutes!"
 		self:_notifyParty(text)
-		local thanks = buyerName(buyer)
-		if thanks ~= nil then
-			self:_promptThanks(buyer, thanks)
-		end
 		return true
 	end
 
@@ -172,13 +171,9 @@ function CafeRatingService:StartOrExtendBobaParty(buyer: Player?): (boolean, str
 
 	local starterName = buyerName(buyer) or "Someone"
 	local text = if buyer
-		then `{starterName} started a Boba Party! 10 minutes of Rush Hour!`
+		then `{starterName} started a Boba Party! 10 minutes of Rush Hour! Thank them with an emote!`
 		else "Boba Party started! 10 minutes of Rush Hour!"
 	self:_notifyParty(text)
-	local thanks = buyerName(buyer)
-	if thanks ~= nil then
-		self:_promptThanks(buyer, thanks)
-	end
 
 	task.spawn(function()
 		while self._partyActive do
@@ -214,7 +209,29 @@ end
 
 function CafeRatingService:ApplyNpcSlipPenalty()
 	self:_change(-5)
-	self:_notifyAll("A customer slipped on a spill! -5% Cafe Rating")
+	local now = os.clock()
+	if now - (self._lastSlipToastAt or -math.huge) >= SLIP_TOAST_COOLDOWN_SECONDS then
+		self._lastSlipToastAt = now
+		local ok, dialog = pcall(function()
+			return Knit.GetService("DialogService")
+		end)
+		if ok and dialog then
+			for _, player in Players:GetPlayers() do
+				if player:GetAttribute("ClockedIn") == true then
+					pcall(function()
+						dialog:Notify(
+							player,
+							{
+								Title = "Cafe Rating",
+								Description = "A customer slipped on a spill! -5% Cafe Rating",
+								Text = "A customer slipped on a spill! -5% Cafe Rating",
+							} :: any
+						)
+					end)
+				end
+			end
+		end
+	end
 end
 
 function CafeRatingService:_change(delta: number)

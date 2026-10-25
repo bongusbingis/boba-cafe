@@ -52,25 +52,21 @@ local CARD_HEIGHT = 135 -- pixels; height the card springs to when visible
 local ICON_SIZE = UDim2.fromScale(0.55, 0.55)
 local HINTS = {
 	"Join our group in the Shop to claim a free Ant Pet!",
-	"Having fun? Be sure to leave a like and favorite on our game!",
-	"Want exclusive perks and items? Check out our Shop located above! ",
-	"Can't find the pet or trail purchases you made? Check the inventory tab above! ",
-	"Boba Cafe is owned by Flez_ent!",
+	"Can't find the pet or trail purchases you made? Check the inventory tab above!",
 	"Serve a customer while their patience is above half for a Fast bonus!",
 	"Chain Perfect serves in a row to build a pay combo!",
 	"Tap the pour meter in the sweet spot for a tip!",
 	"Regulars drop by sometimes. Serve their favorite drink to fill the Regulars page in the Menu!",
-	"Spend your Boba Bucks on Cafe Upgrades to decorate the cafe!",
 	"Need help? Find one of our moderation staff members around the cafe!",
-	"Want to know more about updates? Join our communications server for more information!",
 	"To hatch your pet, go to your inventory, click capsules, choose a capsule, and click hatch!",
 	"Don't forget to explore the island!",
 	"Check the Quests tab in the Menu for daily and weekly rewards!",
 }
 
-local HOLD_DURATION = 5
+local HOLD_DURATION = 3.5
 local HOLD_BUSY = 2 -- TUNING: hold seconds when more toasts are queued
-local HINT_QUIET_SECONDS = 20 -- TUNING: hints skip their turn this long after a gameplay toast
+local HINT_QUIET_SECONDS = 45 -- TUNING: hints skip their turn this long after a gameplay toast
+local HINT_INTERVAL_SECONDS = 180 -- TUNING: seconds between rotating idle hints
 local QUEUE_CAP = 3
 local SPRING_SLIDE = { mass = 1, tension = 280, friction = 35 } -- bouncy "Back" feel
 local SPRING_FADE = { mass = 1, tension = 10000, friction = 150 }
@@ -315,7 +311,7 @@ module.Component = function()
 		local this = task.spawn(function()
 			while true do
 				for _, hint in HINTS do
-					task.wait(60)
+					task.wait(HINT_INTERVAL_SECONDS)
 					local busy = activeRef.current ~= nil
 						or #queueRef.current > 0
 						or (lastGameplayAt ~= nil and os.clock() - lastGameplayAt < HINT_QUIET_SECONDS)

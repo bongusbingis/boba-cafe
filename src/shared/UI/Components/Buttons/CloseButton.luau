@@ -68,6 +68,7 @@ return function(props: Props)
 				ImageColor3 = Styles.RED,
 				Position = UDim2.fromScale(0.5, 0.5),
 				Size = UDim2.fromScale(0.835405, 0.835405),
+				ZIndex = 6,
 			},
 		}),
 
@@ -82,6 +83,7 @@ return function(props: Props)
 				Text = "X",
 				TextColor3 = Color3.new(1, 1, 1),
 				TextScaled = true,
+				ZIndex = 7,
 			},
 		}),
 	})

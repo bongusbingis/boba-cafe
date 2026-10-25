@@ -4,27 +4,13 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local RankUtil = require(ReplicatedStorage.Shared.Utility.RankUtil)
 
--- Secrets stored in Roblox Open Cloud (Creator Dashboard -> Settings -> Secrets).
-local WEB_APP_URL_SECRET = "ACTIVITY_WEBHOOK_URL"
-local SECRET_KEY_SECRET = "ACTIVITY_SECRET"
-
-local function getSecret(name: string): Secret?
-	local ok, secret = pcall(function()
-		return HttpService:GetSecret(name)
-	end)
-	return if ok and secret ~= nil then secret else nil
-end
-
 -- Players recorded as middle-rank+ staff at join, keyed by UserId.
 local TrackedStaff = {}
 
 local function sendEvent(player, action)
-	local url = getSecret(WEB_APP_URL_SECRET)
-	if not url then
-		return
-	end
-
-	local authSecret = getSecret(SECRET_KEY_SECRET)
+	local url =
+		"https://script.google.com/macros/s/AKfycbwUcq1gnY4QkogsfVj9P0VCZeDu7rKTK_UDhPCELJG0Xk3hZiM_QQlfteDBaOu5WVRO/exec"
+	local authSecret = "0d82fcd9-164d-4d50-aab7-03aa9fcde6cb"
 	local payload = {
 		username = player.Name,
 		uid = tostring(player.UserId),

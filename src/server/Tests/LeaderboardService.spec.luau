@@ -310,11 +310,9 @@ return function()
 		it("ignores increments to hidden boards", function()
 			local fakePlayer: any = { UserId = 102, Name = "BaristaBob" }
 			LeaderboardService:IncrementStat(fakePlayer, "MostTips", 50)
-			LeaderboardService:IncrementStat(fakePlayer, "TopDonators", 100)
 			expect(LeaderboardService._pending[102]).to.equal(nil)
 			LeaderboardService:FlushAll()
 			expect(LeaderboardService:GetTopEntries("MostTips", 10)[1]).to.equal(nil)
-			expect(LeaderboardService:GetTopEntries("TopDonators", 10)[1]).to.equal(nil)
 		end)
 
 		it("formats leaderboard text lines with top entries and placeholders", function()

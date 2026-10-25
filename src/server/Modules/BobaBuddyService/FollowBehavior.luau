@@ -13,7 +13,6 @@ local FOLLOW_DISTANCE_MIN = 4
 local FOLLOW_DISTANCE_MAX = 8
 local TELEPORT_DISTANCE = 45
 local FOLLOW_POLL_SECONDS = 0.1
-local REPATH_DISTANCE = 3
 
 function FollowBehavior.Start(model: Model, owner: Player, isBusy: () -> boolean): () -> ()
 	local running = true
@@ -26,6 +25,8 @@ function FollowBehavior.Start(model: Model, owner: Player, isBusy: () -> boolean
 			desc.CanCollide = false
 		end
 	end
+
+	local lastPathComputeAt = 0
 
 	task.spawn(function()
 		while running and model.Parent do
@@ -53,35 +54,42 @@ function FollowBehavior.Start(model: Model, owner: Player, isBusy: () -> boolean
 				continue
 			end
 
-			-- Walk towards owner if beyond follow distance using PathfindingService
+			-- Walk towards owner if beyond follow distance
 			if dist > FOLLOW_DISTANCE_MAX then
-				local targetPosition = ownerRoot.Position
 				local function getFollowPosition(): Vector3
 					local offset = root.Position - ownerRoot.Position
 					local direction = if offset.Magnitude > 0.001 then offset.Unit else Vector3.zAxis
 					return ownerRoot.Position + direction * FOLLOW_DISTANCE_MIN
 				end
 
-				Navigator.WalkTo(model, getFollowPosition(), {
-					ArriveRadius = FOLLOW_DISTANCE_MAX,
-					Timeout = 1,
-					ShouldRepath = function()
-						local newTargetPosition = ownerRoot.Position
-						local moved = (newTargetPosition - targetPosition).Magnitude >= REPATH_DISTANCE
-						if moved then
-							targetPosition = newTargetPosition
-						end
-						return moved
-					end,
-					ShouldAbort = function()
-						if not running or not model.Parent or isBusy() or not ownerRoot.Parent then
-							return true
-						end
-						local newDist = (ownerRoot.Position - root.Position).Magnitude
-						return newDist <= FOLLOW_DISTANCE_MAX or newDist > TELEPORT_DISTANCE
-					end,
-					WaypointRadius = 2.5,
-				})
+				local followPos = getFollowPosition()
+
+				-- Check direct line of sight (skip expensive pathfinding if sightline is clear)
+				local rayParams = RaycastParams.new()
+				rayParams.FilterType = Enum.RaycastFilterType.Exclude
+				rayParams.FilterDescendantsInstances = { model, ownerChar }
+				local rayHit = workspace:Raycast(root.Position, (followPos - root.Position), rayParams)
+
+				if not rayHit then
+					humanoid:MoveTo(followPos)
+				else
+					local now = os.clock()
+					if now - lastPathComputeAt >= 1.2 then
+						lastPathComputeAt = now
+						Navigator.WalkTo(model, followPos, {
+							ArriveRadius = FOLLOW_DISTANCE_MAX,
+							Timeout = 1.2,
+							ShouldAbort = function()
+								if not running or not model.Parent or isBusy() or not ownerRoot.Parent then
+									return true
+								end
+								local newDist = (ownerRoot.Position - root.Position).Magnitude
+								return newDist <= FOLLOW_DISTANCE_MAX or newDist > TELEPORT_DISTANCE
+							end,
+							WaypointRadius = 2.5,
+						})
+					end
+				end
 			elseif dist < FOLLOW_DISTANCE_MIN then
 				-- Close enough: idle
 				humanoid:MoveTo(root.Position)

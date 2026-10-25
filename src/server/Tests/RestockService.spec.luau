@@ -20,9 +20,6 @@ return function()
 	local function makePlayer(userId: number): Player
 		local folder = Instance.new("Folder")
 		folder.Name = "TestPlayer_" .. userId
-		local player = folder :: any
-		player.UserId = userId
-		player.Name = folder.Name
 
 		local char = Instance.new("Model")
 		char.Name = "Character"
@@ -31,17 +28,24 @@ return function()
 		animator.Parent = humanoid
 		humanoid.Parent = char
 		char.Parent = folder
-		player.Character = char
 
 		local attributes = {}
-		player.GetAttribute = function(_self, key: string)
-			return attributes[key]
-		end
-		player.SetAttribute = function(_self, key: string, val: any)
-			attributes[key] = val
-		end
+		local player = setmetatable({
+			UserId = userId,
+			Name = folder.Name,
+			Character = char,
+			GetAttribute = function(_self, key: string)
+				return attributes[key]
+			end,
+			SetAttribute = function(_self, key: string, val: any)
+				attributes[key] = val
+			end,
+			Destroy = function(_self)
+				folder:Destroy()
+			end,
+		}, { __index = folder })
 
-		return player
+		return (player :: any) :: Player
 	end
 
 	describe("Unlimited Stock pass configuration", function()
@@ -72,20 +76,20 @@ return function()
 
 	describe("KitchenConfig Stock capacities", function()
 		it("should return correct default stocks for all station types", function()
-			expect(KitchenConfig.GetDefaultStock("Classic Milk Tea Syrup")).to.equal(4)
-			expect(KitchenConfig.GetDefaultStock("Normal Tapioca")).to.equal(5)
-			expect(KitchenConfig.GetDefaultStock("Food Display")).to.equal(10)
-			expect(KitchenConfig.GetDefaultStock("Fruits Freezer")).to.equal(10)
-			expect(KitchenConfig.GetDefaultStock("Ice Cream Freezer")).to.equal(10)
-			expect(KitchenConfig.GetDefaultStock("Coffee Machine")).to.equal(3)
-			expect(KitchenConfig.GetDefaultStock("Blender")).to.equal(3)
-			expect(KitchenConfig.GetDefaultStock("Cup")).to.equal(8)
-			expect(KitchenConfig.GetDefaultStock("Clear Cup")).to.equal(8)
-			expect(KitchenConfig.GetDefaultStock("Mug")).to.equal(5)
-			expect(KitchenConfig.GetDefaultStock("Milk")).to.equal(5)
-			expect(KitchenConfig.GetDefaultStock("Sugar")).to.equal(5)
-			expect(KitchenConfig.GetDefaultStock("Ice Machine")).to.equal(5)
-			expect(KitchenConfig.GetDefaultStock("Green Tea Powder")).to.equal(5)
+			expect(KitchenConfig.GetDefaultStock("Classic Milk Tea Syrup")).to.equal(8)
+			expect(KitchenConfig.GetDefaultStock("Normal Tapioca")).to.equal(10)
+			expect(KitchenConfig.GetDefaultStock("Food Display")).to.equal(20)
+			expect(KitchenConfig.GetDefaultStock("Fruits Freezer")).to.equal(20)
+			expect(KitchenConfig.GetDefaultStock("Ice Cream Freezer")).to.equal(20)
+			expect(KitchenConfig.GetDefaultStock("Coffee Machine")).to.equal(6)
+			expect(KitchenConfig.GetDefaultStock("Blender")).to.equal(6)
+			expect(KitchenConfig.GetDefaultStock("Cup")).to.equal(16)
+			expect(KitchenConfig.GetDefaultStock("Clear Cup")).to.equal(16)
+			expect(KitchenConfig.GetDefaultStock("Mug")).to.equal(10)
+			expect(KitchenConfig.GetDefaultStock("Milk")).to.equal(10)
+			expect(KitchenConfig.GetDefaultStock("Sugar")).to.equal(10)
+			expect(KitchenConfig.GetDefaultStock("Ice Machine")).to.equal(10)
+			expect(KitchenConfig.GetDefaultStock("Green Tea Powder")).to.equal(10)
 		end)
 	end)
 

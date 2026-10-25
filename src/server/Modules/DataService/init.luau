@@ -12,15 +12,14 @@ local Config = Shared:WaitForChild("Configuration")
 local Knit = require(Packages.Knit)
 local ProfileStore = require(Packages.Server.ProfileStore)
 local ReplicaService = require(Packages.ReplicaService)
-local GoodSignal = require(Packages.GoodSignal)
 local Promise = require(Packages.Promise)
 
 local PlayerSetup = require(script.PlayerSetup)
 
 ---> constants
 local SAVE_TIMEOUT_SECONDS = 15
-local IS_MOCK_STORE_ENABLED = true
-local PROFILE_STORE_NAME = "PlayerStore_0006"
+local IS_MOCK_STORE_ENABLED = false
+local PROFILE_STORE_NAME = "PRODUCTION_MAIN"
 local REPLICA_CLASS_TOKEN = ReplicaService.NewClassToken("PlayerProfile")
 local PROFILE_TEMPLATE = require(Config:WaitForChild("ProfileTemplate"))
 
@@ -37,7 +36,7 @@ type ProfileProxy = {
 ---> globals
 local Profiles: {} = {}
 local ProfileObjects: {} = {}
-local OnLoadSignals: {} = {}
+local ProfilePromises: { [number]: any } = {}
 local PlayerStore = ProfileStore.New(PROFILE_STORE_NAME, PROFILE_TEMPLATE)
 
 if IS_MOCK_STORE_ENABLED then
@@ -73,6 +72,7 @@ local function loadPlayerProfile(player: Player)
 			playerProfile:Reconcile()
 			playerProfile.OnSessionEnd:Connect(function()
 				Profiles[player.UserId] = nil
+				ProfilePromises[player.UserId] = nil
 				player:Kick("Your player profile session was ended - please try rejoining.")
 			end)
 
@@ -93,25 +93,28 @@ local function loadPlayerProfile(player: Player)
 end
 
 local function playerAdded(player: Player)
-	loadPlayerProfile(player)
+	if ProfilePromises[player.UserId] ~= nil or Profiles[player.UserId] ~= nil then
+		return
+	end
+
+	local loadPromise = loadPlayerProfile(player)
 		:andThen(function(playerProfile)
 			if RunService:IsStudio() then
 				print(script.Name, `[STUDIO] Profile loaded for player`, player.UserId)
 			end
 			Profiles[player.UserId] = playerProfile
-			if OnLoadSignals[player.UserId] then
-				OnLoadSignals[player.UserId]:Fire(playerProfile)
-				OnLoadSignals[player.UserId]:DisconnectAll()
-				OnLoadSignals[player.UserId] = nil
-			end
+			return playerProfile
 		end)
 		:catch(function(failReason)
 			warn(script.Name, `Failed to load data for {player.UserId}:`, failReason)
-			failReason = if typeof(failReason) == "string"
+			local message = if typeof(failReason) == "string"
 				then `Profile load failed because: {failReason}.`
 				else "Your player data couldn't be loaded."
-			player:Kick(failReason .. " Please try again.")
+			player:Kick(message .. " Please try again.")
+			return Promise.reject(failReason)
 		end)
+
+	ProfilePromises[player.UserId] = loadPromise
 end
 
 ---> service declaration
@@ -121,16 +124,22 @@ local DataService = Knit.CreateService({
 })
 
 function DataService:GetDataAsync(player: Player)
-	return Promise.new(function(resolve)
-		local playerData = Profiles[player.UserId]
-		if not playerData then
-			if not OnLoadSignals[player.UserId] then
-				OnLoadSignals[player.UserId] = GoodSignal.new()
-			end
-			playerData = OnLoadSignals[player.UserId]:Wait()
-		end
-		resolve(playerData)
-	end)
+	local playerData = Profiles[player.UserId]
+	if playerData ~= nil then
+		return Promise.resolve(playerData)
+	end
+
+	local promise = ProfilePromises[player.UserId]
+	if promise ~= nil then
+		return promise
+	end
+
+	if player.Parent ~= Players then
+		return Promise.reject("Player not in game")
+	end
+
+	playerAdded(player)
+	return ProfilePromises[player.UserId]
 end
 
 function DataService:ViewProfileAsync(userId: number)
@@ -210,6 +219,7 @@ function DataService:PlayerRemoving(player: Player)
 		ProfileObjects[player.UserId] = nil
 	end
 	Profiles[player.UserId] = nil
+	ProfilePromises[player.UserId] = nil
 end
 
 return DataService

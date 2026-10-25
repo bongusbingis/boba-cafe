@@ -126,8 +126,14 @@ local Seats = {}
 function Seats.Resolve(): { Seat }
 	local seats: { Seat } = {}
 	local assets = workspace:FindFirstChild("Assets")
-	local npc = if assets ~= nil then assets:FindFirstChild("NPC") else nil
-	local seatsFolder = if npc ~= nil then npc:FindFirstChild("Seats") else nil
+	local seatsFolder = nil
+	if assets ~= nil then
+		local npc = assets:FindFirstChild("NPC")
+		seatsFolder = if npc ~= nil then npc:FindFirstChild("Seats") else nil
+		if seatsFolder == nil then
+			seatsFolder = assets:FindFirstChild("Seating")
+		end
+	end
 
 	if seatsFolder ~= nil then
 		for _, descendant in seatsFolder:GetDescendants() do

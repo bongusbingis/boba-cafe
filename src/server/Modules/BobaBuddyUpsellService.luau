@@ -127,8 +127,13 @@ function BobaBuddyUpsellService:_tryShowUpsell(player: Player, chore: "Cleaner" 
 	end
 
 	-- Suppression window (don't show if any upsell fired in last 60 seconds)
+	local now = os.clock()
 	local lastTime = self._lastUpsellTime[player]
-	if lastTime and os.clock() - lastTime < BobaBuddyConfig.UPSELL.SuppressWindowSeconds then
+	if lastTime and now - lastTime < BobaBuddyConfig.UPSELL.SuppressWindowSeconds then
+		return
+	end
+	local attrLast = player:GetAttribute("LastUpsellTime")
+	if typeof(attrLast) == "number" and now - attrLast < BobaBuddyConfig.UPSELL.SuppressWindowSeconds then
 		return
 	end
 
@@ -157,11 +162,12 @@ function BobaBuddyUpsellService:_tryShowUpsell(player: Player, chore: "Cleaner" 
 		return
 	end
 
-	self._lastUpsellTime[player] = os.clock()
+	self._lastUpsellTime[player] = now
+	player:SetAttribute("LastUpsellTime", now)
 	if not self._shownTime[player] then
 		self._shownTime[player] = {}
 	end
-	self._shownTime[player][chore] = os.clock()
+	self._shownTime[player][chore] = now
 
 	-- Inline analytics
 	pcall(function()

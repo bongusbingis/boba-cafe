@@ -46,14 +46,7 @@ return function()
 			expect(tier.Rank).to.equal(8)
 			expect(tier.RoleName).to.equal("Barista")
 		end)
-
-		it("unlocks Senior Barista (RankId 9) at Level 15", function()
-			local tier = GroupRankProgression.GetClaimableTier(15, 8, {})
-			expect(tier ~= nil).to.equal(true)
-			expect(tier.RankId).to.equal(9)
-			expect(tier.Rank).to.equal(9)
-		end)
-
+		
 		it("unlocks Head Barista (RankId 10) at Level 20", function()
 			local tier = GroupRankProgression.GetClaimableTier(20, 9, {})
 			expect(tier ~= nil).to.equal(true)

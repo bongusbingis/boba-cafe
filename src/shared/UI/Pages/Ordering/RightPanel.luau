@@ -207,8 +207,7 @@ return function(props)
 						Size = UDim2.fromScale(1, 0.363022),
 						Text = if props.StaffLevel ~= nil
 							then `Level {props.StaffLevel}`
-							elseif props.StaffRole ~= nil
-							then props.StaffRole
+							elseif props.StaffRole ~= nil then props.StaffRole
 							else "Level 1",
 						TextColor3 = Color3.new(),
 						TextScaled = true,

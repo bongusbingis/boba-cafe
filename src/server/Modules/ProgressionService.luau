@@ -382,8 +382,6 @@ function ProgressionService:_onLevelUp(player: Player, level: number, proxy: any
 				end
 			end)
 		end
-		local text = ProgressionService.LevelUpText(level)
-		Knit.GetService("DialogService"):Notify(player, { Text = text, SoundEnabled = true } :: any)
 		ProgressionService.Client.LeveledUp:Fire(player, {
 			Level = level,
 			Title = Progression.TitleFor(level),

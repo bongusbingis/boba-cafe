@@ -801,13 +801,13 @@ function OrderService:_dispatchPending(exclude: Player?): number
 	return assigned
 end
 
-function OrderService:_collectOrder(customerId: number, area: Model)
+function OrderService:_collectOrder(customerId: number, area: Model, player: Player?)
 	local ownerValue = area:FindFirstChild("OrderOwner") :: IntValue?
 	if not ownerValue or ownerValue.Value ~= customerId then
 		return
 	end
 
-	local customer = Players:GetPlayerByUserId(customerId)
+	local customer = player or Players:GetPlayerByUserId(customerId)
 	if customer then
 		self.Client.PickUpNodeVisibilityChanged:Fire(customer, area, false)
 	end
@@ -863,7 +863,7 @@ function OrderService:_handlePickUp(player: Player, area: Model)
 
 	if ownerValue.Value == player.UserId then
 		-- ── Customer path: collect their completed order ──────────────────────
-		self:_collectOrder(player.UserId, area)
+		self:_collectOrder(player.UserId, area, player)
 	else
 		-- ── Staff path: deposit a prepared order ──────────────────────────────
 		-- A barista with two tickets may be preparing two real orders; the held tools

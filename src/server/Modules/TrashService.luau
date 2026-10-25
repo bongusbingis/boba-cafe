@@ -58,13 +58,11 @@ function TrashService:_onTriggered(player: Player, part: BasePart)
 		if kitchenService and (kitchenService :: any).ThrowAwayRestockBox then
 			(kitchenService :: any):ThrowAwayRestockBox(player)
 		end
-		notify(player, "You threw away the restock box.")
 		return
 	end
 
 	local tool = getTool(player)
 	if not tool then
-		notify(player, "Hold a drink to throw it away.")
 		return
 	end
 	if tool:GetAttribute("NotDisposable") == true then

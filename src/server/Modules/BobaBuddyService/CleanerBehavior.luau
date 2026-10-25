@@ -117,10 +117,17 @@ function CleanerBehavior.Start(model: Model, owner: Player, setBusy: (boolean) -
 					track:Destroy()
 				end
 
-				-- Clean spill via SpillService
-				pcall(function()
-					spillService:Clean(bestSpill, nil, true)
+				-- Clean spill
+				local ok, err = pcall(function()
+					if typeof(bestSpill.Clean) == "function" then
+						bestSpill:Clean()
+					elseif typeof(spillService.Clean) == "function" then
+						spillService:Clean(bestSpill)
+					end
 				end)
+				if not ok then
+					warn(`[BobaBuddy Cleaner] Failed to clean spill: {err}`)
+				end
 			end
 
 			if bestSpill and bestSpill.Object and bestSpill.Object.Parent then

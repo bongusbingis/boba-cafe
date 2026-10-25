@@ -226,7 +226,7 @@ local function RankCard(props: {
 						LayoutOrder = 2,
 						Size = UDim2.fromScale(1, 0.44),
 						Text = props.Caption,
-						TextColor3 = Styles.GREEN_LIGHT,
+						TextColor3 = Styles.OFFWHITE,
 						TextScaled = true,
 						TextXAlignment = Enum.TextXAlignment.Left,
 					}),
@@ -319,6 +319,16 @@ return function()
 			local passes = GroupRankProgression.FetchPassOwnershipAsync(player)
 			setOwnedPasses(passes)
 		end)
+
+		local RankingService = Knit.GetService("RankingService")
+		local rankConn = RankingService.RankClaimed:Connect(function(newRole: string, newRank: number)
+			setCurrentRank(newRank)
+			setCurrentRole(newRole)
+		end)
+
+		return function()
+			rankConn:Disconnect()
+		end
 	end, {})
 
 	local isLoaded = playerData ~= nil
@@ -405,30 +415,47 @@ return function()
 		groupRankStatus = `Group Rank: {currentRole} (Rank {currentRank})`
 	end
 
-	-- STUB: Ranking Mechanism Wire Point (Jack to connect later)
 	local function onClaimRank()
 		if not claimableTier or isClaiming then
 			return
 		end
 		setIsClaiming(true)
 
-		-- =========================================================================
-		-- WIRE POINT: Jack's ranking mechanism will be connected here
-		-- e.g., Knit.GetService("RankingService"):SetRankAsync(player, claimableTier.RankId)
-		-- =========================================================================
-		print(
-			string.format(
-				"[STUB] Claim Group Rank initiated: Role=%s, RankId=%s (Player Level: %d)",
-				claimableTier.RoleName,
-				tostring(claimableTier.RankId),
-				level
-			)
-		)
+		local targetRank = claimableTier.RankId
+		local targetRole = claimableTier.RoleName
 
-		-- Simulated completion delay for UI state preview:
-		task.delay(1, function()
-			setIsClaiming(false)
-		end)
+		local RankingService = Knit.GetService("RankingService")
+		RankingService:ClaimRank()
+			:andThen(function(success, roleOrErr)
+				if success then
+					setCurrentRank(targetRank)
+					setCurrentRole(targetRole)
+					local player = Players.LocalPlayer
+					RankUtil:InvalidateCache(player)
+					task.delay(1, function()
+						local okRank, rank = pcall(function()
+							return RankUtil:GetRankAsync(player)
+						end)
+						if okRank and typeof(rank) == "number" then
+							setCurrentRank(rank)
+						end
+						local okRole, role = pcall(function()
+							return RankUtil:GetRoleAsync(player)
+						end)
+						if okRole and typeof(role) == "string" then
+							setCurrentRole(role)
+						end
+					end)
+				else
+					warn("[Staff] Claim Group Rank failed:", roleOrErr)
+				end
+			end)
+			:catch(function(err)
+				warn("[Staff] Claim Group Rank error:", err)
+			end)
+			:finally(function()
+				setIsClaiming(false)
+			end)
 	end
 
 	local cards = {

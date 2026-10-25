@@ -1,6 +1,7 @@
 ---> Services
 
 local ContextActionService = game:GetService("ContextActionService")
+local MarketplaceService = game:GetService("MarketplaceService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -34,10 +35,12 @@ local CLOCKED_IN_ATTRIBUTE = "ClockedIn" -- owned by the server's ShiftService
 local HIGHLIGHT_NAME = "StationHint"
 local BEAM_NAME = "StationHintBeam"
 local BEAM_ATTACHMENT_NAME = "StationHintAttachment"
-local TOAST_COOLDOWN_SECONDS = 1.5
+local TOAST_COOLDOWN_SECONDS = 4.0
 local RESCUE_BROADCAST_STUDS = 40
 local RESCUE_TOAST_COOLDOWN_SECONDS = 20
 local IMPATIENT_TEXT = "Your customer is getting impatient!"
+local WAIT_REGISTER_TEXT = "Wait at the register for your first customer!"
+local WAIT_REGISTER_TOAST_COOLDOWN_SECONDS = 15
 
 -- TUNING
 local GUIDANCE_INTERVAL_SECONDS = 0.2 -- how often the hint target is recomputed
@@ -353,6 +356,61 @@ local function takeOrderHint(rootPart: BasePart): boolean
 	return true
 end
 
+local lastWaitRegisterToastAt = -math.huge
+
+local function getNearestRegisterCounter(position: Vector3): BasePart?
+	local assets = workspace:FindFirstChild("Assets")
+	local npcFolder = assets and assets:FindFirstChild("NPC")
+	local counterFolder = npcFolder and npcFolder:FindFirstChild("Counter")
+	if not counterFolder then
+		return nil
+	end
+	local nearestPart: BasePart? = nil
+	local nearestDist = math.huge
+	for _, child in counterFolder:GetChildren() do
+		if child:IsA("BasePart") then
+			local dist = (child.Position - position).Magnitude
+			if dist < nearestDist then
+				nearestDist = dist
+				nearestPart = child
+			end
+		end
+	end
+	return nearestPart
+end
+
+local function fallbackRegisterHint(rootPart: BasePart): boolean
+	local counterPart = getNearestRegisterCounter(rootPart.Position)
+	if counterPart == nil then
+		return false
+	end
+
+	for slot = 1, KitchenGuidance.MAX_HIGHLIGHTS do
+		local highlight = getHighlight(slot)
+		highlight.Adornee = if slot == 1 then counterPart else nil
+		highlight.Enabled = slot == 1
+	end
+
+	local beamAllowed = KitchenGuidance.ShouldShowBeam({
+		CustomersSeen = runtime.CustomersSeen,
+		ItemSeenBefore = true,
+		IdleSeconds = 0,
+	})
+	if beamAllowed then
+		showBeam(rootPart, counterPart)
+	elseif runtime.Beam then
+		runtime.Beam.Enabled = false
+	end
+
+	local now = os.clock()
+	if now - lastWaitRegisterToastAt >= WAIT_REGISTER_TOAST_COOLDOWN_SECONDS then
+		lastWaitRegisterToastAt = now
+		toast(WAIT_REGISTER_TEXT)
+	end
+
+	return true
+end
+
 local function guidanceStep(serveTarget: Model?)
 	local player = Players.LocalPlayer
 	local OrderController = Knit.GetController("OrderController")
@@ -394,9 +452,13 @@ local function guidanceStep(serveTarget: Model?)
 		and player:GetAttribute(CLOCKED_IN_ATTRIBUTE) == true
 		and rootPart
 		and rootPart:IsA("BasePart")
-		and takeOrderHint(rootPart)
 	then
-		return
+		if takeOrderHint(rootPart) then
+			return
+		end
+		if fallbackRegisterHint(rootPart) then
+			return
+		end
 	end
 	if not runtime.Enabled or guidance == nil or isClockedOut() or not rootPart or not rootPart:IsA("BasePart") then
 		clearVisuals()
@@ -520,12 +582,17 @@ local function runPatienceCues(model: Model, root: BasePart, fraction: number, c
 	end
 	wasRescuable[model] = rescuable
 
-	-- T5: hide other baristas' bubbles unless rescuable; clocked-out sees all.
+	-- T5: compact patience bar at register; at pickup, hide other baristas' bubbles unless rescuable; clocked-out sees all at pickup.
 	local bubbleOk, bubbleErr = pcall(function()
-		local hideBubble = clockedIn
-			and assigned ~= nil
-			and assigned ~= localPlayer.UserId
-			and not (fraction < CustomerConfig.RESCUE_FRACTION)
+		local hideBubble = true
+		if state == "AtCounter" then
+			hideBubble = false
+		elseif state == "AtPickup" then
+			hideBubble = clockedIn
+				and assigned ~= nil
+				and assigned ~= localPlayer.UserId
+				and not (fraction < CustomerConfig.RESCUE_FRACTION)
+		end
 		local bubble = model:FindFirstChild("OrderBubble")
 		if bubble and bubble:IsA("BillboardGui") then
 			local visible = not hideBubble
@@ -678,6 +745,11 @@ local function startGuidance()
 			offerClockIn()
 		elseif reason == "OutOfStock" then
 			toast("This station is out of stock! Grab a box from a shelf to restock.")
+		elseif
+			typeof(reason) == "string"
+			and (string.find(reason, "ToolNameValidityCheck") or string.find(reason, "EmptyTool"))
+		then
+			toast("You need to grab a cup first! Check the cup dispensers.")
 		end
 	end)
 end
@@ -1238,18 +1310,29 @@ function KitchenController:KnitStart()
 
 	local player = Players.LocalPlayer
 
-	local owns = GamepassUtil:PlayerOwnsPassAsync(player, INSTANT_BREW_PASS_ID)
-	if not owns then
-		return
+	local function checkAndApply()
+		local owns = GamepassUtil:PlayerOwnsPassAsync(player, INSTANT_BREW_PASS_ID)
+		if not owns then
+			return
+		end
+
+		local kitchen = WorldPath.waitFor(workspace, { "Assets", "Kitchen" }, KITCHEN_TIMEOUT_SECONDS)
+		if not kitchen then
+			warn("[KitchenController] workspace.Assets.Kitchen not found; Instant Brew hold times not applied.")
+			return
+		end
+		applyInstantBrew(kitchen)
 	end
 
-	-- Bounded wait: a missing kitchen only disables the Instant Brew perk.
-	local kitchen = WorldPath.waitFor(workspace, { "Assets", "Kitchen" }, KITCHEN_TIMEOUT_SECONDS)
-	if not kitchen then
-		warn("[KitchenController] workspace.Assets.Kitchen not found; Instant Brew hold times not applied.")
-		return
-	end
-	applyInstantBrew(kitchen)
+	checkAndApply()
+
+	MarketplaceService.PromptGamePassPurchaseFinished:Connect(
+		function(purchasingPlayer: Player, passId: number, wasPurchased: boolean)
+			if purchasingPlayer == player and wasPurchased and passId == INSTANT_BREW_PASS_ID then
+				checkAndApply()
+			end
+		end
+	)
 end
 
 return KitchenController

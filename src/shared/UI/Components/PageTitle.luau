@@ -53,6 +53,7 @@ return function(props: {
 				ImageColor3 = props.Color,
 				Position = UDim2.fromScale(0.5, 0.5),
 				Size = UDim2.fromScale(0.946321, 0.822496),
+				ZIndex = 3,
 			}),
 
 			TextLabel = c("TextLabel", {
@@ -64,6 +65,7 @@ return function(props: {
 				Text = props.Text,
 				TextColor3 = Color3.new(1, 1, 1),
 				TextScaled = true,
+				ZIndex = 4,
 			}),
 		}),
 	})

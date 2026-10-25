@@ -22,7 +22,17 @@ return function()
 		if tool then
 			tool.Parent = character
 		end
-		return { Name = "PourPlayer", Character = character }
+		local attributes = { ClockedIn = true }
+		return {
+			Name = "PourPlayer",
+			Character = character,
+			GetAttribute = function(_self, key: string)
+				return attributes[key]
+			end,
+			SetAttribute = function(_self, key: string, value: any)
+				attributes[key] = value
+			end,
+		}
 	end
 
 	-- Registry stub: the behaviour action stamps the held tool, like

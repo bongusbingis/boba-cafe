@@ -206,20 +206,6 @@ local function DailyRewardsBody(props: { Status: { [string]: any }? })
 						DataLoaded = true,
 					}
 				end)
-
-				local bucksGranted = grantResult and grantResult.BobaBucks or 0
-				local capsuleGranted = grantResult and grantResult.Capsule
-				local toastText = `Claimed {bucksGranted} Boba Bucks!`
-				if capsuleGranted then
-					toastText = `Claimed {bucksGranted} Boba Bucks and {capsuleGranted}!`
-				end
-
-				local okController, dialogController = pcall(function()
-					return Knit.GetController("DialogController")
-				end)
-				if okController and dialogController and dialogController.Toast then
-					dialogController:Toast(toastText)
-				end
 			else
 				warn("[DailyRewardsDialog] Claim failed:", if promiseOk then reason else claimOk)
 				-- The claim stays available: status is untouched on a refused claim.

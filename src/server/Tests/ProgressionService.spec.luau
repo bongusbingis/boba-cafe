@@ -129,7 +129,7 @@ return function()
 		end
 
 		it("lists the level 5 bundle", function()
-			expect(has(5, "New title: Barista")).to.equal(true)
+			expect(has(5, "New title: Rookie")).to.equal(true)
 			expect(has(5, "2 order tickets")).to.equal(true)
 			expect(has(5, "Orders with 2 items")).to.equal(true)
 			expect(has(5, "New nametag: Crimson")).to.equal(true)

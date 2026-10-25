@@ -213,6 +213,37 @@ local function watchCounterPrompts()
 	end)
 end
 
+function OrderController:_rebuildTickets()
+	local byId = self._ticketsById
+	local list = {}
+	for id, held in byId do
+		local shouldPrune = false
+		if held.NpcModel ~= nil then
+			if not held.NpcModel:IsDescendantOf(workspace) or held.NpcModel:GetAttribute("State") == "Leaving" then
+				shouldPrune = true
+			end
+		end
+		if shouldPrune then
+			byId[id] = nil
+		else
+			table.insert(list, held)
+		end
+	end
+	table.sort(list, function(a, b)
+		return (a.Slot or 1) < (b.Slot or 1)
+	end)
+	while #list > 2 do
+		byId[list[#list].Id] = nil
+		table.remove(list)
+	end
+	self.Tickets = list
+	self.TicketsChanged:Fire(list)
+
+	self.Ticket = list[1]
+	self.CurrentOrder = self.Ticket
+	self.OrderChanged:Fire(self.Ticket)
+end
+
 ---> Lifecycle
 function OrderController:KnitStart()
 	local OrderService = Knit.GetService("OrderService")
@@ -223,40 +254,79 @@ function OrderController:KnitStart()
 	end
 	LocalPlayer.CharacterAdded:Connect(watchOwnHandoffPrompts)
 
+	LocalPlayer:GetAttributeChangedSignal("ClockedIn"):Connect(function()
+		local clockedIn = LocalPlayer:GetAttribute("ClockedIn") == true
+		if not clockedIn then
+			self._ticketsById = {}
+			self.Tickets = {}
+			self.Ticket = nil
+			self.CurrentOrder = nil
+			self.ReadyNode = nil
+			self.TicketsChanged:Fire({})
+			self.OrderChanged:Fire(nil)
+			self.ReadyNodeChanged:Fire(nil)
+		end
+	end)
+
 	Knit.GetService("CustomerService").TicketChanged:Connect(function(ticket, slot)
 		local byId = self._ticketsById
 		if ticket ~= nil then
+			local assignedSlot = ticket.Slot or slot or 1
+			ticket.Slot = assignedSlot
 			-- A new ticket replaces whatever held its slot (or its own Id).
 			for id, held in byId do
-				if id == ticket.Id or held.Slot == (ticket.Slot or slot) then
+				if id == ticket.Id or held.Slot == assignedSlot then
 					byId[id] = nil
 				end
 			end
 			byId[ticket.Id] = ticket
+
+			-- Watch NPC model for despawn or leaving so expired orders clear immediately
+			if ticket.NpcModel ~= nil and ticket.NpcModel:IsA("Instance") then
+				local model = ticket.NpcModel
+				local connAncestry: RBXScriptConnection?
+				local connState: RBXScriptConnection?
+
+				local function cleanup()
+					if connAncestry then
+						connAncestry:Disconnect()
+						connAncestry = nil
+					end
+					if connState then
+						connState:Disconnect()
+						connState = nil
+					end
+					if byId[ticket.Id] == ticket then
+						byId[ticket.Id] = nil
+						self:_rebuildTickets()
+					end
+				end
+
+				connAncestry = model.AncestryChanged:Connect(function(_, parent)
+					if parent == nil or not model:IsDescendantOf(workspace) then
+						cleanup()
+					end
+				end)
+
+				connState = model:GetAttributeChangedSignal("State"):Connect(function()
+					if model:GetAttribute("State") == "Leaving" then
+						cleanup()
+					end
+				end)
+
+				if not model:IsDescendantOf(workspace) or model:GetAttribute("State") == "Leaving" then
+					cleanup()
+				end
+			end
 		else
 			for id, held in byId do
-				if held.Slot == slot then
+				if slot == nil or held.Slot == slot or (slot == 1 and held.Slot == nil) then
 					byId[id] = nil
 				end
 			end
 		end
-		local list = {}
-		for _, held in byId do
-			table.insert(list, held)
-		end
-		table.sort(list, function(a, b)
-			return (a.Slot or 1) < (b.Slot or 1)
-		end)
-		while #list > 2 do
-			byId[list[#list].Id] = nil
-			table.remove(list)
-		end
-		self.Tickets = list
-		self.TicketsChanged:Fire(list)
 
-		self.Ticket = list[1]
-		self.CurrentOrder = self.Ticket
-		self.OrderChanged:Fire(self.Ticket)
+		self:_rebuildTickets()
 	end)
 
 	OrderService.PickUpNodeVisibilityChanged:Connect(function(node, isVisible: boolean, isReady: boolean?)

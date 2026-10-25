@@ -11,4 +11,5 @@
 return {
 	SHOW_POINTS = false,
 	BobaBuddyUpsellEnabled = true,
+	InstantBrewUpsellEnabled = true,
 }
